@@ -3,71 +3,73 @@ const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
 
-// 1. Conexión a Supabase (usamos las variables de entorno)
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-const parser = new Parser();
+// MEJORA: Añadimos un User-Agent falso para que el BOE no nos bloquee por ser un bot
+const parser = new Parser({
+  headers: {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  },
+});
 
-// URL oficial del RSS del BOE (Empleo público / Oposiciones)
-const BOE_RSS_URL = "https://www.boe.es/rss/canal.php?c=oposiciones";
+// NUEVA URL OFICIAL: Sección II.B (Oposiciones y concursos)
+const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
 
 async function extraerBOE() {
   try {
-    console.log("📡 Conectando con el BOE...");
+    console.log(`📡 Conectando con el BOE en: ${BOE_RSS_URL}...`);
     const feed = await parser.parseURL(BOE_RSS_URL);
 
     let nuevasInsertadas = 0;
 
-    // 2. Recorremos cada publicación del día
     for (const item of feed.items) {
-      // 3. Magia pSEO: Generamos un slug perfecto para Google
-      // Limpiamos palabras raras y lo hacemos minúsculas
       const slugBase = slugify(item.title, {
         lower: true,
         strict: true,
         remove: /[*+~.()'"!:@]/g,
       });
-      // Añadimos el año para evitar duplicados futuros
       const añoActual = new Date().getFullYear();
+      // Generamos un slug limpio
       const slugFinal = `${slugBase}-${añoActual}`;
 
-      // 4. Preparamos el objeto para Supabase
+      // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
+      const textoRaw =
+        item.contentSnippet ||
+        item.content ||
+        item.description ||
+        "Ver detalles en el enlace oficial.";
+
       const convocatoria = {
         slug: slugFinal,
         title: item.title,
-        // Generamos una meta-descripción cortando el contenido a 150 caracteres
-        meta_description: item.contentSnippet
-          ? item.contentSnippet.substring(0, 150) + "..."
-          : item.title,
-        department: "Administración Pública", // Aquí podrías hacer un regex para extraer el ministerio
+        meta_description: textoRaw.substring(0, 150) + "...",
+        department: "Administración Pública",
         type: "Oposición",
         publication_date: new Date(item.pubDate),
         link_boe: item.link,
-        raw_text: item.contentSnippet || item.content,
+        raw_text: textoRaw,
       };
 
-      // 5. Insertamos en la Base de Datos
-      // Usamos upsert para que, si el slug ya existe, no de error y simplemente lo actualice o lo ignore
       const { data, error } = await supabase
         .from("convocatorias")
-        .upsert(convocatoria, { onConflict: "slug" });
+        .upsert(convocatoria, { onConflict: "slug" })
+        .select();
 
       if (error) {
         console.error(`❌ Error al insertar ${slugFinal}:`, error.message);
       } else {
+        console.log(`✅ Procesado: ${item.title.substring(0, 50)}...`);
         nuevasInsertadas++;
       }
     }
 
     console.log(
-      `✅ Proceso completado. ${nuevasInsertadas} convocatorias procesadas.`,
+      `🎉 Proceso completado. ${nuevasInsertadas} convocatorias revisadas/insertadas.`,
     );
-
-    // Aquí iría el POST al Webhook de Astro (lo añadiremos en el siguiente paso del proyecto)
-    // await fetch('URL_DE_VERCEL_O_CLOUDFLARE', { method: 'POST' });
   } catch (error) {
     console.error("🔥 Error crítico en el scraper:", error);
     process.exit(1);
