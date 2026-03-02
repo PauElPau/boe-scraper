@@ -1,0 +1,35 @@
+name: BOE Scraper Diario
+
+# 1. Cuándo se ejecuta (Triggers)
+on:
+  schedule:
+    # Formato Cron: Se ejecuta de Lunes a Sábado a las 08:00 AM (UTC)
+    - cron: "0 8 * * 1-6"
+  workflow_dispatch:
+    # Esto te permite ejecutarlo manualmente dándole a un botón en GitHub
+
+jobs:
+  extraer-datos:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 2. Descargar el código
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      # 3. Preparar el entorno de Node.js
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      # 4. Instalar dependencias
+      - name: Instalar paquetes (npm install)
+        run: npm ci
+
+      # 5. Ejecutar el script usando los secretos de GitHub
+      - name: Ejecutar Scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node index.js
