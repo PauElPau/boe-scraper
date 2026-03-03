@@ -72,6 +72,13 @@ async function extraerBOE() {
     console.log(
       `🎉 Proceso completado. ${nuevasInsertadas} convocatorias revisadas/insertadas.`,
     );
+
+    // Avisamos a Vercel para que regenere la web estática de Astro
+    if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
+      console.log('🚀 Avisando a Vercel para reconstruir la web...');
+      await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
+      console.log('✅ Aviso enviado con éxito.');
+    }
   } catch (error) {
     console.error("🔥 Error crítico en el scraper:", error);
     process.exit(1);
