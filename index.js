@@ -27,14 +27,16 @@ async function extraerBOE() {
     let nuevasInsertadas = 0;
 
     for (const item of feed.items) {
-      const slugBase = slugify(item.title, {
-        lower: true,
-        strict: true,
-        remove: /[*+~.()'"!:@]/g,
-      });
+      const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
+      
+      // --- CORRECCIÓN ---
+      // Cortamos el slug a máximo 100 caracteres para evitar el error ENAMETOOLONG
+      // Si es muy largo, lo cortamos sin miramientos.
+      const slugRecortado = slugBase.length > 100 ? slugBase.substring(0, 100) : slugBase;
+      
       const añoActual = new Date().getFullYear();
-      // Generamos un slug limpio
-      const slugFinal = `${slugBase}-${añoActual}`;
+      // Generamos un slug limpio y corto
+      const slugFinal = `${slugRecortado}-${añoActual}`;
 
       // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
       const textoRaw =
