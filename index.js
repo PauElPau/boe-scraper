@@ -135,8 +135,9 @@ async function extraerBOE() {
         meta_description: textoRaw.substring(0, 150) + "...",
         section: categoriaSeccion,     
         department: categoriaOrganismo, // (UNIVERSIDADES, etc.)
-        guid: item.guid,               
-        type: "OPOSICION - " + deducirTipo(item.title),
+        guid: item.guid,       
+        parent_type: "OPOSICION",    
+        type: deducirTipo(item.title),
         publication_date: fechaCorrecta,
         link_boe: item.link,
         raw_text: textoRaw,
