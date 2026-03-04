@@ -47,6 +47,15 @@ async function extraerBOE() {
       // Ahora sí, extraemos la fecha en formato string YYYY-MM-DD para Supabase
       const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
 
+      // --- NUEVO: EXTRACCIÓN DE CATEGORÍAS Y GUID ---
+      // item.categories es un array. 
+      // La [0] suele ser la Sección (II. Autoridades...)
+      // La [1] suele ser el Organismo (UNIVERSIDADES, MINISTERIOS...)
+
+      // Usamos "||" por seguridad, por si alguna vez vienen vacías
+      const categoriaSeccion = item.categories && item.categories[0] ? item.categories[0] : "Otros";
+      const categoriaOrganismo = item.categories && item.categories[1] ? item.categories[1] : "Administración Pública";
+
       // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
       const textoRaw =
         item.contentSnippet ||
@@ -58,7 +67,9 @@ async function extraerBOE() {
         slug: slugFinal,
         title: item.title,
         meta_description: textoRaw.substring(0, 150) + "...",
-        department: "Administración Pública",
+        section: categoriaSeccion,     
+        department: categoriaOrganismo, // (UNIVERSIDADES, etc.)
+        guid: item.guid,               
         type: "Oposición",
         publication_date: fechaCorrecta,
         link_boe: item.link,
