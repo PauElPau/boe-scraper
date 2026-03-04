@@ -19,6 +19,69 @@ const parser = new Parser({
 // NUEVA URL OFICIAL: Sección II.B (Oposiciones y concursos)
 const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
 
+// Esta función comprueba si el departamento existe. Si no, lo crea.
+async function gestionarDepartamento(nombre) {
+  if (!nombre) return;
+
+  // Creamos un slug para el departamento (ej: "ministerio-de-justicia")
+  const slugDep = slugify(nombre, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
+
+  // Usamos 'upsert' para insertar solo si no existe (basado en el campo 'slug')
+  // 'ignoreDuplicates: true' significa que si ya existe, no hace nada (no da error).
+  const { error } = await supabase
+    .from('departments')
+    .upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
+
+  if (error) {
+    console.error(`⚠️ Error gestionando departamento ${nombre}:`, error.message);
+  }
+}
+
+// --- NUEVA FUNCIÓN: CLASIFICADOR INTELIGENTE ---
+function deducirTipo(titulo) {
+  // Pasamos todo a minúsculas y quitamos acentos para que sea más fácil buscar
+  const t = titulo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  // 1. Correcciones (Van primero para que no las confunda con convocatorias reales)
+  if (t.includes('correccion de error') || t.includes('errata')) {
+    return 'Corrección de errores';
+  }
+  
+  // 2. Trámites de Listas
+  if (t.includes('admitid') || t.includes('excluid') || t.includes('relacion provisional') || t.includes('relacion definitiva')) {
+    return 'Listas de Admitidos/Excluidos';
+  }
+  
+  // 3. Trámites de Exámenes y Notas
+  if (t.includes('fecha, hora') || t.includes('lugar de celebracion') || t.includes('ejercicio') || t.includes('calificacion') || t.includes('relacion de aprobad')) {
+    return 'Exámenes y Calificaciones';
+  }
+  
+  // 4. Trámites de Tribunales
+  if (t.includes('tribunal') || t.includes('organo de seleccion') || t.includes('nombra') && t.includes('miembro')) {
+    return 'Tribunales';
+  }
+  
+  // 5. Traslados (Para funcionarios que ya tienen plaza, no para nuevos)
+  if (t.includes('provision de puesto') || t.includes('concurso de traslado') || t.includes('concurso especifico')) {
+    return 'Concurso de Traslados (Interno)';
+  }
+  
+  // 6. Bolsas de Empleo Temporal
+  if (t.includes('bolsa de empleo') || t.includes('bolsa de trabajo') || t.includes('contratacion temporal')) {
+    return 'Bolsa de Empleo';
+  }
+  
+  // 7. LAS DESEADAS: Nuevas Convocatorias de Plazas
+  // Si tiene palabras de convocatoria y no ha sido atrapada por los filtros anteriores...
+  if (t.includes('convoca') || t.includes('plaza') || t.includes('ingreso libre') || t.includes('acceso libre') || t.includes('pruebas selectivas')) {
+    return 'Nueva Convocatoria';
+  }
+
+  // 8. El cajón desastre
+  return 'Otros Trámites';
+}
+
 async function extraerBOE() {
   try {
     console.log(`📡 Conectando con el BOE en: ${BOE_RSS_URL}...`);
@@ -56,6 +119,9 @@ async function extraerBOE() {
       const categoriaSeccion = item.categories && item.categories[0] ? item.categories[0] : "Otros";
       const categoriaOrganismo = item.categories && item.categories[1] ? item.categories[1] : "Administración Pública";
 
+      // Antes de guardar la oposición, nos aseguramos de que el departamento exista en la tabla maestra
+      await gestionarDepartamento(categoriaOrganismo);
+
       // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
       const textoRaw =
         item.contentSnippet ||
@@ -70,7 +136,7 @@ async function extraerBOE() {
         section: categoriaSeccion,     
         department: categoriaOrganismo, // (UNIVERSIDADES, etc.)
         guid: item.guid,               
-        type: "Oposición",
+        type: "OPOSICION - " + deducirTipo(item.title),
         publication_date: fechaCorrecta,
         link_boe: item.link,
         raw_text: textoRaw,
