@@ -37,6 +37,15 @@ async function extraerBOE() {
       const añoActual = new Date().getFullYear();
       // Generamos un slug limpio y corto
       const slugFinal = `${slugRecortado}-${añoActual}`;
+      
+
+      // El BOE publica a las 00:00 +0100.
+      // Si usamos new Date() directo, Node.js en UTC lo interpreta como las 23:00 del día anterior.
+      // Solución: Parseamos manualmente la cadena o forzamos UTC al mediodía para evitar cambios de día.
+      const fechaRaw = new Date(item.pubDate);
+      fechaRaw.setHours(fechaRaw.getHours() + 12);
+      // Ahora sí, extraemos la fecha en formato string YYYY-MM-DD para Supabase
+      const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
 
       // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
       const textoRaw =
@@ -51,7 +60,7 @@ async function extraerBOE() {
         meta_description: textoRaw.substring(0, 150) + "...",
         department: "Administración Pública",
         type: "Oposición",
-        publication_date: new Date(item.pubDate),
+        publication_date: fechaCorrecta,
         link_boe: item.link,
         raw_text: textoRaw,
       };
