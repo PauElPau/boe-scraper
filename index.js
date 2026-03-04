@@ -37,48 +37,103 @@ async function gestionarDepartamento(nombre) {
   }
 }
 
+// --- NUEVA FUNCIÓN: EXTRACTOR DE PLAZAS ---
+function extraerPlazas(titulo) {
+  const t = titulo.toLowerCase();
+  
+  // Si es una bolsa de empleo o lista de reserva, el número de plazas es indeterminado (null)
+  if (t.includes('bolsa') || t.includes('lista de reserva')) {
+    return null; 
+  }
+
+  // 1er Intento: Buscar números en formato dígito (ej: "3 plazas", "150 puestos", "1 plaza")
+  // La expresión regular (\d+) captura cualquier bloque de números que vaya seguido de " plaza" o " puesto"
+  const matchDigitos = t.match(/(\d+)\s+(?:plaza|puesto)/);
+  if (matchDigitos && matchDigitos[1]) {
+    return parseInt(matchDigitos[1], 10);
+  }
+
+  // 2º Intento: El BOE usa muchísimo la palabra "una" o "un" en lugar del número 1. (ej: "una plaza")
+  const matchUna = t.match(/(?:un|una|uno)\s+(?:plaza|puesto)/);
+  if (matchUna) {
+    return 1;
+  }
+
+  // 3er Intento: Números del 2 al 10 escritos con letras (menos común, pero ocurre)
+  const numerosTexto = {
+    'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5, 
+    'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10
+  };
+  
+  for (const [palabra, numero] of Object.entries(numerosTexto)) {
+    if (t.match(new RegExp(`${palabra}\\s+(?:plaza|puesto)`))) {
+      return numero;
+    }
+  }
+
+  // Si no encuentra nada claro, devolvemos null
+  return null;
+}
+
 // --- NUEVA FUNCIÓN: CLASIFICADOR INTELIGENTE ---
 function deducirTipo(titulo) {
-  // Pasamos todo a minúsculas y quitamos acentos para que sea más fácil buscar
+  // Pasamos todo a minúsculas, quitamos acentos y caracteres raros
   const t = titulo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  // 1. Correcciones (Van primero para que no las confunda con convocatorias reales)
-  if (t.includes('correccion de error') || t.includes('errata')) {
-    return 'Corrección de errores';
-  }
-  
-  // 2. Trámites de Listas
-  if (t.includes('admitid') || t.includes('excluid') || t.includes('relacion provisional') || t.includes('relacion definitiva')) {
-    return 'Listas de Admitidos/Excluidos';
-  }
-  
-  // 3. Trámites de Exámenes y Notas
-  if (t.includes('fecha, hora') || t.includes('lugar de celebracion') || t.includes('ejercicio') || t.includes('calificacion') || t.includes('relacion de aprobad')) {
-    return 'Exámenes y Calificaciones';
-  }
-  
-  // 4. Trámites de Tribunales
-  if (t.includes('tribunal') || t.includes('organo de seleccion') || t.includes('nombra') && t.includes('miembro')) {
-    return 'Tribunales';
-  }
-  
-  // 5. Traslados (Para funcionarios que ya tienen plaza, no para nuevos)
-  if (t.includes('provision de puesto') || t.includes('concurso de traslado') || t.includes('concurso especifico')) {
-    return 'Concurso de Traslados (Interno)';
-  }
-  
-  // 6. Bolsas de Empleo Temporal
-  if (t.includes('bolsa de empleo') || t.includes('bolsa de trabajo') || t.includes('contratacion temporal')) {
-    return 'Bolsa de Empleo';
-  }
-  
-  // 7. LAS DESEADAS: Nuevas Convocatorias de Plazas
-  // Si tiene palabras de convocatoria y no ha sido atrapada por los filtros anteriores...
-  if (t.includes('convoca') || t.includes('plaza') || t.includes('ingreso libre') || t.includes('acceso libre') || t.includes('pruebas selectivas')) {
-    return 'Nueva Convocatoria';
+  // 1. CORRECCIONES Y ANULACIONES (Van primero para que atrapen cualquier cambio sobre trámites posteriores)
+  if (t.includes('correccion') || t.includes('errata') || t.includes('modifica') || t.includes('ampliacion de plazo') || t.includes('deja sin efecto') || t.includes('desierto') || t.includes('suspension') || t.includes('retrotrae')) {
+    return 'Correcciones y Modificaciones';
   }
 
-  // 8. El cajón desastre
+  // 2. ADJUDICACIONES, APROBADOS Y NOMBRAMIENTOS (El final del proceso)
+  // Atrapa a la gente que ya ha ganado la plaza o elige destino.
+  if (t.includes('aprobad') || t.includes('destino') || t.includes('adjudicacion') || t.includes('superan') || t.includes('fase de practica') || (t.includes('nombra') && t.includes('funcionari'))) {
+    return 'Aprobados y Adjudicaciones';
+  }
+
+  // 3. TRÁMITES: ADMITIDOS Y EXCLUIDOS
+  if (t.includes('admitid') || t.includes('excluid') || t.includes('relacion provisional') || t.includes('relacion definitiva') || t.includes('lista provisional')) {
+    return 'Listas de Admitidos/Excluidos';
+  }
+
+  // 4. TRÁMITES: EXÁMENES Y NOTAS
+  if (t.includes('fecha') || t.includes('hora') || t.includes('lugar') || t.includes('ejercicio') || t.includes('calificacion') || t.includes('fase de concurso') || t.includes('fase de oposicion') || t.includes('valoracion') || t.includes('prueba de aptitud')) {
+    return 'Exámenes y Calificaciones';
+  }
+
+  // 5. TRÁMITES: TRIBUNALES
+  if (t.includes('tribunal') || t.includes('organo de seleccion') || t.includes('comision de seleccion') || t.includes('comision calificador') || t.includes('comision evaluadora') || (t.includes('nombra') && t.includes('miembro'))) {
+    return 'Tribunales';
+  }
+
+  // 6. TRASLADOS Y LIBRE DESIGNACIÓN (Movilidad para quienes YA son funcionarios)
+  // "Libre designación" ensucia muchísimo el BOE. Hay que aislarlo.
+  if (t.includes('libre designacion') || t.includes('provision de puesto') || t.includes('concurso de traslado') || t.includes('concurso especifico') || t.includes('concurso general')) {
+    return 'Traslados / Libre Designación';
+  }
+
+  // 7. BOLSAS DE EMPLEO TEMPORAL Y SUSTITUCIONES
+  if (t.includes('bolsa de empleo') || t.includes('bolsa de trabajo') || t.includes('lista de reserva') || t.includes('contratacion temporal') || t.includes('interin')) {
+    return 'Bolsas de Empleo';
+  }
+
+  // 8. LAS DESEADAS: NUEVAS CONVOCATORIAS
+  // Si tiene palabras clave de inicio de proceso y ha sobrevivido a los filtros anteriores, es una convocatoria.
+  if (t.includes('convoca') || t.includes('plaza') || t.includes('ingreso') || t.includes('acceso libre') || t.includes('pruebas selectivas') || t.includes('proceso selectivo')) {
+    
+    // Sub-Clasificamos las convocatorias para dar una información brutal al usuario
+    if (t.includes('promocion interna')) {
+        return 'Convocatoria (Promoción Interna)';
+    }
+    if (t.includes('estabilizacion') || t.includes('consolidacion')) {
+        return 'Convocatoria (Estabilización)';
+    }
+    
+    // Si no es interna ni de estabilización, es el Santo Grial:
+    return 'Nueva Convocatoria'; 
+  }
+
+  // 9. CAJÓN DESASTRE (Cartas de servicios, convenios raros, etc.)
   return 'Otros Trámites';
 }
 
@@ -137,6 +192,7 @@ async function extraerBOE() {
         department: categoriaOrganismo, // (UNIVERSIDADES, etc.)
         guid: item.guid,       
         parent_type: "OPOSICION",    
+        plazas: extraerPlazas(item.title),
         type: deducirTipo(item.title),
         publication_date: fechaCorrecta,
         link_boe: item.link,
