@@ -2,16 +2,19 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
-// IMPORTAMOS GEMINI
-const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
+// Usamos la librería de OpenAI, pero conectada a Groq
+const { OpenAI } = require("openai");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-// Configuración Gemini
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Configuración de la IA apuntando a Groq (¡Gratis!)
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY,
+  baseURL: "https://api.groq.com/openai/v1",
+});
 
 const parser = new Parser({
   headers: {
@@ -22,7 +25,7 @@ const parser = new Parser({
 
 const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
 
-// Función para no superar el límite gratuito de Gemini (15 req/min)
+// Pausa para ser educados con la API gratuita (3 segundos)
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function gestionarDepartamento(nombre) {
@@ -37,56 +40,43 @@ async function gestionarDepartamento(nombre) {
   }
 }
 
-// --- CEREBRO GEMINI: SALIDA ESTRUCTURADA ---
-async function analizarConvocatoriaGemini(titulo, descripcion) {
-  const schema = {
-    type: SchemaType.OBJECT,
-    properties: {
-      tipo: {
-        type: SchemaType.STRING,
-        description: "Debe ser EXACTAMENTE uno de estos valores: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'."
-      },
-      plazas: {
-        type: SchemaType.INTEGER,
-        description: "Número total de plazas ofertadas numérico. Si no hay plazas numéricas claras, o es una bolsa, o trámite intermedio, devuelve null.",
-        nullable: true
-      },
-      resumen: {
-        type: SchemaType.STRING,
-        description: "Un resumen claro y directo de 1 frase para humanos. Elimina toda la jerga burocrática del BOE (no uses 'Resolución por la que se...'). Ve al grano: 'Se convocan X plazas de Auxiliar para el Ayuntamiento de Y' o 'Se publica la lista de admitidos para las plazas de...'."
-      },
-      plazo_texto: {
-        type: SchemaType.STRING,
-        description: "Extrae el plazo de presentación de instancias exacto (ej: '20 días hábiles', '15 días naturales'). Si es un trámite sin plazo de inscripción, devuelve null.",
-        nullable: true
-      }
-    },
-    required: ["tipo", "resumen"]
-  };
-
-  const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    generationConfig: {
-      responseMimeType: "application/json",
-      responseSchema: schema,
-      temperature: 0.2, 
-    },
-  });
-
+// --- CEREBRO IA (LLAMA 3 en GROQ) ---
+async function analizarConvocatoriaIA(titulo, descripcion) {
   const prompt = `
-  Analiza esta publicación del BOE.
-  Extrae la categoría, las plazas, el plazo de inscripción (si lo hay) y redacta un resumen sin jerga.
+  Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
+  Analiza la siguiente publicación.
   
   TÍTULO: ${titulo}
   TEXTO: ${descripcion}
+  
+  Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta, sin texto adicional ni código markdown:
+  {
+    "tipo": "Uno de estos valores exactos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'.",
+    "plazas": Número entero de plazas ofertadas (si no hay, devuelve null),
+    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática.",
+    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles'). Si no hay plazo, devuelve null."
+  }
   `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const responseText = result.response.text();
-    return JSON.parse(responseText);
+    const response = await groq.chat.completions.create({
+      model: "llama-3.3-70b-versatile", // Modelo gratuito super potente
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+      messages: [
+        { 
+          role: "system", 
+          content: "You are a helpful assistant designed to output strict JSON." 
+        },
+        { role: "user", content: prompt }
+      ]
+    });
+
+    const resultado = JSON.parse(response.choices[0].message.content);
+    return resultado;
+
   } catch (error) {
-    console.error("⚠️ Error con Gemini en este item:", error.message);
+    console.error("⚠️ Error con la IA en este item:", error.message);
     return { 
       tipo: "OPOSICION - Otros Trámites", 
       plazas: null, 
@@ -102,8 +92,6 @@ async function extraerBOE() {
     const feed = await parser.parseURL(BOE_RSS_URL);
 
     let nuevasInsertadas = 0;
-    
-    // Invertimos para guardar primero las más antiguas y mantener el orden cronológico
     const items = feed.items.reverse();
 
     for (const item of items) {
@@ -121,14 +109,10 @@ async function extraerBOE() {
 
       await gestionarDepartamento(categoriaOrganismo);
 
-      const textoRaw =
-        item.contentSnippet ||
-        item.content ||
-        item.description ||
-        "Ver detalles en el enlace oficial.";
+      const textoRaw = item.contentSnippet || item.content || item.description || "Ver detalles.";
 
-      console.log(`🤖 Analizando con IA: ${item.title.substring(0, 50)}...`);
-      const analisisIA = await analizarConvocatoriaGemini(item.title, textoRaw);
+      console.log(`🤖 Analizando con IA (Groq): ${item.title.substring(0, 50)}...`);
+      const analisisIA = await analizarConvocatoriaIA(item.title, textoRaw);
 
       const convocatoria = {
         slug: slugFinal,
@@ -139,12 +123,11 @@ async function extraerBOE() {
         guid: item.guid,       
         parent_type: "OPOSICION",    
         
-        // --- DATOS MÁGICOS DE LA IA ---
+        // DATOS ESTRUCTURADOS POR LA IA
         type: analisisIA.tipo,
         plazas: analisisIA.plazas,
         resumen: analisisIA.resumen,
         plazo_texto: analisisIA.plazo_texto,
-        // ------------------------------
         
         publication_date: fechaCorrecta,
         link_boe: item.link,
@@ -159,20 +142,20 @@ async function extraerBOE() {
       if (error) {
         console.error(`❌ Error al insertar ${slugFinal}:`, error.message);
       } else {
-        console.log(`✅ Procesado: ${analisisIA.resumen.substring(0, 50)}...`);
+        console.log(`   ✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
         nuevasInsertadas++;
       }
       
-      // Respetamos límite gratuito de Gemini (aprox 4.5s)
-      await esperar(4500);
+      // Esperamos 3 segundos para no saturar la API gratuita
+      await esperar(3000);
     }
 
-    console.log(`🎉 Proceso completado. ${nuevasInsertadas} convocatorias insertadas/actualizadas.`);
+    console.log(`🎉 Proceso completado. ${nuevasInsertadas} convocatorias procesadas.`);
 
     if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
       console.log('🚀 Avisando a Vercel para reconstruir la web...');
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
-      console.log('✅ Aviso enviado con éxito.');
+      console.log('✅ Aviso enviado.');
     }
   } catch (error) {
     console.error("🔥 Error crítico en el scraper:", error);
