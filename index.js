@@ -2,13 +2,17 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
+// IMPORTAMOS GEMINI
+const { GoogleGenerativeAI, SchemaType } = require("@google/generative-ai");
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-// MEJORA: Añadimos un User-Agent falso para que el BOE no nos bloquee por ser un bot
+// Configuración Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 const parser = new Parser({
   headers: {
     "User-Agent":
@@ -16,18 +20,14 @@ const parser = new Parser({
   },
 });
 
-// NUEVA URL OFICIAL: Sección II.B (Oposiciones y concursos)
 const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
 
-// Esta función comprueba si el departamento existe. Si no, lo crea.
+// Función para no superar el límite gratuito de Gemini (15 req/min)
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function gestionarDepartamento(nombre) {
   if (!nombre) return;
-
-  // Creamos un slug para el departamento (ej: "ministerio-de-justicia")
   const slugDep = slugify(nombre, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
-
-  // Usamos 'upsert' para insertar solo si no existe (basado en el campo 'slug')
-  // 'ignoreDuplicates: true' significa que si ya existe, no hace nada (no da error).
   const { error } = await supabase
     .from('departments')
     .upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
@@ -37,104 +37,63 @@ async function gestionarDepartamento(nombre) {
   }
 }
 
-// --- NUEVA FUNCIÓN: EXTRACTOR DE PLAZAS ---
-function extraerPlazas(titulo) {
-  const t = titulo.toLowerCase();
-  
-  // Si es una bolsa de empleo o lista de reserva, el número de plazas es indeterminado (null)
-  if (t.includes('bolsa') || t.includes('lista de reserva')) {
-    return null; 
-  }
-
-  // 1er Intento: Buscar números en formato dígito (ej: "3 plazas", "150 puestos", "1 plaza")
-  // La expresión regular (\d+) captura cualquier bloque de números que vaya seguido de " plaza" o " puesto"
-  const matchDigitos = t.match(/(\d+)\s+(?:plaza|puesto)/);
-  if (matchDigitos && matchDigitos[1]) {
-    return parseInt(matchDigitos[1], 10);
-  }
-
-  // 2º Intento: El BOE usa muchísimo la palabra "una" o "un" en lugar del número 1. (ej: "una plaza")
-  const matchUna = t.match(/(?:un|una|uno)\s+(?:plaza|puesto)/);
-  if (matchUna) {
-    return 1;
-  }
-
-  // 3er Intento: Números del 2 al 10 escritos con letras (menos común, pero ocurre)
-  const numerosTexto = {
-    'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5, 
-    'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10
+// --- CEREBRO GEMINI: SALIDA ESTRUCTURADA ---
+async function analizarConvocatoriaGemini(titulo, descripcion) {
+  const schema = {
+    type: SchemaType.OBJECT,
+    properties: {
+      tipo: {
+        type: SchemaType.STRING,
+        description: "Debe ser EXACTAMENTE uno de estos valores: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'."
+      },
+      plazas: {
+        type: SchemaType.INTEGER,
+        description: "Número total de plazas ofertadas numérico. Si no hay plazas numéricas claras, o es una bolsa, o trámite intermedio, devuelve null.",
+        nullable: true
+      },
+      resumen: {
+        type: SchemaType.STRING,
+        description: "Un resumen claro y directo de 1 frase para humanos. Elimina toda la jerga burocrática del BOE (no uses 'Resolución por la que se...'). Ve al grano: 'Se convocan X plazas de Auxiliar para el Ayuntamiento de Y' o 'Se publica la lista de admitidos para las plazas de...'."
+      },
+      plazo_texto: {
+        type: SchemaType.STRING,
+        description: "Extrae el plazo de presentación de instancias exacto (ej: '20 días hábiles', '15 días naturales'). Si es un trámite sin plazo de inscripción, devuelve null.",
+        nullable: true
+      }
+    },
+    required: ["tipo", "resumen"]
   };
+
+  const model = genAI.getGenerativeModel({
+    model: "gemini-1.5-flash",
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: schema,
+      temperature: 0.2, 
+    },
+  });
+
+  const prompt = `
+  Analiza esta publicación del BOE.
+  Extrae la categoría, las plazas, el plazo de inscripción (si lo hay) y redacta un resumen sin jerga.
   
-  for (const [palabra, numero] of Object.entries(numerosTexto)) {
-    if (t.match(new RegExp(`${palabra}\\s+(?:plaza|puesto)`))) {
-      return numero;
-    }
+  TÍTULO: ${titulo}
+  TEXTO: ${descripcion}
+  `;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const responseText = result.response.text();
+    return JSON.parse(responseText);
+  } catch (error) {
+    console.error("⚠️ Error con Gemini en este item:", error.message);
+    return { 
+      tipo: "OPOSICION - Otros Trámites", 
+      plazas: null, 
+      resumen: titulo, 
+      plazo_texto: null 
+    };
   }
-
-  // Si no encuentra nada claro, devolvemos null
-  return null;
-}
-
-// --- NUEVA FUNCIÓN: CLASIFICADOR INTELIGENTE ---
-function deducirTipo(titulo) {
-  // Pasamos todo a minúsculas, quitamos acentos y caracteres raros
-  const t = titulo.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  // 1. CORRECCIONES Y ANULACIONES (Van primero para que atrapen cualquier cambio sobre trámites posteriores)
-  if (t.includes('correccion') || t.includes('errata') || t.includes('modifica') || t.includes('ampliacion de plazo') || t.includes('deja sin efecto') || t.includes('desierto') || t.includes('suspension') || t.includes('retrotrae')) {
-    return 'Correcciones y Modificaciones';
-  }
-
-  // 2. ADJUDICACIONES, APROBADOS Y NOMBRAMIENTOS (El final del proceso)
-  // Atrapa a la gente que ya ha ganado la plaza o elige destino.
-  if (t.includes('aprobad') || t.includes('destino') || t.includes('adjudicacion') || t.includes('superan') || t.includes('fase de practica') || (t.includes('nombra') && t.includes('funcionari'))) {
-    return 'Aprobados y Adjudicaciones';
-  }
-
-  // 3. TRÁMITES: ADMITIDOS Y EXCLUIDOS
-  if (t.includes('admitid') || t.includes('excluid') || t.includes('relacion provisional') || t.includes('relacion definitiva') || t.includes('lista provisional')) {
-    return 'Listas de Admitidos/Excluidos';
-  }
-
-  // 4. TRÁMITES: EXÁMENES Y NOTAS
-  if (t.includes('fecha') || t.includes('hora') || t.includes('lugar') || t.includes('ejercicio') || t.includes('calificacion') || t.includes('fase de concurso') || t.includes('fase de oposicion') || t.includes('valoracion') || t.includes('prueba de aptitud')) {
-    return 'Exámenes y Calificaciones';
-  }
-
-  // 5. TRÁMITES: TRIBUNALES
-  if (t.includes('tribunal') || t.includes('organo de seleccion') || t.includes('comision de seleccion') || t.includes('comision calificador') || t.includes('comision evaluadora') || (t.includes('nombra') && t.includes('miembro'))) {
-    return 'Tribunales';
-  }
-
-  // 6. TRASLADOS Y LIBRE DESIGNACIÓN (Movilidad para quienes YA son funcionarios)
-  // "Libre designación" ensucia muchísimo el BOE. Hay que aislarlo.
-  if (t.includes('libre designacion') || t.includes('provision de puesto') || t.includes('concurso de traslado') || t.includes('concurso especifico') || t.includes('concurso general')) {
-    return 'Traslados / Libre Designación';
-  }
-
-  // 7. BOLSAS DE EMPLEO TEMPORAL Y SUSTITUCIONES
-  if (t.includes('bolsa de empleo') || t.includes('bolsa de trabajo') || t.includes('lista de reserva') || t.includes('contratacion temporal') || t.includes('interin')) {
-    return 'Bolsas de Empleo';
-  }
-
-  // 8. LAS DESEADAS: NUEVAS CONVOCATORIAS
-  // Si tiene palabras clave de inicio de proceso y ha sobrevivido a los filtros anteriores, es una convocatoria.
-  if (t.includes('convoca') || t.includes('plaza') || t.includes('ingreso') || t.includes('acceso libre') || t.includes('pruebas selectivas') || t.includes('proceso selectivo')) {
-    
-    // Sub-Clasificamos las convocatorias para dar una información brutal al usuario
-    if (t.includes('promocion interna')) {
-        return 'Convocatoria (Promoción Interna)';
-    }
-    if (t.includes('estabilizacion') || t.includes('consolidacion')) {
-        return 'Convocatoria (Estabilización)';
-    }
-    
-    // Si no es interna ni de estabilización, es el Santo Grial:
-    return 'Nueva Convocatoria'; 
-  }
-
-  // 9. CAJÓN DESASTRE (Cartas de servicios, convenios raros, etc.)
-  return 'Otros Trámites';
 }
 
 async function extraerBOE() {
@@ -143,63 +102,56 @@ async function extraerBOE() {
     const feed = await parser.parseURL(BOE_RSS_URL);
 
     let nuevasInsertadas = 0;
+    
+    // Invertimos para guardar primero las más antiguas y mantener el orden cronológico
+    const items = feed.items.reverse();
 
-    for (const item of feed.items) {
+    for (const item of items) {
       const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
-      
-      // --- CORRECCIÓN ---
-      // Cortamos el slug a máximo 100 caracteres para evitar el error ENAMETOOLONG
-      // Si es muy largo, lo cortamos sin miramientos.
       const slugRecortado = slugBase.length > 100 ? slugBase.substring(0, 100) : slugBase;
-      
       const añoActual = new Date().getFullYear();
-      // Generamos un slug limpio y corto
       const slugFinal = `${slugRecortado}-${añoActual}`;
-      
 
-      // El BOE publica a las 00:00 +0100.
-      // Si usamos new Date() directo, Node.js en UTC lo interpreta como las 23:00 del día anterior.
-      // Solución: Parseamos manualmente la cadena o forzamos UTC al mediodía para evitar cambios de día.
       const fechaRaw = new Date(item.pubDate);
       fechaRaw.setHours(fechaRaw.getHours() + 12);
-      // Ahora sí, extraemos la fecha en formato string YYYY-MM-DD para Supabase
       const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
 
-      // --- NUEVO: EXTRACCIÓN DE CATEGORÍAS Y GUID ---
-      // item.categories es un array. 
-      // La [0] suele ser la Sección (II. Autoridades...)
-      // La [1] suele ser el Organismo (UNIVERSIDADES, MINISTERIOS...)
-
-      // Usamos "||" por seguridad, por si alguna vez vienen vacías
       const categoriaSeccion = item.categories && item.categories[0] ? item.categories[0] : "Otros";
       const categoriaOrganismo = item.categories && item.categories[1] ? item.categories[1] : "Administración Pública";
 
-      // Antes de guardar la oposición, nos aseguramos de que el departamento exista en la tabla maestra
       await gestionarDepartamento(categoriaOrganismo);
 
-      // Extraemos el texto de forma más segura (el BOE a veces usa contentSnippet o content)
       const textoRaw =
         item.contentSnippet ||
         item.content ||
         item.description ||
         "Ver detalles en el enlace oficial.";
 
+      console.log(`🤖 Analizando con IA: ${item.title.substring(0, 50)}...`);
+      const analisisIA = await analizarConvocatoriaGemini(item.title, textoRaw);
+
       const convocatoria = {
         slug: slugFinal,
         title: item.title,
         meta_description: textoRaw.substring(0, 150) + "...",
         section: categoriaSeccion,     
-        department: categoriaOrganismo, // (UNIVERSIDADES, etc.)
+        department: categoriaOrganismo, 
         guid: item.guid,       
         parent_type: "OPOSICION",    
-        plazas: extraerPlazas(item.title),
-        type: deducirTipo(item.title),
+        
+        // --- DATOS MÁGICOS DE LA IA ---
+        type: analisisIA.tipo,
+        plazas: analisisIA.plazas,
+        resumen: analisisIA.resumen,
+        plazo_texto: analisisIA.plazo_texto,
+        // ------------------------------
+        
         publication_date: fechaCorrecta,
         link_boe: item.link,
         raw_text: textoRaw,
       };
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from("convocatorias")
         .upsert(convocatoria, { onConflict: "slug" })
         .select();
@@ -207,16 +159,16 @@ async function extraerBOE() {
       if (error) {
         console.error(`❌ Error al insertar ${slugFinal}:`, error.message);
       } else {
-        console.log(`✅ Procesado: ${item.title.substring(0, 50)}...`);
+        console.log(`✅ Procesado: ${analisisIA.resumen.substring(0, 50)}...`);
         nuevasInsertadas++;
       }
+      
+      // Respetamos límite gratuito de Gemini (aprox 4.5s)
+      await esperar(4500);
     }
 
-    console.log(
-      `🎉 Proceso completado. ${nuevasInsertadas} convocatorias revisadas/insertadas.`,
-    );
+    console.log(`🎉 Proceso completado. ${nuevasInsertadas} convocatorias insertadas/actualizadas.`);
 
-    // Avisamos a Vercel para que regenere la web estática de Astro
     if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
       console.log('🚀 Avisando a Vercel para reconstruir la web...');
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
