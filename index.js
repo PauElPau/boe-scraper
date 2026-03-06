@@ -2,15 +2,14 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
-// Usamos la librería de OpenAI, pero conectada a Groq
 const { OpenAI } = require("openai");
+const cheerio = require("cheerio"); // <--- NUEVA LIBRERÍA
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-// Configuración de la IA apuntando a Groq (¡Gratis!)
 const groq = new OpenAI({
   apiKey: process.env.GROQ_API_KEY,
   baseURL: "https://api.groq.com/openai/v1",
@@ -25,7 +24,6 @@ const parser = new Parser({
 
 const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
 
-// Pausa para ser educados con la API gratuita (3 segundos)
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function gestionarDepartamento(nombre) {
@@ -34,63 +32,74 @@ async function gestionarDepartamento(nombre) {
   const { error } = await supabase
     .from('departments')
     .upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
+  if (error) console.error(`⚠️ Error departamento ${nombre}:`, error.message);
+}
 
-  if (error) {
-    console.error(`⚠️ Error gestionando departamento ${nombre}:`, error.message);
+// --- NUEVA FUNCIÓN: LEER EL INTERIOR DEL BOE ---
+async function obtenerTextoBOE(url) {
+  try {
+    // 1. Descargamos el código fuente de la página del BOE
+    const respuesta = await fetch(url);
+    const html = await respuesta.text();
+    
+    // 2. Usamos Cheerio para leerlo como si fuera jQuery
+    const $ = cheerio.load(html);
+    
+    // El texto oficial del BOE siempre está dentro de un div con id "textoxslt"
+    let textoLimpio = $('#textoxslt').text();
+    
+    // Limpiamos saltos de línea y espacios extra
+    textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
+    
+    // 3. RECORTAMOS: Nos quedamos solo con los primeros 4000 caracteres (~800 palabras)
+    // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
+    return textoLimpio.substring(0, 4000);
+  } catch (error) {
+    console.error(`⚠️ No se pudo leer el interior de ${url}`);
+    return null; // Si falla, devolveremos null
   }
 }
 
-// --- CEREBRO IA (LLAMA 3 en GROQ) ---
-async function analizarConvocatoriaIA(titulo, descripcion) {
+// --- CEREBRO IA ACTUALIZADO ---
+async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
   Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
-  Analiza la siguiente publicación.
+  Analiza el texto oficial de esta publicación (hemos extraído la introducción del documento real).
   
   TÍTULO: ${titulo}
-  TEXTO: ${descripcion}
+  TEXTO INTERIOR DEL BOE: ${textoInterior}
   
   Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta, sin texto adicional ni código markdown:
   {
     "tipo": "Uno de estos valores exactos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'.",
-    "plazas": Número entero de plazas ofertadas (si no hay, devuelve null),
-    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática.",
-    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles'). Si no hay plazo, devuelve null."
+    "plazas": Número entero de plazas ofertadas (si no se indica un número, devuelve null),
+    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática. Basado en el texto interior.",
+    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles', 'quince días naturales'). Si es un trámite sin plazo, devuelve null."
   }
   `;
 
   try {
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile", // Modelo gratuito super potente
+      model: "llama-3.3-70b-versatile",
       temperature: 0.1,
       response_format: { type: "json_object" },
       messages: [
-        { 
-          role: "system", 
-          content: "You are a helpful assistant designed to output strict JSON." 
-        },
+        { role: "system", content: "You are a helpful assistant designed to output strict JSON." },
         { role: "user", content: prompt }
       ]
     });
 
-    const resultado = JSON.parse(response.choices[0].message.content);
-    return resultado;
-
+    return JSON.parse(response.choices[0].message.content);
   } catch (error) {
-    console.error("⚠️ Error con la IA en este item:", error.message);
-    return { 
-      tipo: "OPOSICION - Otros Trámites", 
-      plazas: null, 
-      resumen: titulo, 
-      plazo_texto: null 
-    };
+    console.error("⚠️ Error con la IA:", error.message);
+    return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo, plazo_texto: null };
   }
 }
 
 async function extraerBOE() {
   try {
-    console.log(`📡 Conectando con el BOE en: ${BOE_RSS_URL}...`);
+    console.log(`📡 Conectando con el BOE...`);
     const feed = await parser.parseURL(BOE_RSS_URL);
-
     let nuevasInsertadas = 0;
     const items = feed.items.reverse();
 
@@ -109,21 +118,27 @@ async function extraerBOE() {
 
       await gestionarDepartamento(categoriaOrganismo);
 
-      const textoRaw = item.contentSnippet || item.content || item.description || "Ver detalles.";
+      // --- AQUÍ OCURRE LA MAGIA ---
+      console.log(`\n📄 Leyendo interior de: ${item.link}`);
+      let textoParaIA = await obtenerTextoBOE(item.link);
+      
+      // Si por algún motivo falla la lectura web, usamos la descripción corta del RSS como plan B
+      if (!textoParaIA || textoParaIA.length < 50) {
+        textoParaIA = item.contentSnippet || item.content || item.description;
+      }
 
-      console.log(`🤖 Analizando con IA (Groq): ${item.title.substring(0, 50)}...`);
-      const analisisIA = await analizarConvocatoriaIA(item.title, textoRaw);
+      console.log(`🤖 Analizando con IA (Groq)...`);
+      const analisisIA = await analizarConvocatoriaIA(item.title, textoParaIA);
 
       const convocatoria = {
         slug: slugFinal,
         title: item.title,
-        meta_description: textoRaw.substring(0, 150) + "...",
+        meta_description: item.contentSnippet?.substring(0, 150) + "..." || "Ver detalles.",
         section: categoriaSeccion,     
         department: categoriaOrganismo, 
         guid: item.guid,       
         parent_type: "OPOSICION",    
         
-        // DATOS ESTRUCTURADOS POR LA IA
         type: analisisIA.tipo,
         plazas: analisisIA.plazas,
         resumen: analisisIA.resumen,
@@ -131,7 +146,7 @@ async function extraerBOE() {
         
         publication_date: fechaCorrecta,
         link_boe: item.link,
-        raw_text: textoRaw,
+        raw_text: textoParaIA, // Opcional: guardamos el texto recortado en BD
       };
 
       const { error } = await supabase
@@ -140,25 +155,21 @@ async function extraerBOE() {
         .select();
 
       if (error) {
-        console.error(`❌ Error al insertar ${slugFinal}:`, error.message);
+        console.error(`❌ Error BD:`, error.message);
       } else {
-        console.log(`   ✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
+        console.log(`✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
         nuevasInsertadas++;
       }
       
-      // Esperamos 3 segundos para no saturar la API gratuita
-      await esperar(3000);
+      await esperar(3000); // 3 segundos de pausa
     }
 
-    console.log(`🎉 Proceso completado. ${nuevasInsertadas} convocatorias procesadas.`);
-
+    console.log(`🎉 Proceso completado.`);
     if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
-      console.log('🚀 Avisando a Vercel para reconstruir la web...');
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
-      console.log('✅ Aviso enviado.');
     }
   } catch (error) {
-    console.error("🔥 Error crítico en el scraper:", error);
+    console.error("🔥 Error crítico:", error);
     process.exit(1);
   }
 }
