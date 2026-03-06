@@ -60,7 +60,7 @@ async function obtenerTextoBOE(url) {
   }
 }
 
-// --- CEREBRO IA ACTUALIZADO ---
+// --- CEREBRO IA ACTUALIZADO Y SUPERVITAMINADO ---
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
   Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
@@ -73,15 +73,19 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   {
     "tipo": "Uno de estos valores exactos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'.",
     "plazas": Número entero de plazas ofertadas (si no se indica un número, devuelve null),
-    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática. Basado en el texto interior.",
-    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles', 'quince días naturales'). Si es un trámite sin plazo, devuelve null."
+    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática.",
+    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles'). Si es un trámite sin plazo, devuelve null.",
+    "grupo": "El grupo o subgrupo funcionarial si se menciona (ej: 'A1', 'A2', 'C1', 'C2', 'E', 'Agrupaciones Profesionales'). Si no se menciona, devuelve null.",
+    "sistema": "El sistema de selección. Valores permitidos: 'Oposición', 'Concurso-oposición', 'Concurso', o null si no se menciona.",
+    "profesion": "El nombre del puesto de trabajo, cuerpo o categoría de forma limpia y directa (ej: 'Auxiliar Administrativo', 'Policía Local', 'Técnico de Gestión'). Si no aplica, devuelve null.",
+    "provincia": "A partir del organismo convocante, deduce la provincia española a la que pertenece (ej: si es Ayuntamiento de Valencia, la provincia es 'Valencia'). Si es a nivel estatal (Ministerios) devuelve 'Estatal'. Si no estás seguro, devuelve null."
   }
   `;
 
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.3-70b-versatile",
-      temperature: 0.1,
+      temperature: 0.1, // Mantenemos 0.1 para que sea estricto con los formatos
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: "You are a helpful assistant designed to output strict JSON." },
@@ -92,7 +96,16 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     console.error("⚠️ Error con la IA:", error.message);
-    return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo, plazo_texto: null };
+    return { 
+      tipo: "OPOSICION - Otros Trámites", 
+      plazas: null, 
+      resumen: titulo, 
+      plazo_texto: null,
+      grupo: null,
+      sistema: null,
+      profesion: null,
+      provincia: null
+    };
   }
 }
 
@@ -143,6 +156,11 @@ async function extraerBOE() {
         plazas: analisisIA.plazas,
         resumen: analisisIA.resumen,
         plazo_texto: analisisIA.plazo_texto,
+
+        grupo: analisisIA.grupo,
+        sistema: analisisIA.sistema,
+        profesion: analisisIA.profesion,
+        provincia: analisisIA.provincia,
         
         publication_date: fechaCorrecta,
         link_boe: item.link,
