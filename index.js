@@ -123,7 +123,7 @@ async function extraerBOE() {
       const slugFinal = `${slugRecortado}-${añoActual}`;
 
       const fechaRaw = new Date(item.pubDate);
-      fechaRaw.setHours(fechaRaw.getHours() + 12);
+      fechaRaw.setHours(fechaRaw.getHours() + 14);
       const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
 
       const categoriaSeccion = item.categories && item.categories[0] ? item.categories[0] : "Otros";
