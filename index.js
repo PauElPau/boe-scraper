@@ -51,9 +51,9 @@ async function obtenerTextoBOE(url) {
     // Limpiamos saltos de línea y espacios extra
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
     
-    // 3. RECORTAMOS: Nos quedamos solo con los primeros 4000 caracteres (~800 palabras)
+    // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~400 palabras)
     // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
-    return textoLimpio.substring(0, 4000);
+    return textoLimpio.substring(0, 1800);
   } catch (error) {
     console.error(`⚠️ No se pudo leer el interior de ${url}`);
     return null; // Si falla, devolveremos null
@@ -84,7 +84,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
   try {
     const response = await groq.chat.completions.create({
-      model: "llama-3.3-70b-versatile",
+      model: "llama-3.1-8b-instant",
       temperature: 0.1, // Mantenemos 0.1 para que sea estricto con los formatos
       response_format: { type: "json_object" },
       messages: [
