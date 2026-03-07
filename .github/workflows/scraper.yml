@@ -3,8 +3,8 @@ name: BOE Scraper Diario
 # 1. Cuándo se ejecuta (Triggers)
 on:
   schedule:
-    # Formato Cron: Se ejecuta de Lunes a Sábado a las 08:00 AM (UTC)
-    - cron: "0 8 * * 1-6"
+    # Formato Cron: Se ejecuta de Lunes a Sábado a las 05:17 AM (UTC) -> 06:17 AM España
+    - cron: "17 5 * * 1-6"
   workflow_dispatch:
     # Esto te permite ejecutarlo manualmente dándole a un botón en GitHub
 
