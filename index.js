@@ -53,7 +53,7 @@ async function obtenerTextoBOE(url) {
     
     // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~400 palabras)
     // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
-    return textoLimpio.substring(0, 1800);
+    return textoLimpio.substring(0, 4000);
   } catch (error) {
     console.error(`⚠️ No se pudo leer el interior de ${url}`);
     return null; // Si falla, devolveremos null
@@ -78,7 +78,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "grupo": "El grupo o subgrupo funcionarial si se menciona (ej: 'A1', 'A2', 'C1', 'C2', 'E', 'Agrupaciones Profesionales'). Si no se menciona, devuelve null.",
     "sistema": "El sistema de selección. Valores permitidos: 'Oposición', 'Concurso-oposición', 'Concurso', o null si no se menciona.",
     "profesion": "El nombre del puesto de trabajo, cuerpo o categoría de forma limpia y directa (ej: 'Auxiliar Administrativo', 'Policía Local', 'Técnico de Gestión'). Si no aplica, devuelve null.",
-    "provincia": "A partir del organismo convocante, deduce la provincia española a la que pertenece (ej: si es Ayuntamiento de Valencia, la provincia es 'Valencia'). Si es a nivel estatal (Ministerios) devuelve 'Estatal'. Si no estás seguro, devuelve null."
+    "provincia": "A partir del organismo convocante, deduce la provincia española a la que pertenece (ej: si es Ayuntamiento de Valencia, la provincia es 'Valencia'). Si es a nivel estatal (Ministerios) devuelve 'Estatal'. Si no estás seguro, devuelve null.",
+    "titulacion": "La titulación académica mínima exigida para presentarse (ej: 'Graduado en ESO', 'Bachiller', 'Grado Universitario'). Si no se menciona explícitamente en el texto, devuelve null.",
+    "enlace_inscripcion": "La URL, página web o sede electrónica exacta que se mencione para ver las bases o presentar la instancia (ej: 'www.madrid.es', 'sede.policia.gob.es'). Si no se menciona ninguna web, devuelve null.",
+    "tasa": "El importe de la tasa por derechos de examen si aparece detallado (ej: '15,50€'). Si no se menciona, devuelve null."
   }
   `;
 
@@ -104,7 +107,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       grupo: null,
       sistema: null,
       profesion: null,
-      provincia: null
+      provincia: null,
+      titulacion: null,
+      enlace_inscripcion: null,
+      tasa: null
     };
   }
 }
