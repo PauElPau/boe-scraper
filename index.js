@@ -51,7 +51,7 @@ async function obtenerTextoBOE(url) {
     // Limpiamos saltos de línea y espacios extra
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
     
-    // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~400 palabras)
+    // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~800 palabras)
     // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
     return textoLimpio.substring(0, 4000);
   } catch (error) {
@@ -74,7 +74,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "tipo": "Uno de estos valores exactos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'.",
     "plazas": Número entero de plazas ofertadas (si no se indica un número, devuelve null),
     "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática.",
-    "plazo_texto": "El plazo exacto de presentación de instancias que diga el texto (ej: '20 días hábiles'). Si es un trámite sin plazo, devuelve null.",
+    "plazo_texto": "Extrae SOLO la duración numérica y el tipo de días, de forma extremadamente concisa (ej: '20 días hábiles', '15 días naturales', '1 mes'). OMITE ABSOLUTAMENTE todo el texto burocrático como 'a contar desde el día siguiente al de la publicación...' o similares. Si no hay plazo, devuelve null.",
     "grupo": "El grupo o subgrupo funcionarial si se menciona (ej: 'A1', 'A2', 'C1', 'C2', 'E', 'Agrupaciones Profesionales'). Si no se menciona, devuelve null.",
     "sistema": "El sistema de selección. Valores permitidos: 'Oposición', 'Concurso-oposición', 'Concurso', o null si no se menciona.",
     "profesion": "El nombre del puesto de trabajo, cuerpo o categoría de forma limpia y directa (ej: 'Auxiliar Administrativo', 'Policía Local', 'Técnico de Gestión'). Si no aplica, devuelve null.",
