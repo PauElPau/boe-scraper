@@ -53,7 +53,7 @@ async function obtenerTextoBOE(url) {
     
     // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~800 palabras)
     // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
-    return textoLimpio.substring(0, 4000);
+    return textoLimpio.substring(0, 5000);
   } catch (error) {
     console.error(`⚠️ No se pudo leer el interior de ${url}`);
     return null; // Si falla, devolveremos null
