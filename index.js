@@ -3,7 +3,8 @@ const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
 const { OpenAI } = require("openai");
-const cheerio = require("cheerio"); // <--- NUEVA LIBRERÍA
+const cheerio = require("cheerio"); 
+const { Resend } = require('resend'); // Corregido: en Node.js usamos require en lugar de import
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -35,28 +36,18 @@ async function gestionarDepartamento(nombre) {
   if (error) console.error(`⚠️ Error departamento ${nombre}:`, error.message);
 }
 
-// --- NUEVA FUNCIÓN: LEER EL INTERIOR DEL BOE ---
+// --- LEER EL INTERIOR DEL BOE ---
 async function obtenerTextoBOE(url) {
   try {
-    // 1. Descargamos el código fuente de la página del BOE
     const respuesta = await fetch(url);
     const html = await respuesta.text();
-    
-    // 2. Usamos Cheerio para leerlo como si fuera jQuery
     const $ = cheerio.load(html);
-    
-    // El texto oficial del BOE siempre está dentro de un div con id "textoxslt"
     let textoLimpio = $('#textoxslt').text();
-    
-    // Limpiamos saltos de línea y espacios extra
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    
-    // 3. RECORTAMOS: Nos quedamos solo con los primeros 1800 caracteres (~800 palabras)
-    // Esto es vital para no agotar los tokens gratuitos de Groq y darle solo el resumen inicial.
     return textoLimpio.substring(0, 5000);
   } catch (error) {
     console.error(`⚠️ No se pudo leer el interior de ${url}`);
-    return null; // Si falla, devolveremos null
+    return null; 
   }
 }
 
@@ -88,7 +79,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      temperature: 0.1, // Mantenemos 0.1 para que sea estricto con los formatos
+      temperature: 0.1, 
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: "You are a helpful assistant designed to output strict JSON." },
@@ -100,27 +91,101 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   } catch (error) {
     console.error("⚠️ Error con la IA:", error.message);
     return { 
-      tipo: "OPOSICION - Otros Trámites", 
-      plazas: null, 
-      resumen: titulo, 
-      plazo_texto: null,
-      grupo: null,
-      sistema: null,
-      profesion: null,
-      provincia: null,
-      titulacion: null,
-      enlace_inscripcion: null,
-      tasa: null
+      tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo, plazo_texto: null,
+      grupo: null, sistema: null, profesion: null, provincia: null, titulacion: null, enlace_inscripcion: null, tasa: null
     };
   }
 }
 
+// --- NUEVA FUNCIÓN: ENVIAR ALERTAS CON RESEND ---
+async function enviarAlertasPorEmail(nuevasConvocatorias) {
+  // Filtramos para enviar correos SOLO de las oposiciones reales, no de correcciones o tribunales
+  const convocatoriasReales = nuevasConvocatorias.filter(c => 
+    c.type === 'OPOSICION - Nueva Convocatoria' || 
+    c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
+    c.type === 'OPOSICION - Bolsas de Empleo'
+  );
+
+  if (convocatoriasReales.length === 0) {
+    console.log("📨 No hay convocatorias de tipo 'Nueva', 'Estabilización' o 'Bolsa' para alertar hoy.");
+    return;
+  }
+
+  // Comprobamos que exista la clave de Resend en el entorno
+  if (!process.env.RESEND_API_KEY) {
+    console.error("⚠️ Falta la variable RESEND_API_KEY en el .env o GitHub Secrets");
+    return;
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  const { data: suscriptores, error } = await supabase.from('suscriptores').select('*');
+
+  if (error || !suscriptores || suscriptores.length === 0) {
+    console.log("📨 No hay suscriptores en la base de datos o hubo un error al leerlos.");
+    return;
+  }
+
+  console.log(`📨 Cruzando ${convocatoriasReales.length} plazas nuevas con ${suscriptores.length} suscriptores...`);
+
+  for (const sub of suscriptores) {
+    if (!sub.interes) continue;
+    const interesStr = sub.interes.toLowerCase().trim();
+
+    const coincidencias = convocatoriasReales.filter(conv => {
+      const enTitulo = conv.title && conv.title.toLowerCase().includes(interesStr);
+      const enProfesion = conv.profesion && conv.profesion.toLowerCase().includes(interesStr);
+      return enTitulo || enProfesion;
+    });
+
+    if (coincidencias.length > 0) {
+      const htmlLista = coincidencias.map(c => 
+        `<li style="margin-bottom: 12px; padding: 10px; background: #f8fafc; border-radius: 8px;">
+          <strong style="color: #0f172a; display: block; margin-bottom: 4px;">${c.profesion || c.title}</strong>
+          <span style="font-size: 13px; color: #475569; display: block; margin-bottom: 6px;">🏛️ ${c.department || 'Admon.'} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}</span>
+          <a href="https://topos.es/convocatorias/${c.slug}" style="display: inline-block; background: #ea580c; color: white; text-decoration: none; padding: 6px 12px; border-radius: 6px; font-size: 13px; font-weight: bold;">Ver plazos y requisitos &rarr;</a>
+        </li>`
+      ).join('');
+
+      try {
+        await resend.emails.send({
+          from: 'El Topo de las Opos <alertas@topos.es>', // <-- CAMBIA ESTO SI VERIFICASTE OTRO DOMINIO EN RESEND
+          to: sub.email,
+          subject: `🚨 Se han publicado plazas de ${sub.interes}`,
+          html: `
+            <div style="font-family: system-ui, -apple-system, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+              <div style="text-align: center; margin-bottom: 20px;">
+                <h2 style="color: #ea580c; margin: 0;">¡Hola! El Topo tiene noticias 🐾</h2>
+              </div>
+              <p style="font-size: 16px;">Acabamos de detectar nuevas publicaciones en el BOE que coinciden con tu alerta de <strong>"${sub.interes}"</strong>:</p>
+              <ul style="list-style: none; padding: 0;">
+                ${htmlLista}
+              </ul>
+              <p style="margin-top: 30px; font-size: 15px;">¡Mucha suerte con el estudio!</p>
+              <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0 20px 0;" />
+              <p style="font-size: 12px; color: #94a3b8; text-align: center;">Estás recibiendo este correo porque activaste una alerta en topos.es</p>
+            </div>
+          `
+        });
+        console.log(`✅ Alerta enviada a ${sub.email}`);
+        await esperar(1000); // Pequeña pausa para no saturar la API de Resend
+      } catch (err) {
+        console.error(`❌ Error enviando email a ${sub.email}:`, err);
+      }
+    }
+  }
+}
+
+// --- BUCLE PRINCIPAL ---
 async function extraerBOE() {
   try {
     console.log(`📡 Conectando con el BOE...`);
     const feed = await parser.parseURL(BOE_RSS_URL);
     let nuevasInsertadas = 0;
     const items = feed.items.reverse();
+    
+    // Array para guardar en memoria lo que metemos hoy y luego pasárselo a Resend
+    const convocatoriasInsertadasHoy = [];
 
     for (const item of items) {
       const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
@@ -137,11 +202,9 @@ async function extraerBOE() {
 
       await gestionarDepartamento(categoriaOrganismo);
 
-      // --- AQUÍ OCURRE LA MAGIA ---
       console.log(`\n📄 Leyendo interior de: ${item.link}`);
       let textoParaIA = await obtenerTextoBOE(item.link);
       
-      // Si por algún motivo falla la lectura web, usamos la descripción corta del RSS como plan B
       if (!textoParaIA || textoParaIA.length < 50) {
         textoParaIA = item.contentSnippet || item.content || item.description;
       }
@@ -150,33 +213,15 @@ async function extraerBOE() {
       const analisisIA = await analizarConvocatoriaIA(item.title, textoParaIA);
 
       const convocatoria = {
-        slug: slugFinal,
-        title: item.title,
-        meta_description: item.contentSnippet?.substring(0, 150) + "..." || "Ver detalles.",
-        section: categoriaSeccion,     
-        department: categoriaOrganismo, 
-        guid: item.guid,       
-        parent_type: "OPOSICION",    
-        
-        type: analisisIA.tipo,
-        plazas: analisisIA.plazas,
-        resumen: analisisIA.resumen,
-        plazo_texto: analisisIA.plazo_texto,
-
-        grupo: analisisIA.grupo,
-        sistema: analisisIA.sistema,
-        profesion: analisisIA.profesion,
-        provincia: analisisIA.provincia,
-        titulacion: analisisIA.titulacion,
-        enlace_inscripcion: analisisIA.enlace_inscripcion,
-        tasa: analisisIA.tasa,
-        
-        publication_date: fechaCorrecta,
-        link_boe: item.link,
-        raw_text: textoParaIA, // Opcional: guardamos el texto recortado en BD
+        slug: slugFinal, title: item.title, meta_description: item.contentSnippet?.substring(0, 150) + "..." || "Ver detalles.",
+        section: categoriaSeccion, department: categoriaOrganismo, guid: item.guid, parent_type: "OPOSICION", 
+        type: analisisIA.tipo, plazas: analisisIA.plazas, resumen: analisisIA.resumen, plazo_texto: analisisIA.plazo_texto,
+        grupo: analisisIA.grupo, sistema: analisisIA.sistema, profesion: analisisIA.profesion, provincia: analisisIA.provincia,
+        titulacion: analisisIA.titulacion, enlace_inscripcion: analisisIA.enlace_inscripcion, tasa: analisisIA.tasa,
+        publication_date: fechaCorrecta, link_boe: item.link, raw_text: textoParaIA,
       };
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("convocatorias")
         .upsert(convocatoria, { onConflict: "slug" })
         .select();
@@ -186,12 +231,23 @@ async function extraerBOE() {
       } else {
         console.log(`✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
         nuevasInsertadas++;
+        // Guardamos la convocatoria procesada en el array para luego enviarla por email
+        if (data && data.length > 0) {
+          convocatoriasInsertadasHoy.push(data[0]);
+        }
       }
       
-      await esperar(3000); // 3 segundos de pausa
+      await esperar(3000); 
     }
 
-    console.log(`🎉 Proceso completado.`);
+    console.log(`🎉 Proceso de lectura completado. Insertadas: ${nuevasInsertadas}`);
+    
+    // --- LLAMADA A RESEND ---
+    if (convocatoriasInsertadasHoy.length > 0) {
+      console.log('🚀 Iniciando envío de alertas por correo electrónico...');
+      await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
+    }
+
     if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
     }
