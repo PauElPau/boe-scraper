@@ -167,6 +167,9 @@ async function extraerBOE() {
         sistema: analisisIA.sistema,
         profesion: analisisIA.profesion,
         provincia: analisisIA.provincia,
+        titulacion: analisisIA.titulacion,
+        enlace_inscripcion: analisisIA.enlace_inscripcion,
+        tasa: analisisIA.tasa,
         
         publication_date: fechaCorrecta,
         link_boe: item.link,
