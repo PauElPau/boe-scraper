@@ -99,43 +99,47 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
 // --- NUEVA FUNCIÓN: ENVIAR ALERTAS CON RESEND ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
-  // Filtramos para enviar correos SOLO de las oposiciones reales, no de correcciones o tribunales
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
     c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
     c.type === 'OPOSICION - Bolsas de Empleo'
   );
 
-  if (convocatoriasReales.length === 0) {
-    console.log("📨 No hay convocatorias de tipo 'Nueva', 'Estabilización' o 'Bolsa' para alertar hoy.");
-    return;
-  }
+  if (convocatoriasReales.length === 0) return;
 
-  // Comprobamos que exista la clave de Resend en el entorno
   if (!process.env.RESEND_API_KEY) {
     console.error("⚠️ Falta la variable RESEND_API_KEY en el .env o GitHub Secrets");
     return;
   }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-
   const { data: suscriptores, error } = await supabase.from('suscriptores').select('*');
 
-  if (error || !suscriptores || suscriptores.length === 0) {
-    console.log("📨 No hay suscriptores en la base de datos o hubo un error al leerlos.");
-    return;
-  }
+  if (error || !suscriptores || suscriptores.length === 0) return;
 
   console.log(`📨 Cruzando ${convocatoriasReales.length} plazas nuevas con ${suscriptores.length} suscriptores...`);
 
   for (const sub of suscriptores) {
     if (!sub.interes) continue;
     const interesStr = sub.interes.toLowerCase().trim();
+    // Leemos el array de provincias del usuario (si es nulo, lo convertimos a array vacío)
+    const provinciasSub = sub.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
+      // 1. ¿Le interesa la profesión?
       const enTitulo = conv.title && conv.title.toLowerCase().includes(interesStr);
       const enProfesion = conv.profesion && conv.profesion.toLowerCase().includes(interesStr);
-      return enTitulo || enProfesion;
+      const encajaInteres = enTitulo || enProfesion;
+
+      // 2. ¿Encaja en su provincia?
+      let encajaProvincia = true;
+      // Si el usuario seleccionó al menos una provincia, comprobamos. Si no, encajaProvincia sigue siendo true (Toda España)
+      if (provinciasSub.length > 0) {
+        // La plaza coincide si su provincia está dentro de lo que marcó el usuario
+        encajaProvincia = provinciasSub.includes(conv.provincia);
+      }
+
+      return encajaInteres && encajaProvincia;
     });
 
     if (coincidencias.length > 0) {
@@ -149,7 +153,7 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
 
       try {
         await resend.emails.send({
-          from: 'El Topo de las Opos <alertas@topos.es>', // <-- CAMBIA ESTO SI VERIFICASTE OTRO DOMINIO EN RESEND
+          from: 'El Topo de las Opos <alertas@topos.es>', 
           to: sub.email,
           subject: `🚨 Se han publicado plazas de ${sub.interes}`,
           html: `
@@ -168,7 +172,8 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
           `
         });
         console.log(`✅ Alerta enviada a ${sub.email}`);
-        await esperar(1000); // Pequeña pausa para no saturar la API de Resend
+        // Pequeña pausa de 1 segundo para no saturar la API de Resend
+        await new Promise(resolve => setTimeout(resolve, 1000)); 
       } catch (err) {
         console.error(`❌ Error enviando email a ${sub.email}:`, err);
       }
