@@ -176,6 +176,72 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   }
 }
 
+// --- NUEVA FUNCIÓN: ENVIAR RESUMEN A TELEGRAM ---
+async function enviarAlertaTelegram(nuevasConvocatorias) {
+  // Solo avisamos de las plazas reales
+  const convocatoriasReales = nuevasConvocatorias.filter(c => 
+    c.type === 'OPOSICION - Nueva Convocatoria' || 
+    c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
+    c.type === 'OPOSICION - Bolsas de Empleo'
+  );
+
+  if (convocatoriasReales.length === 0) return;
+
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHANNEL_ID; 
+
+  if (!token || !chatId) {
+    console.error("⚠️ Faltan las variables de Telegram en .env o GitHub Secrets");
+    return;
+  }
+
+  console.log(`📣 Preparando resumen para Telegram con ${convocatoriasReales.length} plazas...`);
+
+  // Construimos el mensaje con formato Markdown de Telegram
+  let texto = `🚨 *¡Nuevas Oposiciones en el BOE!* 🚨\n\n`;
+  texto += `Hoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
+
+  // Cogemos las 10 primeras para no hacer un mensaje kilométrico
+  const topConv = convocatoriasReales.slice(0, 10);
+  topConv.forEach(c => {
+    const plazas = c.plazas ? `(*${c.plazas} plazas*) ` : '';
+    const org = c.department || 'Administración';
+    texto += `💼 *${c.profesion || 'Plaza'}* ${plazas}\n`;
+    texto += `🏛️ ${org} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n`;
+    texto += `👉 [Ver detalles y plazos](https://topos.es/convocatorias/${c.slug})\n\n`;
+  });
+
+  if (convocatoriasReales.length > 10) {
+    texto += `_Y ${convocatoriasReales.length - 10} convocatorias más._\n`;
+  }
+  
+  texto += `🔍 [Busca la tuya en topos.es](https://topos.es)`;
+
+  const url = `https://api.telegram.org/bot${token}/sendMessage`;
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: texto,
+        parse_mode: 'Markdown',
+        disable_web_page_preview: true // Evita que salga una imagen gigante de previsualización
+      })
+    });
+    
+    const result = await response.json();
+    if (!result.ok) {
+       console.error("❌ Error enviando a Telegram:", result.description);
+    } else {
+       console.log("✅ Resumen enviado a Telegram correctamente.");
+    }
+  } catch (err) {
+    console.error("❌ Error de red con Telegram:", err);
+  }
+}
+
 // --- BUCLE PRINCIPAL ---
 async function extraerBOE() {
   try {
@@ -246,6 +312,9 @@ async function extraerBOE() {
     if (convocatoriasInsertadasHoy.length > 0) {
       console.log('🚀 Iniciando envío de alertas por correo electrónico...');
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
+
+      console.log('🚀 Iniciando envío al canal de Telegram...');
+      await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
 
     if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
