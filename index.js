@@ -55,24 +55,25 @@ async function obtenerTextoBOE(url) {
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
   Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
-  Analiza el texto oficial de esta publicación (hemos extraído la introducción del documento real).
+  Analiza el texto oficial de esta publicación.
   
   TÍTULO: ${titulo}
-  TEXTO INTERIOR DEL BOE: ${textoInterior}
+  TEXTO INTERIOR: ${textoInterior}
   
-  Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta, sin texto adicional ni código markdown:
+  Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
   {
-    "tipo": "Uno de estos valores exactos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Convocatoria (Promoción Interna)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Traslados / Libre Designación', 'OPOSICION - Correcciones y Modificaciones', 'OPOSICION - Listas de Admitidos/Excluidos', 'OPOSICION - Exámenes y Calificaciones', 'OPOSICION - Tribunales', 'OPOSICION - Aprobados y Adjudicaciones', 'OPOSICION - Otros Trámites'.",
-    "plazas": Número entero de plazas ofertadas (si no se indica un número, devuelve null),
-    "resumen": "Resumen claro y directo de 1 o 2 frases para humanos, sin jerga burocrática.",
-    "plazo_texto": "Extrae SOLO la duración numérica y el tipo de días, de forma extremadamente concisa (ej: '20 días hábiles', '15 días naturales', '1 mes'). OMITE ABSOLUTAMENTE todo el texto burocrático como 'a contar desde el día siguiente al de la publicación...' o similares. Si no hay plazo, devuelve null.",
-    "grupo": "El grupo o subgrupo funcionarial si se menciona (ej: 'A1', 'A2', 'C1', 'C2', 'E', 'Agrupaciones Profesionales'). Si no se menciona, devuelve null.",
-    "sistema": "El sistema de selección. Valores permitidos: 'Oposición', 'Concurso-oposición', 'Concurso', o null si no se menciona.",
-    "profesion": "El nombre del puesto de trabajo, cuerpo o categoría de forma limpia y directa (ej: 'Auxiliar Administrativo', 'Policía Local', 'Técnico de Gestión'). Si no aplica, devuelve null.",
-    "provincia": "A partir del organismo convocante, deduce la provincia española a la que pertenece (ej: si es Ayuntamiento de Valencia, la provincia es 'Valencia'). Si es a nivel estatal (Ministerios) devuelve 'Estatal'. Si no estás seguro, devuelve null.",
-    "titulacion": "La titulación académica mínima exigida para presentarse (ej: 'Graduado en ESO', 'Bachiller', 'Grado Universitario'). Si no se menciona explícitamente en el texto, devuelve null.",
-    "enlace_inscripcion": "La URL, página web o sede electrónica exacta que se mencione para ver las bases o presentar la instancia (ej: 'www.madrid.es', 'sede.policia.gob.es'). Si no se menciona ninguna web, devuelve null.",
-    "tasa": "El importe de la tasa por derechos de examen si aparece detallado (ej: '15,50€'). Si no se menciona, devuelve null."
+    "tipo": "Uno de estos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Otros Trámites'.",
+    "plazas": Número entero (o null),
+    "resumen": "Resumen claro de 1-2 frases.",
+    "plazo_texto": "Extrae SOLO la duración (ej: '20 días hábiles'). Si no hay, null.",
+    "grupo": "El grupo (ej: 'A1', 'C2'). Si no, null.",
+    "sistema": "'Oposición', 'Concurso-oposición', 'Concurso', o null.",
+    "profesion": "Nombre limpio del puesto (ej: 'Policía Local'). Si no, null.",
+    "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
+    "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
+    "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
+    "tasa": "Importe de la tasa. Si no, null.",
+    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín (ej: 'Boletín Oficial de la Provincia de...', 'BOCM', 'DOGC', etc.). Si lo menciona, extrae el nombre del boletín, número y fecha. Ej: 'Boletín Oficial de la Comunidad de Madrid número 53, de 4 de marzo'. Si el propio BOE tiene las bases o no menciona otro boletín, devuelve null."
   }
   `;
 
@@ -267,10 +268,10 @@ async function extraerBOE() {
     const convocatoriasInsertadasHoy = [];
 
     for (const item of items) {
-      const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
+      /*const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
       const slugRecortado = slugBase.length > 100 ? slugBase.substring(0, 100) : slugBase;
       const añoActual = new Date().getFullYear();
-      const slugFinal = `${slugRecortado}-${añoActual}`;
+      const slugFinal = `${slugRecortado}-${añoActual}`;*/
 
       const fechaRaw = new Date(item.pubDate);
       fechaRaw.setHours(fechaRaw.getHours() + 14);
@@ -290,6 +291,29 @@ async function extraerBOE() {
 
       console.log(`🤖 Analizando con IA (Groq)...`);
       const analisisIA = await analizarConvocatoriaIA(item.title, textoParaIA);
+
+      let textoParaSlug = "";
+      if (analisisIA.profesion) {
+        const plazasStr = analisisIA.plazas ? `${analisisIA.plazas}-plazas-` : '';
+        const depStr = categoriaOrganismo ? categoriaOrganismo.replace('Ayuntamiento de', '').replace('Ministerio de', '').trim() : '';
+        textoParaSlug = `oposiciones-${plazasStr}${analisisIA.profesion}-${depStr}`;
+      } else if (analisisIA.resumen) {
+        textoParaSlug = analisisIA.resumen;
+      } else {
+        textoParaSlug = item.title;
+      }
+
+      // Limpiamos el texto, le quitamos acentos y caracteres raros
+      let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
+      
+      // Recortamos a 80 caracteres (ideal para Google) y evitamos que termine en guion
+      if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
+      
+      // Extraemos el ID único del BOE (ej. BOE-A-2026-1234 -> 2026-1234) para evitar slugs duplicados
+      const matchBOE = item.link.match(/id=BOE-[A-Z]-(\d{4}-\d+)/);
+      const boeSuffix = matchBOE ? matchBOE[1] : new Date().getTime().toString().slice(-6);
+      
+      const slugFinal = `${slugBase}-${boeSuffix}`;
 
       const convocatoria = {
         slug: slugFinal, title: item.title, meta_description: item.contentSnippet?.substring(0, 150) + "..." || "Ver detalles.",
