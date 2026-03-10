@@ -152,6 +152,9 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
       ).join('');
 
       try {
+        // Generamos un enlace de baja seguro convirtiendo caracteres extraños (ej: el @)
+        const enlaceBaja = `https://topos.es/baja?email=${encodeURIComponent(sub.email)}`;
+
         await resend.emails.send({
           from: 'El Topo de las Opos <alertas@topos.es>', 
           to: sub.email,
@@ -166,13 +169,18 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
                 ${htmlLista}
               </ul>
               <p style="margin-top: 30px; font-size: 15px;">¡Mucha suerte con el estudio!</p>
+              
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0 20px 0;" />
-              <p style="font-size: 12px; color: #94a3b8; text-align: center;">Estás recibiendo este correo porque activaste una alerta en topos.es</p>
+              <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-bottom: 5px;">
+                Estás recibiendo este correo porque activaste una alerta en topos.es
+              </p>
+              <p style="font-size: 12px; text-align: center; margin: 0;">
+                <a href="${enlaceBaja}" style="color: #94a3b8; text-decoration: underline;">Cancelar suscripción y dejar de recibir alertas</a>
+              </p>
             </div>
           `
         });
         console.log(`✅ Alerta enviada a ${sub.email}`);
-        // Pequeña pausa de 1 segundo para no saturar la API de Resend
         await new Promise(resolve => setTimeout(resolve, 1000)); 
       } catch (err) {
         console.error(`❌ Error enviando email a ${sub.email}:`, err);
