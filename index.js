@@ -4,7 +4,7 @@ const Parser = require("rss-parser");
 const slugify = require("slugify");
 const { OpenAI } = require("openai");
 const cheerio = require("cheerio"); 
-const { Resend } = require('resend'); // Corregido: en Node.js usamos require en lugar de import
+const { Resend } = require('resend'); 
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -51,7 +51,7 @@ async function obtenerTextoBOE(url) {
   }
 }
 
-// --- CEREBRO IA ACTUALIZADO Y SUPERVITAMINADO ---
+// --- CEREBRO IA ACTUALIZADO ---
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
   Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
@@ -73,7 +73,8 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
     "tasa": "Importe de la tasa. Si no, null.",
-    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín (ej: 'Boletín Oficial de la Provincia de...', 'BOCM', 'DOGC', etc.). Si lo menciona, extrae el nombre del boletín, número y fecha. Ej: 'Boletín Oficial de la Comunidad de Madrid número 53, de 4 de marzo'. Si el propio BOE tiene las bases o no menciona otro boletín, devuelve null."
+    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín (ej: 'Boletín Oficial de la Provincia de...'). Si lo menciona, extrae el nombre del boletín, número y fecha. Si no, devuelve null.",
+    "referencia_boe_original": "Si esto es una actualización (listas de admitidos, fechas de examen, tribunal), busca el código BOE original de la convocatoria a la que hace referencia (formato 'BOE-A-YYYY-XXXX'). Si no es una actualización o no aparece el código exacto, devuelve null."
   }
   `;
 
@@ -93,12 +94,13 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     console.error("⚠️ Error con la IA:", error.message);
     return { 
       tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo, plazo_texto: null,
-      grupo: null, sistema: null, profesion: null, provincia: null, titulacion: null, enlace_inscripcion: null, tasa: null
+      grupo: null, sistema: null, profesion: null, provincia: null, titulacion: null, enlace_inscripcion: null, tasa: null,
+      referencia_bases: null, referencia_boe_original: null
     };
   }
 }
 
-// --- NUEVA FUNCIÓN: ENVIAR ALERTAS CON RESEND ---
+// --- FUNCIÓN ORIGINAL: ALERTAS GENÉRICAS ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
@@ -107,11 +109,7 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   );
 
   if (convocatoriasReales.length === 0) return;
-
-  if (!process.env.RESEND_API_KEY) {
-    console.error("⚠️ Falta la variable RESEND_API_KEY en el .env o GitHub Secrets");
-    return;
-  }
+  if (!process.env.RESEND_API_KEY) return;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const { data: suscriptores, error } = await supabase.from('suscriptores').select('*');
@@ -123,23 +121,17 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   for (const sub of suscriptores) {
     if (!sub.interes) continue;
     const interesStr = sub.interes.toLowerCase().trim();
-    // Leemos el array de provincias del usuario (si es nulo, lo convertimos a array vacío)
     const provinciasSub = sub.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
-      // 1. ¿Le interesa la profesión?
       const enTitulo = conv.title && conv.title.toLowerCase().includes(interesStr);
       const enProfesion = conv.profesion && conv.profesion.toLowerCase().includes(interesStr);
       const encajaInteres = enTitulo || enProfesion;
 
-      // 2. ¿Encaja en su provincia?
       let encajaProvincia = true;
-      // Si el usuario seleccionó al menos una provincia, comprobamos. Si no, encajaProvincia sigue siendo true (Toda España)
       if (provinciasSub.length > 0) {
-        // La plaza coincide si su provincia está dentro de lo que marcó el usuario
         encajaProvincia = provinciasSub.includes(conv.provincia);
       }
-
       return encajaInteres && encajaProvincia;
     });
 
@@ -153,35 +145,21 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
       ).join('');
 
       try {
-        // Generamos un enlace de baja seguro convirtiendo caracteres extraños (ej: el @)
         const enlaceBaja = `https://topos.es/baja?email=${encodeURIComponent(sub.email)}`;
-
         await resend.emails.send({
           from: 'El Topo de las Opos <alertas@topos.es>', 
           to: sub.email,
           subject: `🚨 Se han publicado plazas de ${sub.interes}`,
           html: `
             <div style="font-family: system-ui, -apple-system, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
-              <div style="text-align: center; margin-bottom: 20px;">
-                <h2 style="color: #ea580c; margin: 0;">¡Hola! El Topo tiene noticias 🐾</h2>
-              </div>
-              <p style="font-size: 16px;">Acabamos de detectar nuevas publicaciones en el BOE que coinciden con tu alerta de <strong>"${sub.interes}"</strong>:</p>
-              <ul style="list-style: none; padding: 0;">
-                ${htmlLista}
-              </ul>
-              <p style="margin-top: 30px; font-size: 15px;">¡Mucha suerte con el estudio!</p>
-              
+              <h2 style="color: #ea580c; text-align: center; margin-bottom: 20px;">¡Hola! El Topo tiene noticias 🐾</h2>
+              <p style="font-size: 16px;">Nuevas publicaciones en el BOE que coinciden con tu alerta de <strong>"${sub.interes}"</strong>:</p>
+              <ul style="list-style: none; padding: 0;">${htmlLista}</ul>
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0 20px 0;" />
-              <p style="font-size: 12px; color: #94a3b8; text-align: center; margin-bottom: 5px;">
-                Estás recibiendo este correo porque activaste una alerta en topos.es
-              </p>
-              <p style="font-size: 12px; text-align: center; margin: 0;">
-                <a href="${enlaceBaja}" style="color: #94a3b8; text-decoration: underline;">Cancelar suscripción y dejar de recibir alertas</a>
-              </p>
+              <p style="font-size: 12px; text-align: center;"><a href="${enlaceBaja}" style="color: #94a3b8;">Cancelar suscripción</a></p>
             </div>
           `
         });
-        console.log(`✅ Alerta enviada a ${sub.email}`);
         await new Promise(resolve => setTimeout(resolve, 1000)); 
       } catch (err) {
         console.error(`❌ Error enviando email a ${sub.email}:`, err);
@@ -190,9 +168,68 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   }
 }
 
-// --- NUEVA FUNCIÓN: ENVIAR RESUMEN A TELEGRAM ---
+// --- NUEVA FUNCIÓN: ALERTAS A FAVORITOS (USUARIOS REGISTRADOS) ---
+async function enviarAlertasFavoritos(nuevasConvocatorias) {
+  // Filtramos solo las que son actualizaciones y tienen un "padre" asociado
+  const actualizaciones = nuevasConvocatorias.filter(c => c.parent_slug);
+
+  if (actualizaciones.length === 0) return;
+  if (!process.env.RESEND_API_KEY) return;
+
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  console.log(`🔔 Se han detectado ${actualizaciones.length} actualizaciones de trámites. Buscando seguidores...`);
+
+  for (const update of actualizaciones) {
+    // Buscamos quién sigue a la plaza original (el padre)
+    const { data: seguidores, error } = await supabase
+      .from('favoritos')
+      .select('user_id')
+      .eq('convocatoria_slug', update.parent_slug);
+    
+    if (error || !seguidores || seguidores.length === 0) continue;
+
+    console.log(`   -> La actualización '${update.title.substring(0, 30)}...' tiene ${seguidores.length} seguidores.`);
+
+    for (const seguidor of seguidores) {
+      // Usamos el Service Key para extraer el email del sistema de autenticación de Supabase
+      const { data: userData } = await supabase.auth.admin.getUserById(seguidor.user_id);
+      
+      if (userData && userData.user && userData.user.email) {
+        const email = userData.user.email;
+        try {
+          await resend.emails.send({
+            from: 'Novedades El Topo <alertas@topos.es>', 
+            to: email,
+            subject: `🔔 Hay novedades en la oposición que sigues`,
+            html: `
+              <div style="font-family: system-ui, -apple-system, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <span style="font-size: 40px;">🔔</span>
+                  <h2 style="color: #10b981; margin: 10px 0 0 0;">¡Actualización en tu plaza!</h2>
+                </div>
+                <p style="font-size: 16px;">Acabamos de detectar un nuevo trámite oficial en el BOE para la plaza que tienes guardada en favoritos.</p>
+                <div style="background: #f8fafc; padding: 15px; border-left: 4px solid #10b981; border-radius: 0 8px 8px 0; margin: 20px 0;">
+                  <strong style="color: #0f172a; display: block; margin-bottom: 5px;">Nuevo trámite publicado:</strong>
+                  <span style="color: #475569; font-size: 14px;">${update.resumen || update.title}</span>
+                </div>
+                <div style="text-align: center; margin-top: 30px;">
+                  <a href="https://topos.es/convocatorias/${update.slug}" style="display: inline-block; background: #10b981; color: white; text-decoration: none; padding: 10px 20px; border-radius: 8px; font-size: 15px; font-weight: bold;">Ver documento oficial</a>
+                </div>
+              </div>
+            `
+          });
+          console.log(`      ✅ Aviso enviado al usuario: ${email}`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); 
+        } catch (err) {
+          console.error(`      ❌ Error enviando novedad a ${email}:`, err);
+        }
+      }
+    }
+  }
+}
+
+// --- TELEGRAM ---
 async function enviarAlertaTelegram(nuevasConvocatorias) {
-  // Solo avisamos de las plazas reales
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
     c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
@@ -204,55 +241,30 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const chatId = process.env.TELEGRAM_CHANNEL_ID; 
 
-  if (!token || !chatId) {
-    console.error("⚠️ Faltan las variables de Telegram en .env o GitHub Secrets");
-    return;
-  }
+  if (!token || !chatId) return;
 
-  console.log(`📣 Preparando resumen para Telegram con ${convocatoriasReales.length} plazas...`);
+  console.log(`📣 Preparando resumen para Telegram...`);
+  let texto = `🚨 *¡Nuevas Oposiciones en el BOE!* 🚨\n\nHoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
 
-  // Construimos el mensaje con formato Markdown de Telegram
-  let texto = `🚨 *¡Nuevas Oposiciones en el BOE!* 🚨\n\n`;
-  texto += `Hoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
-
-  // Cogemos las 10 primeras para no hacer un mensaje kilométrico
   const topConv = convocatoriasReales.slice(0, 10);
   topConv.forEach(c => {
     const plazas = c.plazas ? `(*${c.plazas} plazas*) ` : '';
-    const org = c.department || 'Administración';
     texto += `💼 *${c.profesion || 'Plaza'}* ${plazas}\n`;
-    texto += `🏛️ ${org} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n`;
-    texto += `👉 [Ver detalles y plazos](https://topos.es/convocatorias/${c.slug})\n\n`;
+    texto += `🏛️ ${c.department || 'Administración'} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n`;
+    texto += `👉 [Ver plazos](https://topos.es/convocatorias/${c.slug})\n\n`;
   });
 
-  if (convocatoriasReales.length > 10) {
-    texto += `_Y ${convocatoriasReales.length - 10} convocatorias más._\n`;
-  }
-  
+  if (convocatoriasReales.length > 10) texto += `_Y ${convocatoriasReales.length - 10} convocatorias más._\n`;
   texto += `🔍 [Busca la tuya en topos.es](https://topos.es)`;
 
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-
   try {
-    const response = await fetch(url, {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: texto,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true // Evita que salga una imagen gigante de previsualización
-      })
+      body: JSON.stringify({ chat_id: chatId, text: texto, parse_mode: 'Markdown', disable_web_page_preview: true })
     });
-    
-    const result = await response.json();
-    if (!result.ok) {
-       console.error("❌ Error enviando a Telegram:", result.description);
-    } else {
-       console.log("✅ Resumen enviado a Telegram correctamente.");
-    }
   } catch (err) {
-    console.error("❌ Error de red con Telegram:", err);
+    console.error("❌ Error con Telegram:", err);
   }
 }
 
@@ -263,16 +275,9 @@ async function extraerBOE() {
     const feed = await parser.parseURL(BOE_RSS_URL);
     let nuevasInsertadas = 0;
     const items = feed.items.reverse();
-    
-    // Array para guardar en memoria lo que metemos hoy y luego pasárselo a Resend
     const convocatoriasInsertadasHoy = [];
 
     for (const item of items) {
-      /*const slugBase = slugify(item.title, { lower: true, strict: true, remove: /[*+~.()'"!:@]/g });
-      const slugRecortado = slugBase.length > 100 ? slugBase.substring(0, 100) : slugBase;
-      const añoActual = new Date().getFullYear();
-      const slugFinal = `${slugRecortado}-${añoActual}`;*/
-
       const fechaRaw = new Date(item.pubDate);
       fechaRaw.setHours(fechaRaw.getHours() + 14);
       const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
@@ -284,13 +289,31 @@ async function extraerBOE() {
 
       console.log(`\n📄 Leyendo interior de: ${item.link}`);
       let textoParaIA = await obtenerTextoBOE(item.link);
-      
       if (!textoParaIA || textoParaIA.length < 50) {
         textoParaIA = item.contentSnippet || item.content || item.description;
       }
 
-      console.log(`🤖 Analizando con IA (Groq)...`);
+      console.log(`🤖 Analizando con IA...`);
       const analisisIA = await analizarConvocatoriaIA(item.title, textoParaIA);
+
+      // LÓGICA DE PADRE E HIJO (Enlazar trámites)
+      let parentSlug = null;
+      if (analisisIA.referencia_boe_original) {
+        console.log(`   🔗 Se ha detectado referencia original: ${analisisIA.referencia_boe_original}. Buscando padre...`);
+        // Buscamos en nuestra tabla si tenemos alguna convocatoria que contenga ese ID del BOE en su enlace
+        const { data: parentMatch } = await supabase
+          .from('convocatorias')
+          .select('slug')
+          .like('link_boe', `%${analisisIA.referencia_boe_original}%`)
+          .single();
+          
+        if (parentMatch) {
+          parentSlug = parentMatch.slug;
+          console.log(`   🎯 ¡Padre encontrado! Enlazado a: ${parentSlug}`);
+        } else {
+          console.log(`   ⚠️ El padre no está en nuestra base de datos (es muy antiguo).`);
+        }
+      }
 
       let textoParaSlug = "";
       if (analisisIA.profesion) {
@@ -303,16 +326,11 @@ async function extraerBOE() {
         textoParaSlug = item.title;
       }
 
-      // Limpiamos el texto, le quitamos acentos y caracteres raros
       let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
-      
-      // Recortamos a 80 caracteres (ideal para Google) y evitamos que termine en guion
       if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
       
-      // Extraemos el ID único del BOE (ej. BOE-A-2026-1234 -> 2026-1234) para evitar slugs duplicados
       const matchBOE = item.link.match(/id=BOE-[A-Z]-(\d{4}-\d+)/);
       const boeSuffix = matchBOE ? matchBOE[1] : new Date().getTime().toString().slice(-6);
-      
       const slugFinal = `${slugBase}-${boeSuffix}`;
 
       const convocatoria = {
@@ -321,36 +339,34 @@ async function extraerBOE() {
         type: analisisIA.tipo, plazas: analisisIA.plazas, resumen: analisisIA.resumen, plazo_texto: analisisIA.plazo_texto,
         grupo: analisisIA.grupo, sistema: analisisIA.sistema, profesion: analisisIA.profesion, provincia: analisisIA.provincia,
         titulacion: analisisIA.titulacion, enlace_inscripcion: analisisIA.enlace_inscripcion, tasa: analisisIA.tasa,
+        referencia_bases: analisisIA.referencia_bases, parent_slug: parentSlug, // <- Aquí guardamos el enlace
         publication_date: fechaCorrecta, link_boe: item.link, raw_text: textoParaIA,
       };
 
-      const { data, error } = await supabase
-        .from("convocatorias")
-        .upsert(convocatoria, { onConflict: "slug" })
-        .select();
+      const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
 
       if (error) {
         console.error(`❌ Error BD:`, error.message);
       } else {
         console.log(`✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
         nuevasInsertadas++;
-        // Guardamos la convocatoria procesada en el array para luego enviarla por email
-        if (data && data.length > 0) {
-          convocatoriasInsertadasHoy.push(data[0]);
-        }
+        if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
       }
       
       await esperar(3000); 
     }
 
-    console.log(`🎉 Proceso de lectura completado. Insertadas: ${nuevasInsertadas}`);
+    console.log(`🎉 Proceso completado. Insertadas: ${nuevasInsertadas}`);
     
-    // --- LLAMADA A RESEND ---
+    // --- LLAMADAS A LOS MOTORES DE AVISO ---
     if (convocatoriasInsertadasHoy.length > 0) {
-      console.log('🚀 Iniciando envío de alertas por correo electrónico...');
+      console.log('🚀 Iniciando alertas generales de Boletín...');
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
+      
+      console.log('🚀 Iniciando alertas de Novedades a Favoritos...');
+      await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
 
-      console.log('🚀 Iniciando envío al canal de Telegram...');
+      console.log('🚀 Iniciando envío a Telegram...');
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
 
