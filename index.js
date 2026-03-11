@@ -278,6 +278,11 @@ async function extraerBOE() {
     const convocatoriasInsertadasHoy = [];
 
     for (const item of items) {
+      // --- FILTRO: Omitir el Sumario del día ---
+      if (item.title === "Sumario") {
+        console.log("⏩ Saltando item: Sumario del día.");
+        continue;
+      }
       const fechaRaw = new Date(item.pubDate);
       fechaRaw.setHours(fechaRaw.getHours() + 14);
       const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
