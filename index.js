@@ -330,7 +330,7 @@ const convocatoria = {
     meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
     department: departamentoFinal, 
-    link: itemData.link, // Mantenemos el link original del RSS por si acaso
+ //   link: itemData.link, // Mantenemos el link original del RSS por si acaso
     // 💡 AQUÍ GUARDAMOS EL PDF PARA TU FRONTEND
     guid: enlacePdfDefinitivo,
     parent_type: "OPOSICION", 
