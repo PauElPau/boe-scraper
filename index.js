@@ -43,7 +43,7 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
- // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
@@ -51,27 +51,23 @@ const FUENTES_BOLETINES = [
   { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
-  // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
+ /*  // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
  // { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
   
   // 🔄 BOLETINES CON URL ESTABLE (Redirigen solos al número de hoy)
-  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" },
-  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },
-  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },
- // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },
+  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, //"https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473"
+  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },   //"https://www.gobiernodecanarias.org/boc/archivo/2026/049/"
+  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },   //"https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22"
+ // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },     //"https://dogc.gencat.cat/es/sumari-del-dogc/?numDOGC=9623"
 
- /*  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473", ambito: "Islas Baleares" },
-  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/archivo/2026/049/", ambito: "Canarias" },
-  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22", ambito: "Cantabria" },
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/sumari-del-dogc/?numDOGC=9623", ambito: "Cataluña" }, */
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/#/resultados-fecha?from=busquedaFechaHome&PUBL={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
   { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" } */
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -617,7 +613,7 @@ async function extraerBoletines() {
           }
         } 
         
-        /* else if (fuente.tipo === "html_directo") {
+        else if (fuente.tipo === "html_directo") {
           // 💡 CALCULAMOS LA FECHA DE HOY PARA LAS URLs DINÁMICAS
           const hoy = new Date();
           const yyyy = hoy.getFullYear();
@@ -689,7 +685,7 @@ async function extraerBoletines() {
             
             await esperar(500);
           }
-        } */
+        }
       } catch (err) {
         console.error(`❌ Error procesando ${fuente.nombre}:`, err.message);
       }
