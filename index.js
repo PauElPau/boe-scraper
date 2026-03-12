@@ -604,7 +604,7 @@ async function extraerBoletines() {
           }
         } 
         
-        else if (fuente.tipo === "html_directo") {
+        /* else if (fuente.tipo === "html_directo") {
           // 💡 CALCULAMOS LA FECHA DE HOY PARA LAS URLs DINÁMICAS
           const hoy = new Date();
           const yyyy = hoy.getFullYear();
@@ -676,7 +676,7 @@ async function extraerBoletines() {
             
             await esperar(500);
           }
-        }
+        } */
       } catch (err) {
         console.error(`❌ Error procesando ${fuente.nombre}:`, err.message);
       }
