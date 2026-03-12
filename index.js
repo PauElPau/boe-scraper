@@ -76,7 +76,7 @@ async function obtenerTextoBOE(url) {
 }
 
 // --- 4. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE PARA EL RESTO) ---
-async function obtenerTextoUniversal(url) {
+async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
     // 👇 PEGA AQUÍ TUS DATOS REALES (dentro de las comillas) 👇
     const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
