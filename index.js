@@ -23,29 +23,39 @@ const parser = new Parser({
   },
 });
 
+
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
   { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
-  { nombre: "BOCM", tipo: "html_directo", url: "https://www.bocm.es/boletin/bocm-hoy", ambito: "Madrid" },
-  { nombre: "DOG", tipo: "html_directo", url: "https://www.xunta.gal/diario-oficial-galicia/", ambito: "Galicia" },
-  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/ultimo-diario", ambito: "Comunidad Valenciana" },
-  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/", ambito: "Aragón" },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
+  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
+  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
+  
+  // 🔄 BOLETINES CON URL ESTABLE (Redirigen solos al número de hoy)
   { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" },
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },
-  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.castillalamancha.es/portaldocm/verUltimoDiario.do", ambito: "Castilla-La Mancha" },
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/ultimoBoletin.do", ambito: "Castilla y León" },
   { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },
-  { nombre: "DOE", tipo: "html_directo", url: "https://doe.juntaex.es/ultima-portada/", ambito: "Extremadura" },
-  { nombre: "BORM", tipo: "html_directo", url: "https://www.borm.es/#/borm/sumario", ambito: "Región de Murcia" },
-  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/boletin-del-dia", ambito: "Navarra" },
-  { nombre: "BOPV", tipo: "html_directo", url: "https://www.euskadi.eus/r48-bopv/es/bopv2/datos/Ultimo.shtml", ambito: "País Vasco" },
-  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-ultimo", ambito: "La Rioja" }
+
+ /*  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473", ambito: "Islas Baleares" },
+  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/archivo/2026/049/", ambito: "Canarias" },
+  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22", ambito: "Cantabria" },
+  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/sumari-del-dogc/?numDOGC=9623", ambito: "Cataluña" }, */
+
+  // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
+  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/#/resultados-fecha?from=busquedaFechaHome&PUBL={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -156,14 +166,14 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
 
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
-  Eres un experto en extraer datos del empleo público. Analiza el texto oficial de esta publicación.
+  Eres un experto en extraer datos del empleo público. Analiza el texto de esta web.
   TÍTULO: ${titulo}
-  TEXTO INTERIOR: ${textoInterior}
+  TEXTO WEB: ${textoInterior}
   
   Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
   {
     "tipo": "Uno de estos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Otros Trámites'.",
-    "plazas": Número entero (o null),
+    "plazas": "Busca exhaustivamente cuántas plazas, puestos o vacantes se convocan en total. Busca en el primer párrafo o en el título. Puede estar escrito con letras (ej: 'tres', 'diez') o con números (ej: '3', '10'). Conviértelo SIEMPRE a un número entero. Si es una bolsa de empleo sin número fijo o no se menciona, devuelve null.",
     "resumen": "Resumen claro de 1-2 frases.",
     "plazo_texto": "Extrae SOLO la duración (ej: '20 días hábiles'). Si no hay, null.",
     "grupo": "El grupo (ej: 'A1', 'C2'). Si no, null.",
@@ -174,20 +184,28 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
     "tasa": "Importe de la tasa. Si no, null.",
     "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín. Si lo menciona, extrae el nombre del boletín, número y fecha. Si no, devuelve null.",
-    "referencia_boe_original": "Si esto es una actualización, busca el código original de la convocatoria a la que hace referencia (ej: BOE-A-YYYY-XXXX o similar). Si no, null."
+    "referencia_boe_original": "Si esto es una actualización o trámite, busca el código original de la convocatoria a la que hace referencia (ej: BOE-A-YYYY-XXXX o similar). Si no, null.",
+    "texto_limpio": "Extrae y devuelve el texto oficial de la convocatoria limpio y bien redactado. Elimina menús de navegación, enlaces rotos, cabeceras, pies de página, 'Saltar al contenido' y textos de búsqueda. Deja solo el texto legal y útil.",
+    "meta_description": "Crea una descripción corta (máximo 150 caracteres) directa al grano, ideal para SEO y redes sociales. Empieza directamente por lo importante. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'"
   }
   `;
 
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      temperature: 0.1, 
+      // 💡 Le damos un poco más de temperatura (0.2) para que sea mejor redactando el texto limpio y el SEO
+      temperature: 0.2, 
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
+      messages: [
+        // 💡 Instrucción de sistema hiper-estricta para obligarle a buscar las plazas
+        { role: "system", content: "You output strict JSON. Eres un experto analista legal. Tu prioridad absoluta es encontrar el número de plazas exacto convirtiendo letras a números, limpiar la basura visual del texto y generar descripciones SEO." }, 
+        { role: "user", content: prompt }
+      ]
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     console.error("⚠️ Error con IA analizando detalle:", error.message);
+    // Si falla, devolvemos un objeto básico para que no rompa la base de datos
     return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo };
   }
 }
@@ -279,10 +297,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
-  const convocatoria = {
+const convocatoria = {
     slug: slugFinal, 
     title: itemData.title, 
-    meta_description: analisisIA.resumen?.substring(0, 150) + "..." || "Ver detalles.",
+    // 💡 USAMOS LA META DESCRIPTION GENERADA POR LA IA (con un fallback de seguridad)
+    meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
     department: itemData.department, 
     guid: itemData.link, 
@@ -299,10 +318,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
     tasa: analisisIA.tasa,
     referencia_bases: analisisIA.referencia_bases, 
-    parent_slug: parentSlug, // <- Aquí es donde Supabase sabe que es un "hijo"
+    parent_slug: parentSlug, 
     publication_date: new Date().toISOString().split('T')[0], 
     link_boe: itemData.link, 
-    raw_text: textoParaIA,
+    // 💡 USAMOS EL TEXTO LIMPIO GENERADO POR LA IA
+    raw_text: analisisIA.texto_limpio || textoParaIA,
   };
 
   const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
@@ -492,7 +512,7 @@ async function extraerBoletines() {
       
       try {
         if (fuente.tipo === "rss") {
-   /*        const feed = await parser.parseURL(fuente.url);
+          const feed = await parser.parseURL(fuente.url);
           for (const item of feed.items.reverse()) {
             const t = item.title.toLowerCase();
             if (!t.includes('oposición') && !t.includes('concurso') && !t.includes('provisión') && !t.includes('empleo') && !t.includes('plaza') && !t.includes('bolsa')) continue;
@@ -523,11 +543,21 @@ async function extraerBoletines() {
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
             await esperar(500);
-          } */
+          }
         } 
         
         else if (fuente.tipo === "html_directo") {
-          const markdownWeb = await obtenerTextoUniversal(fuente.url); 
+          // 💡 CALCULAMOS LA FECHA DE HOY PARA LAS URLs DINÁMICAS
+          const hoy = new Date();
+          const yyyy = hoy.getFullYear();
+          const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+          const dd = String(hoy.getDate()).padStart(2, '0');
+          
+          let urlFinal = fuente.url
+            .replace('{YYYYMMDD}', `${yyyy}${mm}${dd}`)
+            .replace('{DD/MM/YYYY}', `${dd}/${mm}/${yyyy}`);
+
+          const markdownWeb = await obtenerTextoUniversal(urlFinal); // Usamos urlFinal
           if (!markdownWeb) continue;
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
