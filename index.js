@@ -78,17 +78,20 @@ async function obtenerTextoBOE(url) {
 // --- 4. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE PARA EL RESTO) ---
 async function obtenerTextoUniversal(url) {
   try {
-    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser_rendering/crawl`, {
+    // 👇 PEGA AQUÍ TUS DATOS REALES (dentro de las comillas) 👇
+    const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
+    const MI_TOKEN_API = "j-iMVNZe0JocbS4_ZsGnDkinrKrBv1Fe100t6Z2y";
+
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser_rendering/crawl`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        'Authorization': `Bearer ${MI_TOKEN_API}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ url: url, format: "markdown", follow_links: false })
     });
 
     if (!response.ok) {
-      // 💡 AHORA NOS CHIVARÁ EL MOTIVO EXACTO DEL RECHAZO
       const errorText = await response.text();
       console.error(`⚠️ Cloudflare bloqueó la URL ${url}`);
       console.error(`   Status: ${response.status}`);
