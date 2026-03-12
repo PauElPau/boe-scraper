@@ -173,41 +173,39 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
   {
     "tipo": "Uno de estos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Otros Trámites'.",
-    "plazas": "Busca exhaustivamente cuántas plazas, puestos o vacantes se convocan en total. Busca en el primer párrafo o en el título. Puede estar escrito con letras (ej: 'tres', 'diez') o con números (ej: '3', '10'). Conviértelo SIEMPRE a un número entero. Si es una bolsa de empleo sin número fijo o no se menciona, devuelve null.",
+    "plazas": "Busca cuántas plazas se convocan en total. Convierte letras a números. Devuelve SIEMPRE un Integer. Si es bolsa o no hay, null.",
     "resumen": "Resumen claro de 1-2 frases.",
-    "plazo_texto": "Extrae SOLO la duración (ej: '20 días hábiles'). Si no hay, null.",
-    "plazo_dias": "Extrae la duración del plazo en días. REGLA ESTRICTA: Convierte siempre los números escritos con letras a dígitos matemáticos (ej: si el texto dice 'veinte días hábiles', devuelve '20 días hábiles'; si dice 'diez días naturales', devuelve '10 días naturales'). Si no hay plazo, devuelve null.",
-    "grupo": "El grupo (ej: 'A1', 'C2'). Si no, null.",
-    "sistema": "'Oposición', 'Concurso-oposición', 'Concurso', o null.",
-    "profesion": "Nombre limpio del puesto (ej: 'Policía Local'). Si no, null.",
-    "organismo": "Nombre exacto del ayuntamiento, diputación, ministerio u organismo que convoca (ej: 'Ayuntamiento de Madrid', 'Universidad de Valencia'). Si no lo encuentras, null.",
+    "plazo_numero": "Extrae SOLO la cantidad numérica del plazo (ej: 20, 15, 10). Devuelve siempre un número Integer. Si no hay plazo, null.",
+    "plazo_tipo": "Extrae SOLO el tipo de días del plazo (ej: 'hábiles', 'naturales', 'meses'). Si no hay plazo, null.",
+    "grupo": "Grupo profesional (A1, A2, B, C1, C2, E). Si no se menciona explícitamente, dedúcelo: 'Técnica/Media' -> 'A2', 'Técnica Superior' -> 'A1', 'Administrativa' -> 'C1', 'Auxiliar' -> 'C2', 'Subalterna/Oficios' -> 'E'. Si no se puede deducir, null.",
+    "sistema": "REGLA ESTRICTA: Devuelve EXACTAMENTE 'Oposición', 'Concurso-oposición' o 'Concurso'. Si el texto menciona varios para distintas plazas, devuelve 'Concurso-oposición'. Si no, null.",
+    "profesiones": "Devuelve siempre un ARRAY de strings con los nombres limpios de los puestos. Si hay varios, sepáralos como elementos (ej: ['Técnico en Turismo', 'Oficial Tallista']). Si solo hay uno, devuélvelo en el array (ej: ['Policía Local']). Si no hay, devuelve un array vacío [].",
     "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
     "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
     "tasa": "Importe de la tasa. Si no, null.",
-    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín. Si lo menciona, extrae el nombre del boletín, número y fecha. Si no, devuelve null.",
-    "referencia_boe_original": "Si esto es una actualización o trámite, busca el código original de la convocatoria a la que hace referencia (ej: BOE-A-YYYY-XXXX o similar). Si no, null.",
-    "texto_limpio": "Extrae y devuelve el texto oficial de la convocatoria limpio y bien redactado. Elimina menús de navegación, enlaces rotos, cabeceras, pies de página, 'Saltar al contenido' y textos de búsqueda. Deja solo el texto legal y útil.",
-    "meta_description": "Crea una descripción corta (máximo 150 caracteres) directa al grano, ideal para SEO y redes sociales. Empieza directamente por lo importante. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'"
+    "boletin_origen_nombre": "Si menciona que las bases íntegras están publicadas en otro boletín, extrae SOLO el nombre de ese boletín (ej: 'BOP Córdoba', 'DOGV'). Si no lo menciona, null.",
+    "boletin_origen_fecha": "Si menciona la fecha de publicación de ese otro boletín de origen, devuélvela en formato estricto 'YYYY-MM-DD' (ej: '2026-02-17'). Si no, null.",
+    "referencia_boe_original": "Si esto es un trámite posterior, busca el código BOE original (BOE-A-YYYY-XXXX). Si no, null.",
+    "organismo": "Nombre exacto del ayuntamiento, diputación u organismo (ej: 'Ayuntamiento de Madrid'). Si no lo encuentras, null.",
+    "texto_limpio": "Extrae el texto oficial limpio. Elimina menús de navegación, enlaces rotos y basura visual.",
+    "meta_description": "Crea una descripción corta (máx 150 caracteres) directa al grano, ideal para SEO. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'"
   }
   `;
 
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      // 💡 Le damos un poco más de temperatura (0.2) para que sea mejor redactando el texto limpio y el SEO
-      temperature: 0.2, 
+      temperature: 0.1, 
       response_format: { type: "json_object" },
       messages: [
-        // 💡 Instrucción de sistema hiper-estricta para obligarle a buscar las plazas
-        { role: "system", content: "You output strict JSON. Eres un experto analista legal. Tu prioridad absoluta es encontrar el número de plazas exacto convirtiendo letras a números, limpiar la basura visual del texto y generar descripciones SEO." }, 
+        { role: "system", content: "You output strict JSON. Eres un experto analista legal. Tu prioridad es estructurar datos: extrae números enteros para plazos y plazas, y formatea fechas como YYYY-MM-DD." }, 
         { role: "user", content: prompt }
       ]
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     console.error("⚠️ Error con IA analizando detalle:", error.message);
-    // Si falla, devolvemos un objeto básico para que no rompa la base de datos
     return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo };
   }
 }
@@ -226,6 +224,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
+
+  // 💡 NUEVO: Sacamos la primera profesión del array para usarla como "Principal"
+  const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
   
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "OPOSICION - Otros Trámites") {
       console.log(`   ⏭️ Ignorado: La IA determinó que no es empleo público real.`);
@@ -240,13 +241,13 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const esTramite = (analisisIA.tipo === 'OPOSICION - Otros Trámites');
 
   // 🧠 CEREBRO DE DESDUPLICACIÓN CORREGIDO
-  if (analisisIA.profesion && departamentoFinal) {
+ if (profesionPrincipal && departamentoFinal) {
     const { data: coincidencias } = await supabase
       .from('convocatorias')
       .select('slug, type, link_boe')
       // Buscamos por el departamento REAL, no por la categoría genérica
       .ilike('department', `%${departamentoFinal}%`)
-      .ilike('profesion', `%${analisisIA.profesion}%`)
+      .ilike('profesion', `%${profesionPrincipal}%`) // <-- CAMBIO AQUÍ
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
       .limit(1);
@@ -282,34 +283,44 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   // Generamos el slug usando el departamento REAL
-  let textoParaSlug = analisisIA.profesion ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${analisisIA.profesion}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
-  let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
+let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);  let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
-  const convocatoria = {
+const convocatoria = {
     slug: slugFinal, 
     title: itemData.title, 
     meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
-    // Guardamos el departamento REAL en Supabase
     department: departamentoFinal, 
     guid: itemData.link, 
     parent_type: "OPOSICION", 
     type: analisisIA.tipo, 
     plazas: analisisIA.plazas, 
     resumen: analisisIA.resumen, 
-    plazo_texto: analisisIA.plazo_texto, 
+    
+    // 💡 LAS 4 COLUMNAS NUEVAS DE ESTRUCTURACIÓN
+    plazo_numero: analisisIA.plazo_numero,
+    plazo_tipo: analisisIA.plazo_tipo,
+    boletin_origen_nombre: analisisIA.boletin_origen_nombre,
+    boletin_origen_fecha: analisisIA.boletin_origen_fecha,
+    
+    // 💡 Mantenemos las columnas antiguas autogeneradas por si tu web aún las usa
+    plazo_texto: (analisisIA.plazo_numero && analisisIA.plazo_tipo) ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` : null,
+    referencia_bases: (analisisIA.boletin_origen_nombre && analisisIA.boletin_origen_fecha) ? `${analisisIA.boletin_origen_nombre} | ${analisisIA.boletin_origen_fecha}` : null,
+
     grupo: analisisIA.grupo, 
     sistema: analisisIA.sistema, 
-    profesion: analisisIA.profesion, 
+    // Guardamos la principal para retrocompatibilidad
+    profesion: profesionPrincipal, 
+    // Guardamos el ARRAY completo para el buscador de tu web
+    profesiones: analisisIA.profesiones,
     provincia: analisisIA.provincia || fuente.ambito, 
     titulacion: analisisIA.titulacion, 
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
     tasa: analisisIA.tasa,
-    referencia_bases: analisisIA.referencia_bases, 
     parent_slug: parentSlug, 
     publication_date: new Date().toISOString().split('T')[0], 
     link_boe: itemData.link, 
