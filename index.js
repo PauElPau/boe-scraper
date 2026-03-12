@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // 💡 SISTEMA MULTI-KEY PARA SALTARSE LOS LÍMITES DE GROQ
-const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
+const groqKeys = [process.env.GROQ_API_KEY, "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"].filter(Boolean);
 let currentKeyIndex = 0;
 
 function getGroqClient() {
