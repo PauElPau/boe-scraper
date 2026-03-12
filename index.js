@@ -43,16 +43,16 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
- /*  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" }, */
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
- /*  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -66,7 +66,7 @@ const FUENTES_BOLETINES = [
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/#/resultados-fecha?from=busquedaFechaHome&PUBL={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
   { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" } */
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -600,10 +600,10 @@ async function extraerBoletines() {
             
             let textoParaIA = null;
             // 💡 AQUÍ ESTÁ EL ARREGLO:
-            if (fuente.nombre === "BOE" || fuente.nombre === "DOG") {
-              // BOE y Galicia van por la vía rápida nativa (Sin límites de Cloudflare)
+            if (fuente.nombre === "BOE" || fuente.nombre === "DOG" || fuente.nombre === "BOCM") {
+              // BOE, Galicia y Madrid van por la vía rápida nativa (Sin límites de Cloudflare)
               textoParaIA = await obtenerTextoNativo(item.link);
-            } else if (item.link.toLowerCase().includes('pdf')) { 
+            } else if (item.link.toLowerCase().includes('pdf')) {
               // 👈 Unimos el título y el resumen para que nunca sea demasiado corto
               console.log("   📄 Enlace PDF detectado en la URL. Usando resumen del RSS...");
               textoParaIA = item.title + " - " + (item.contentSnippet || item.content || "");
