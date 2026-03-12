@@ -13,7 +13,7 @@ const supabase = createClient(
 );
 
 // 💡 SISTEMA MULTI-KEY PARA SALTARSE LOS LÍMITES DE GROQ
-const groqKeys = [process.env.GROQ_API_KEY, "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"].filter(Boolean);
+const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
 let currentKeyIndex = 0;
 
 function getGroqClient() {
@@ -52,7 +52,7 @@ const FUENTES_BOLETINES = [
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
-  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
+ // { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -61,7 +61,7 @@ const FUENTES_BOLETINES = [
   { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" },
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },
+ // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },
 
  /*  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473", ambito: "Islas Baleares" },
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/archivo/2026/049/", ambito: "Canarias" },
@@ -102,13 +102,11 @@ async function obtenerTextoBOE(url) {
 }
 
 async function obtenerTextoUniversal(url, reintentos = 3) {
-    const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
-    const MI_TOKEN_API = "j-iMVNZe0JocbS4_ZsGnDkinrKrBv1Fe100t6Z2y";
   try {
-    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser-rendering/markdown`, {
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${MI_TOKEN_API}`,
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ url: url }) 
@@ -214,7 +212,8 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "referencia_boe_original": "Si esto es un trámite posterior, busca el código BOE original (BOE-A-YYYY-XXXX). Si no, null.",
     "organismo": "Nombre exacto del ayuntamiento, diputación u organismo (ej: 'Ayuntamiento de Madrid'). Si no lo encuentras, null.",
     "texto_limpio": "Extrae el texto oficial limpio. Elimina menús de navegación, enlaces rotos y basura visual.",
-    "meta_description": "Crea una descripción corta (máx 150 caracteres) directa al grano, ideal para SEO. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'"
+    "meta_description": "Crea una descripción corta (máx 150 caracteres) directa al grano, ideal para SEO. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'",
+    "enlace_pdf": "Busca en el texto la URL directa al documento oficial en formato PDF. En los boletines autonómicos suele ser un enlace explícito de descarga. Si lo encuentras, devuélvelo. Si no hay ningún enlace a un PDF, devuelve null.",
   }
   `;
 
@@ -323,13 +322,17 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? anal
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
+  const enlacePdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.link;
+
 const convocatoria = {
     slug: slugFinal, 
     title: itemData.title, 
     meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
     department: departamentoFinal, 
-    guid: itemData.link, 
+    link: itemData.link, // Mantenemos el link original del RSS por si acaso
+    // 💡 AQUÍ GUARDAMOS EL PDF PARA TU FRONTEND
+    guid: enlacePdfDefinitivo,
     parent_type: "OPOSICION", 
     type: analisisIA.tipo, 
     plazas: analisisIA.plazas, 
@@ -562,20 +565,31 @@ async function extraerBoletines() {
             let textoParaIA = null;
             // 💡 AQUÍ ESTÁ EL ARREGLO:
             if (fuente.nombre === "BOE") {
-              // Usamos tu función rápida y nativa para el BOE (salta bloqueos)
               textoParaIA = await obtenerTextoBOE(item.link);
+            } else if (item.link.toLowerCase().endsWith('.pdf')) {
+              // Si es un PDF directo, no usamos Cloudflare (rompe), usamos el resumen del RSS
+              console.log("   📄 Enlace PDF detectado. Usando resumen del RSS...");
+              textoParaIA = item.contentSnippet || item.content;
             } else {
-              // Cloudflare para los RSS más complejos
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
             
             // Si por cualquier motivo falla, nos quedamos con el Snippet
             if (!textoParaIA || textoParaIA.length < 50) {
               textoParaIA = item.contentSnippet || item.content;
+               // Aseguramos no pasarnos del límite de tokens por minuto de Groq Free (aprox 15000 chars)
+              if (textoParaIA && textoParaIA.length > 15000) {
+                  textoParaIA = textoParaIA.substring(0, 15000) + "... [Texto cortado por seguridad]";
+              }
             }
+           
             
             await procesarYGuardarConvocatoria({ 
-              title: item.title, link: item.link, section: categoriaSeccion, department: categoriaOrganismo 
+              title: item.title, 
+              link: item.link, 
+              pdf_rss: item.enclosure?.url, // 💡 Extraemos el PDF nativo del RSS si viene oculto
+              section: categoriaSeccion, 
+              department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
             await esperar(500);
@@ -596,6 +610,11 @@ async function extraerBoletines() {
           const markdownWeb = await obtenerTextoUniversal(urlFinal); // Usamos urlFinal
           if (!markdownWeb) continue;
 
+          // Tijeretazo de seguridad para sumarios gigantes
+          if (markdownWeb && markdownWeb.length > 20000) {
+              markdownWeb = markdownWeb.substring(0, 20000);
+          }
+
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
           
@@ -612,17 +631,26 @@ async function extraerBoletines() {
                continue;
             }
 
-            // 💡 2. Convertimos enlaces relativos (#/ruta o /ruta) a absolutos (https://...)
-            let enlaceFinal = item.enlace;
+            // 💡 2. LIMPIEZA EXTREMA DEL ENLACE OFICIAL
+            // Quitamos paréntesis, comillas o corchetes que la IA haya arrastrado del Markdown
+            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            
+            // Si es un enlace relativo y la IA se comió la barra inicial, se la ponemos
+            if (!enlaceLimpio.startsWith('http') && !enlaceLimpio.startsWith('/') && !enlaceLimpio.startsWith('#')) {
+                enlaceLimpio = '/' + enlaceLimpio;
+            }
+
+            let enlaceFinal = enlaceLimpio;
             try {
-               enlaceFinal = new URL(item.enlace, fuente.url).href;
+               // Combinamos la URL base del boletín con la ruta relativa de forma nativa
+               enlaceFinal = new URL(enlaceLimpio, fuente.url).href;
             } catch (e) {
-               console.log(`⚠️ Enlace mal formado ignorado: ${item.enlace}`);
+               console.log(`⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
                continue;
             }
             
-            // Si el enlace es idéntico a la portada, es un error de la IA, lo saltamos
-            if (enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
+            // Si el enlace es idéntico a la portada o está vacío, es un error de la IA, lo saltamos
+            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
 
             await gestionarDepartamento(item.departamento);
             
