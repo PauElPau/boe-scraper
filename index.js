@@ -75,28 +75,25 @@ async function obtenerTextoBOE(url) {
   }
 }
 
-// --- 4. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE PARA EL RESTO) ---
 async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
-    // 👇 PEGA AQUÍ TUS DATOS REALES (dentro de las comillas) 👇
-    const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
-    const MI_TOKEN_API = "j-iMVNZe0JocbS4_ZsGnDkinrKrBv1Fe100t6Z2y";
-
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser-rendering/markdown`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MI_TOKEN_API}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url: url })
+      body: JSON.stringify({ url: url }) 
     });
 
-    // 💡 CAMBIO 3: Escudo anti-bloqueos (Manejo del límite de velocidad 429)
-    if (response.status === 429) {
+  if (response.status === 429) {
       if (reintentos > 0) {
-         console.log(`   ⏳ Límite de velocidad (429). Cloudflare pide frenar. Esperando 10 segundos...`);
-         await esperar(10000); // Pausamos el script 10 segundos
-         return obtenerTextoUniversal(url, reintentos - 1); // Lo reintentamos mágicamente
+         // Si es el primer reintento (reintentos = 3), espera 3 segundos.
+         // Si es el segundo (2), espera 6s. El tercero (1) espera 9s.
+         const tiempoPausa = (4 - reintentos) * 3000; 
+         console.log(`   ⏳ Límite de Cloudflare. Pausa inteligente de ${tiempoPausa/1000}s...`);
+         await esperar(tiempoPausa); 
+         return obtenerTextoUniversal(url, reintentos - 1); 
       } else {
          console.error(`❌ Demasiados bloqueos seguidos para la URL: ${url}`);
          return null;
@@ -105,17 +102,15 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`⚠️ Cloudflare bloqueó la URL ${url}`);
-      console.error(`   Status: ${response.status}`);
-      console.error(`   Detalle: ${errorText}`);
+      console.error(`⚠️ Cloudflare falló al procesar ${url} - Status: ${response.status}`);
       return null;
     }
     
-    // 💡 CAMBIO 4: El endpoint /markdown devuelve directamente el texto en "data.result"
     const data = await response.json();
     let textoLimpio = data.result || "";
     
-    return typeof textoLimpio === "string" ? textoLimpio.substring(0, 15000) : ""; 
+    // 💡 AUMENTAMOS EL LÍMITE A 80.000 CARACTERES PARA NO CORTAR EL BOLETÍN
+    return typeof textoLimpio === "string" ? textoLimpio.substring(0, 80000) : ""; 
     
   } catch (error) {
     console.error(`⚠️ Fallo de conexión interno para ${url}:`, error.message);
@@ -123,20 +118,22 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
   }
 }
 
+
 // --- 5. MOTORES DE IA ---
 async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   const prompt = `
-    Eres un experto en empleo público. Aquí tienes el sumario/portada del boletín ${nombreBoletin} en Markdown.
-    Busca TODAS las convocatorias de empleo público (oposiciones, concursos, bolsas de trabajo, estabilización).
-    Ignora subvenciones, multas, nombramientos de altos cargos o ceses.
-    Devuelve ÚNICAMENTE un objeto JSON con un array llamado "convocatorias".
-    Estructura esperada:
-    {
-      "convocatorias": [
-        { "titulo": "Título de la convocatoria", "enlace": "URL completa absoluta extraída del markdown", "departamento": "Organismo que convoca" }
-      ]
-    }
+    Eres un experto en empleo público. Analiza este sumario/portada del boletín ${nombreBoletin} en Markdown.
+    Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, estabilización).
+    
+    REGLAS ESTRICTAS:
+    1. IGNORA menús de navegación, cabeceras, pies de página, "cartas de servicios", "pagos" o índices genéricos.
+    2. Busca SOLO bajo apartados como "Oposiciones y concursos", "Autoridades y personal", o "Empleo público".
+    3. Devuelve el enlace EXACTO que acompaña a cada resolución específica.
+    
+    Devuelve ÚNICAMENTE un JSON con esta estructura:
+    { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
     Si no hay nada relevante, devuelve { "convocatorias": [] }.
+    
     TEXTO:
     ${markdownWeb}
   `;
@@ -144,7 +141,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   try {
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
-      temperature: 0.1, 
+      temperature: 0.0, // 💡 Bajamos a 0.0 para máxima precisión
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
     });
@@ -452,7 +449,7 @@ async function extraerBoletines() {
               title: item.title, link: item.link, section: categoriaSeccion, department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2000);
+            await esperar(500);
           } */
         } 
         
@@ -470,17 +467,35 @@ async function extraerBoletines() {
           }
 
           for (const item of listado) {
+            // 💡 1. Filtramos basura evidente que la IA haya colado
+            const t = item.titulo.toLowerCase();
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) {
+               continue;
+            }
+
+            // 💡 2. Convertimos enlaces relativos (#/ruta o /ruta) a absolutos (https://...)
+            let enlaceFinal = item.enlace;
+            try {
+               enlaceFinal = new URL(item.enlace, fuente.url).href;
+            } catch (e) {
+               console.log(`⚠️ Enlace mal formado ignorado: ${item.enlace}`);
+               continue;
+            }
+            
+            // Si el enlace es idéntico a la portada, es un error de la IA, lo saltamos
+            if (enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
+
             await gestionarDepartamento(item.departamento);
             
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
-            let textoInterior = await obtenerTextoUniversal(item.enlace);
+            let textoInterior = await obtenerTextoUniversal(enlaceFinal);
             if(!textoInterior) continue;
 
             await procesarYGuardarConvocatoria({ 
-              title: item.titulo, link: item.enlace, section: `Boletín ${fuente.nombre}`, department: item.departamento 
+              title: item.titulo, link: enlaceFinal, section: `Boletín ${fuente.nombre}`, department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2000);
+            await esperar(500);
           }
         }
       } catch (err) {
