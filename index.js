@@ -82,17 +82,22 @@ async function gestionarDepartamento(nombre) {
 }
 
 // --- 3. EXTRACCIÓN BOE NATIVA (LA VÍA RÁPIDA) ---
-async function obtenerTextoBOE(url) {
+async function obtenerTextoNativo(url) {
   try {
     const respuesta = await fetch(url);
     const html = await respuesta.text();
     const $ = cheerio.load(html);
-    let textoLimpio = $('#textoxslt').text();
-    if (!textoLimpio) textoLimpio = $('body').text(); // Fallback por si cambia la estructura
+    
+    // Limpiamos la basura visual genérica de cualquier web
+    $('script, style, nav, footer, header, aside').remove();
+    
+    let textoLimpio = $('#textoxslt').text(); // Prioridad si es el BOE
+    if (!textoLimpio) textoLimpio = $('body').text(); // Fallback para Galicia y otros
+    
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
     return textoLimpio.substring(0, 15000);
   } catch (error) {
-    console.error(`⚠️ Error extrayendo el BOE de forma nativa:`, error.message);
+    console.error(`⚠️ Error extrayendo web de forma nativa:`, error.message);
     return null; 
   }
 }
@@ -579,8 +584,9 @@ async function extraerBoletines() {
             
             let textoParaIA = null;
             // 💡 AQUÍ ESTÁ EL ARREGLO:
-            if (fuente.nombre === "BOE") {
-              textoParaIA = await obtenerTextoBOE(item.link);
+            if (fuente.nombre === "BOE" || fuente.nombre === "DOG") {
+              // BOE y Galicia van por la vía rápida nativa (Sin límites de Cloudflare)
+              textoParaIA = await obtenerTextoNativo(item.link);
             } else if (item.link.toLowerCase().includes('pdf')) { 
               // 👈 Unimos el título y el resumen para que nunca sea demasiado corto
               console.log("   📄 Enlace PDF detectado en la URL. Usando resumen del RSS...");
