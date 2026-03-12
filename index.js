@@ -179,6 +179,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "grupo": "El grupo (ej: 'A1', 'C2'). Si no, null.",
     "sistema": "'Oposición', 'Concurso-oposición', 'Concurso', o null.",
     "profesion": "Nombre limpio del puesto (ej: 'Policía Local'). Si no, null.",
+    "organismo": "Nombre exacto del ayuntamiento, diputación, ministerio u organismo que convoca (ej: 'Ayuntamiento de Madrid', 'Universidad de Valencia'). Si no lo encuentras, null.",
     "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
     "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
@@ -212,13 +213,11 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
 // --- 6. LÓGICA DE BASE DE DATOS (SUPABASE) ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
-  // 💡 FILTRO ANTI-BASURA 1: Si el texto es ridículamente corto, lo ignoramos
   if (!textoParaIA || textoParaIA.length < 150) {
-      console.log(`   ⏭️ Ignorado: El texto extraído es demasiado corto (posible error de carga).`);
+      console.log(`   ⏭️ Ignorado: El texto extraído es demasiado corto.`);
       return;
   }
   
-  // 💡 FILTRO ANTI-BASURA 2: Si el texto contiene mensajes de error 404 de la web
   const textoLower = textoParaIA.toLowerCase();
   if (textoLower.includes("error 404") || textoLower.includes("página no encontrada") || textoLower.includes("page not found")) {
       console.log(`   ⏭️ Ignorado: La web de destino devolvió un Error 404.`);
@@ -227,58 +226,51 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
   
-  // 💡 FILTRO ANTI-BASURA 3: Si la IA no saca profesión y el tipo es genérico, es un falso positivo
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "OPOSICION - Otros Trámites") {
       console.log(`   ⏭️ Ignorado: La IA determinó que no es empleo público real.`);
       return;
   }
 
+  // 💡 AQUÍ ESTÁ LA MAGIA: Usamos el organismo exacto de la IA (Ej: "Ayuntamiento de Pals") 
+  // Si la IA falla, usamos el genérico del RSS como plan B.
+  const departamentoFinal = analisisIA.organismo || itemData.department;
+
   let parentSlug = null;
   const esTramite = (analisisIA.tipo === 'OPOSICION - Otros Trámites');
 
-  // ----------------------------------------------------------------------
-  // 🧠 EL CEREBRO DE DESDUPLICACIÓN Y ENLACE DE TRÁMITES
-  // ----------------------------------------------------------------------
-  if (analisisIA.profesion && itemData.department) {
-    // 1. Buscamos si ya existe el "padre" original en nuestra base de datos
-    // Buscamos misma profesión y mismo departamento (ignorando si es mayúscula/minúscula)
+  // 🧠 CEREBRO DE DESDUPLICACIÓN CORREGIDO
+  if (analisisIA.profesion && departamentoFinal) {
     const { data: coincidencias } = await supabase
       .from('convocatorias')
       .select('slug, type, link_boe')
-      .ilike('department', `%${itemData.department}%`)
+      // Buscamos por el departamento REAL, no por la categoría genérica
+      .ilike('department', `%${departamentoFinal}%`)
       .ilike('profesion', `%${analisisIA.profesion}%`)
-      .is('parent_slug', null) // Solo buscamos los padres originales, no otros trámites
-      .order('created_at', { ascending: false }) // Pillamos la más reciente
+      .is('parent_slug', null) 
+      .order('created_at', { ascending: false }) 
       .limit(1);
 
     if (coincidencias && coincidencias.length > 0) {
       const plazaExistente = coincidencias[0];
 
       if (esTramite) {
-        // CASO A: Es una lista de admitidos, fecha de examen, etc.
         console.log(`   🔗 Novedad detectada para la plaza: ${plazaExistente.slug}. Enlazando como trámite hijo...`);
         parentSlug = plazaExistente.slug;
       } 
       else {
-        // CASO B: Es una "Nueva Convocatoria", pero ¡ya la teníamos! (Duplicado BOE vs CCAA)
         console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
-        
-        // Si el duplicado nos llega desde el BOE y la plaza original no tenía link del BOE, la actualizamos
         if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
             console.log(`   ✅ Actualizando la plaza original con la apertura oficial de plazos en el BOE.`);
             await supabase.from("convocatorias").update({ 
                 link_boe: itemData.link, 
-                publication_date: new Date().toISOString().split('T')[0] // Refrescamos la fecha para que suba arriba
+                publication_date: new Date().toISOString().split('T')[0] 
             }).eq('slug', plazaExistente.slug);
         }
-        
-        // DETENEMOS LA EJECUCIÓN AQUÍ. No queremos insertar una fila nueva en la base de datos.
         return; 
       }
     }
   }
 
-  // Fallback: Si no lo hemos encontrado por texto, pero el BOE menciona el código original (tu código anterior)
   if (!parentSlug && analisisIA.referencia_boe_original) {
     const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
       .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
@@ -287,23 +279,22 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
         console.log(`   🔗 Enlazado por código BOE al padre: ${parentSlug}`);
     }
   }
-  // ----------------------------------------------------------------------
 
-  // Generamos el slug de forma segura
-  let textoParaSlug = analisisIA.profesion ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${analisisIA.profesion}-${itemData.department || fuente.nombre}` : (analisisIA.resumen || itemData.title);
+  // Generamos el slug usando el departamento REAL
+  let textoParaSlug = analisisIA.profesion ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${analisisIA.profesion}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
-const convocatoria = {
+  const convocatoria = {
     slug: slugFinal, 
     title: itemData.title, 
-    // 💡 USAMOS LA META DESCRIPTION GENERADA POR LA IA (con un fallback de seguridad)
     meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
-    department: itemData.department, 
+    // Guardamos el departamento REAL en Supabase
+    department: departamentoFinal, 
     guid: itemData.link, 
     parent_type: "OPOSICION", 
     type: analisisIA.tipo, 
@@ -321,7 +312,6 @@ const convocatoria = {
     parent_slug: parentSlug, 
     publication_date: new Date().toISOString().split('T')[0], 
     link_boe: itemData.link, 
-    // 💡 USAMOS EL TEXTO LIMPIO GENERADO POR LA IA
     raw_text: analisisIA.texto_limpio || textoParaIA,
   };
 
@@ -330,13 +320,13 @@ const convocatoria = {
   if (error) {
     console.error(`❌ Error BD:`, error.message);
   } else {
-    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Es trámite/hijo: ${parentSlug ? 'SÍ' : 'NO'}`);
+    // 💡 Aseguramos que el departamento se guarde también en tu tabla 'departments'
+    await gestionarDepartamento(departamentoFinal);
     
-    // Lo metemos en el array para que luego se envíen los emails
+    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal}`);
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
 }
-
 // --- 7. SISTEMAS DE ALERTAS (ORIGINALES) ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
