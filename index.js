@@ -196,7 +196,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   
   Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
   {
-    "tipo": "Uno de estos: 'OPOSICION - Nueva Convocatoria', 'OPOSICION - Convocatoria (Estabilización)', 'OPOSICION - Bolsas de Empleo', 'OPOSICION - Otros Trámites'.",
+    "tipo": "Debes clasificar el texto obligatoriamente en UNA de estas categorías exactas: 'Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites'.",
     "plazas": "Busca cuántas plazas se convocan en total. Convierte letras a números. Devuelve SIEMPRE un Integer. Si es bolsa o no hay, null.",
     "resumen": "Resumen claro de 1-2 frases.",
     "plazo_numero": "Extrae SOLO la cantidad numérica del plazo (ej: 20, 15, 10). Devuelve siempre un número Integer. Si no hay plazo, null.",
@@ -240,7 +240,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
         }
     }
     console.error("⚠️ Error con IA analizando detalle:", error.message);
-    return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo };
+    return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
   }
 }
 
@@ -262,7 +262,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   // 💡 NUEVO: Sacamos la primera profesión del array para usarla como "Principal"
   const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
   
-  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "OPOSICION - Otros Trámites") {
+  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
       console.log(`   ⏭️ Ignorado: La IA determinó que no es empleo público real.`);
       return;
   }
@@ -272,7 +272,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const departamentoFinal = analisisIA.organismo || itemData.department;
 
   let parentSlug = null;
-  const esTramite = (analisisIA.tipo === 'OPOSICION - Otros Trámites');
+  // 💡 Consideramos "trámite" a todo lo que NO sea abrir plazos nuevos o traslados
+  const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
+  const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
   // 🧠 CEREBRO DE DESDUPLICACIÓN CORREGIDO
  if (profesionPrincipal && departamentoFinal) {
@@ -341,7 +343,8 @@ const convocatoria = {
     meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
     section: itemData.section, 
     department: departamentoFinal, 
- //   link: itemData.link, // Mantenemos el link original del RSS por si acaso
+
+    boletin: `${fuente.nombre} - ${fuente.ambito}`,
     // 💡 AQUÍ GUARDAMOS EL PDF PARA TU FRONTEND
     guid: enlacePdfDefinitivo,
     parent_type: "OPOSICION", 
@@ -390,9 +393,9 @@ const convocatoria = {
 // --- 7. SISTEMAS DE ALERTAS (ORIGINALES) ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
-    c.type === 'OPOSICION - Nueva Convocatoria' || 
-    c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
-    c.type === 'OPOSICION - Bolsas de Empleo'
+    c.type === 'Oposiciones (Turno Libre)' || 
+    c.type === 'Estabilización y Promoción' || 
+    c.type === 'Bolsas de Empleo Temporal'
   );
 
   if (convocatoriasReales.length === 0) return;
@@ -513,9 +516,9 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
 
 async function enviarAlertaTelegram(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
-    c.type === 'OPOSICION - Nueva Convocatoria' || 
-    c.type === 'OPOSICION - Convocatoria (Estabilización)' || 
-    c.type === 'OPOSICION - Bolsas de Empleo'
+    c.type === 'Oposiciones (Turno Libre)' || 
+    c.type === 'Estabilización y Promoción' || 
+    c.type === 'Bolsas de Empleo Temporal'
   );
 
   if (convocatoriasReales.length === 0) return;
@@ -577,25 +580,25 @@ async function extraerBoletines() {
             // 💡 AQUÍ ESTÁ EL ARREGLO:
             if (fuente.nombre === "BOE") {
               textoParaIA = await obtenerTextoBOE(item.link);
-            } else if (item.link.toLowerCase().endsWith('.pdf')) {
-              // Si es un PDF directo, no usamos Cloudflare (rompe), usamos el resumen del RSS
-              console.log("   📄 Enlace PDF detectado. Usando resumen del RSS...");
+            } else if (item.link.toLowerCase().includes('pdf')) { 
+              // 👈 Usamos INCLUDES en lugar de endsWith para atrapar los de Murcia (/pdf)
+              console.log("   📄 Enlace PDF detectado en la URL. Usando resumen del RSS...");
               textoParaIA = item.contentSnippet || item.content;
             } else {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
             
-            // Si por cualquier motivo falla, nos quedamos con el Snippet
+            // Si por cualquier motivo falla o viene vacío, nos quedamos con el Snippet
             if (!textoParaIA || textoParaIA.length < 50) {
               textoParaIA = item.contentSnippet || item.content;
-               // Aseguramos no pasarnos del límite de tokens por minuto de Groq Free (aprox 15000 chars)
-              if (textoParaIA && textoParaIA.length > 15000) {
-                  textoParaIA = textoParaIA.substring(0, 15000) + "... [Texto cortado por seguridad]";
-              }
+            }
+            
+            // 💡 EL TIJERETAZO DE SEGURIDAD (¡AQUÍ AFUERA! Para que afecte a todos los textos largos)
+            if (textoParaIA && textoParaIA.length > 15000) {
+                textoParaIA = textoParaIA.substring(0, 15000) + "... [Texto cortado por seguridad para la IA]";
             }
            
-            
-           // 💡 CAZADOR DE PDFs EN RSS: Buscamos en enclosure o en el guid (estilo BOE)
+            // 💡 CAZADOR DE PDFs EN RSS: Buscamos en enclosure o en el guid (estilo BOE)
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) {
                 enlacePdfRss = item.guid;
