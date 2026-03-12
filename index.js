@@ -194,15 +194,84 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
 // --- 6. LÓGICA DE BASE DE DATOS (SUPABASE) ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
-  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
+  // 💡 FILTRO ANTI-BASURA 1: Si el texto es ridículamente corto, lo ignoramos
+  if (!textoParaIA || textoParaIA.length < 150) {
+      console.log(`   ⏭️ Ignorado: El texto extraído es demasiado corto (posible error de carga).`);
+      return;
+  }
   
-  let parentSlug = null;
-  if (analisisIA.referencia_boe_original) {
-    const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
-      .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
-    if (parentMatch) parentSlug = parentMatch.slug;
+  // 💡 FILTRO ANTI-BASURA 2: Si el texto contiene mensajes de error 404 de la web
+  const textoLower = textoParaIA.toLowerCase();
+  if (textoLower.includes("error 404") || textoLower.includes("página no encontrada") || textoLower.includes("page not found")) {
+      console.log(`   ⏭️ Ignorado: La web de destino devolvió un Error 404.`);
+      return;
   }
 
+  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
+  
+  // 💡 FILTRO ANTI-BASURA 3: Si la IA no saca profesión y el tipo es genérico, es un falso positivo
+  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "OPOSICION - Otros Trámites") {
+      console.log(`   ⏭️ Ignorado: La IA determinó que no es empleo público real.`);
+      return;
+  }
+
+  let parentSlug = null;
+  const esTramite = (analisisIA.tipo === 'OPOSICION - Otros Trámites');
+
+  // ----------------------------------------------------------------------
+  // 🧠 EL CEREBRO DE DESDUPLICACIÓN Y ENLACE DE TRÁMITES
+  // ----------------------------------------------------------------------
+  if (analisisIA.profesion && itemData.department) {
+    // 1. Buscamos si ya existe el "padre" original en nuestra base de datos
+    // Buscamos misma profesión y mismo departamento (ignorando si es mayúscula/minúscula)
+    const { data: coincidencias } = await supabase
+      .from('convocatorias')
+      .select('slug, type, link_boe')
+      .ilike('department', `%${itemData.department}%`)
+      .ilike('profesion', `%${analisisIA.profesion}%`)
+      .is('parent_slug', null) // Solo buscamos los padres originales, no otros trámites
+      .order('created_at', { ascending: false }) // Pillamos la más reciente
+      .limit(1);
+
+    if (coincidencias && coincidencias.length > 0) {
+      const plazaExistente = coincidencias[0];
+
+      if (esTramite) {
+        // CASO A: Es una lista de admitidos, fecha de examen, etc.
+        console.log(`   🔗 Novedad detectada para la plaza: ${plazaExistente.slug}. Enlazando como trámite hijo...`);
+        parentSlug = plazaExistente.slug;
+      } 
+      else {
+        // CASO B: Es una "Nueva Convocatoria", pero ¡ya la teníamos! (Duplicado BOE vs CCAA)
+        console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
+        
+        // Si el duplicado nos llega desde el BOE y la plaza original no tenía link del BOE, la actualizamos
+        if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
+            console.log(`   ✅ Actualizando la plaza original con la apertura oficial de plazos en el BOE.`);
+            await supabase.from("convocatorias").update({ 
+                link_boe: itemData.link, 
+                publication_date: new Date().toISOString().split('T')[0] // Refrescamos la fecha para que suba arriba
+            }).eq('slug', plazaExistente.slug);
+        }
+        
+        // DETENEMOS LA EJECUCIÓN AQUÍ. No queremos insertar una fila nueva en la base de datos.
+        return; 
+      }
+    }
+  }
+
+  // Fallback: Si no lo hemos encontrado por texto, pero el BOE menciona el código original (tu código anterior)
+  if (!parentSlug && analisisIA.referencia_boe_original) {
+    const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
+      .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
+    if (parentMatch) {
+        parentSlug = parentMatch.slug;
+        console.log(`   🔗 Enlazado por código BOE al padre: ${parentSlug}`);
+    }
+  }
+  // ----------------------------------------------------------------------
+
+  // Generamos el slug de forma segura
   let textoParaSlug = analisisIA.profesion ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${analisisIA.profesion}-${itemData.department || fuente.nombre}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
@@ -230,7 +299,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
     tasa: analisisIA.tasa,
     referencia_bases: analisisIA.referencia_bases, 
-    parent_slug: parentSlug, 
+    parent_slug: parentSlug, // <- Aquí es donde Supabase sabe que es un "hijo"
     publication_date: new Date().toISOString().split('T')[0], 
     link_boe: itemData.link, 
     raw_text: textoParaIA,
@@ -241,7 +310,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (error) {
     console.error(`❌ Error BD:`, error.message);
   } else {
-    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
+    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Es trámite/hijo: ${parentSlug ? 'SÍ' : 'NO'}`);
+    
+    // Lo metemos en el array para que luego se envíen los emails
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
 }
