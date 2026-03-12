@@ -4,6 +4,7 @@ const Parser = require("rss-parser");
 const slugify = require("slugify");
 const { OpenAI } = require("openai");
 const { Resend } = require('resend'); 
+const cheerio = require("cheerio"); // 👈 VOLVEMOS A AÑADIR CHEERIO PARA EL BOE
 
 // --- 1. INICIALIZACIÓN DE CLIENTES ---
 const supabase = createClient(
@@ -24,13 +25,13 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-  // 🟢 BOLETINES CON RSS FUNCIONAL
+  // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
   { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/rss", ambito: "Madrid" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/2.xml", ambito: "Galicia" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
+  { nombre: "BOCM", tipo: "html_directo", url: "https://www.bocm.es/boletin/bocm-hoy", ambito: "Madrid" },
+  { nombre: "DOG", tipo: "html_directo", url: "https://www.xunta.gal/diario-oficial-galicia/", ambito: "Galicia" },
   { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/ultimo-diario", ambito: "Comunidad Valenciana" },
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/", ambito: "Aragón" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
@@ -58,7 +59,23 @@ async function gestionarDepartamento(nombre) {
   if (error) console.error(`⚠️ Error departamento ${nombre}:`, error.message);
 }
 
-// --- 3. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE) ---
+// --- 3. EXTRACCIÓN BOE NATIVA (LA VÍA RÁPIDA) ---
+async function obtenerTextoBOE(url) {
+  try {
+    const respuesta = await fetch(url);
+    const html = await respuesta.text();
+    const $ = cheerio.load(html);
+    let textoLimpio = $('#textoxslt').text();
+    if (!textoLimpio) textoLimpio = $('body').text(); // Fallback por si cambia la estructura
+    textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
+    return textoLimpio.substring(0, 15000);
+  } catch (error) {
+    console.error(`⚠️ Error extrayendo el BOE de forma nativa:`, error.message);
+    return null; 
+  }
+}
+
+// --- 4. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE PARA EL RESTO) ---
 async function obtenerTextoUniversal(url) {
   try {
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser_rendering/crawl`, {
@@ -70,17 +87,25 @@ async function obtenerTextoUniversal(url) {
       body: JSON.stringify({ url: url, format: "markdown", follow_links: false })
     });
 
-    if (!response.ok) return null;
+    if (!response.ok) {
+      // 💡 AHORA NOS CHIVARÁ EL MOTIVO EXACTO DEL RECHAZO
+      const errorText = await response.text();
+      console.error(`⚠️ Cloudflare bloqueó la URL ${url}`);
+      console.error(`   Status: ${response.status}`);
+      console.error(`   Detalle: ${errorText}`);
+      return null;
+    }
+    
     const data = await response.json();
     let textoLimpio = data.result?.markdown || "";
-    return textoLimpio.substring(0, 15000); // Límite de tokens para Llama-3
+    return textoLimpio.substring(0, 15000); 
   } catch (error) {
-    console.error(`⚠️ Error en Cloudflare para ${url}:`, error.message);
+    console.error(`⚠️ Fallo de conexión con Cloudflare para ${url}:`, error.message);
     return null; 
   }
 }
 
-// --- 4. MOTORES DE IA ---
+// --- 5. MOTORES DE IA ---
 async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   const prompt = `
     Eres un experto en empleo público. Aquí tienes el sumario/portada del boletín ${nombreBoletin} en Markdown.
@@ -150,7 +175,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   }
 }
 
-// --- 5. LÓGICA DE BASE DE DATOS (SUPABASE) ---
+// --- 6. LÓGICA DE BASE DE DATOS (SUPABASE) ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
   
@@ -165,7 +190,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
-  // Usamos un sufijo único para evitar colisiones
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
@@ -205,7 +229,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 }
 
-// --- 6. SISTEMAS DE ALERTAS (ORIGINALES) ---
+// --- 7. SISTEMAS DE ALERTAS (ORIGINALES) ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
@@ -368,7 +392,7 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   }
 }
 
-// --- 7. BUCLE PRINCIPAL ---
+// --- 8. BUCLE PRINCIPAL ---
 async function extraerBoletines() {
   try {
     const convocatoriasInsertadasHoy = [];
@@ -382,7 +406,6 @@ async function extraerBoletines() {
         if (fuente.tipo === "rss") {
           const feed = await parser.parseURL(fuente.url);
           for (const item of feed.items.reverse()) {
-            // Filtro rápido para no gastar IA en nombramientos o ceses
             const t = item.title.toLowerCase();
             if (!t.includes('oposición') && !t.includes('concurso') && !t.includes('provisión') && !t.includes('empleo') && !t.includes('plaza') && !t.includes('bolsa')) continue;
 
@@ -391,7 +414,21 @@ async function extraerBoletines() {
             await gestionarDepartamento(categoriaOrganismo);
 
             console.log(`\n📄 Extrayendo interior de: ${item.title.substring(0,60)}...`);
-            let textoParaIA = await obtenerTextoUniversal(item.link) || item.contentSnippet;
+            
+            let textoParaIA = null;
+            // 💡 AQUÍ ESTÁ EL ARREGLO:
+            if (fuente.nombre === "BOE") {
+              // Usamos tu función rápida y nativa para el BOE (salta bloqueos)
+              textoParaIA = await obtenerTextoBOE(item.link);
+            } else {
+              // Cloudflare para los RSS más complejos
+              textoParaIA = await obtenerTextoUniversal(item.link);
+            }
+            
+            // Si por cualquier motivo falla, nos quedamos con el Snippet
+            if (!textoParaIA || textoParaIA.length < 50) {
+              textoParaIA = item.contentSnippet || item.content;
+            }
             
             await procesarYGuardarConvocatoria({ 
               title: item.title, link: item.link, section: categoriaSeccion, department: categoriaOrganismo 
@@ -435,12 +472,11 @@ async function extraerBoletines() {
 
     console.log(`\n🎉 RASTREO COMPLETADO. Total nuevas insertadas: ${convocatoriasInsertadasHoy.length}`);
     
-    // --- LLAMADAS A MOTORES DE AVISOS ---
-   /*  if (convocatoriasInsertadasHoy.length > 0) {
+    if (convocatoriasInsertadasHoy.length > 0) {
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
       await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
-    } */
+    }
 
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
