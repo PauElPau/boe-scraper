@@ -12,10 +12,26 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY,
-  baseURL: "https://api.groq.com/openai/v1",
-});
+// 💡 SISTEMA MULTI-KEY PARA SALTARSE LOS LÍMITES DE GROQ
+const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
+let currentKeyIndex = 0;
+
+function getGroqClient() {
+  return new OpenAI({
+    apiKey: groqKeys[currentKeyIndex],
+    baseURL: "https://api.groq.com/openai/v1",
+  });
+}
+
+function rotarKeyGroq() {
+  currentKeyIndex++;
+  if (currentKeyIndex >= groqKeys.length) {
+    console.error("❌ Todas las API Keys de Groq han agotado su cuota diaria.");
+    return false; // Ya no quedan llaves
+  }
+  console.log(`🔄 Cuota agotada. Cambiando a la API Key secundaria de Groq (Key ${currentKeyIndex + 1})...`);
+  return true;
+}
 
 const parser = new Parser({
   headers: {
@@ -151,6 +167,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   `;
 
   try {
+    const groq = getGroqClient(); // <-- Usamos el cliente dinámico
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.0, // 💡 Bajamos a 0.0 para máxima precisión
@@ -159,6 +176,14 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     });
     return JSON.parse(response.choices[0].message.content).convocatorias || [];
   } catch (error) {
+    // 💡 SI EL ERROR ES POR CUOTA DIARIA (Rate Limit 429)
+    if (error.message.includes('429 Rate limit reached') || error.status === 429) {
+        if (rotarKeyGroq()) {
+            // Si hemos podido cambiar a la llave 2, esperamos 2 segundos y reintentamos esta misma plaza
+            await esperar(2000);
+            return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin);
+        }
+    }
     console.error("⚠️ Error IA extrayendo sumario:", error.message);
     return [];
   }
@@ -194,6 +219,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   `;
 
   try {
+    const groq = getGroqClient(); // <-- Usamos el cliente dinámico
     const response = await groq.chat.completions.create({
       model: "llama-3.1-8b-instant",
       temperature: 0.1, 
@@ -205,6 +231,14 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
+    // 💡 SI EL ERROR ES POR CUOTA DIARIA (Rate Limit 429)
+    if (error.message.includes('429 Rate limit reached') || error.status === 429) {
+        if (rotarKeyGroq()) {
+            // Si hemos podido cambiar a la llave 2, esperamos 2 segundos y reintentamos esta misma plaza
+            await esperar(2000);
+            return analizarConvocatoriaIA(titulo, textoInterior);
+        }
+    }
     console.error("⚠️ Error con IA analizando detalle:", error.message);
     return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo };
   }
