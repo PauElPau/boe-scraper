@@ -322,6 +322,7 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? anal
   const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
   const slugFinal = `${slugBase}-${suffix}`;
 
+  // 1. PDF de la IA | 2. PDF del RSS (BOE) | 3. Enlace web normal
   const enlacePdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.link;
 
 const convocatoria = {
@@ -584,10 +585,17 @@ async function extraerBoletines() {
             }
            
             
+           // 💡 CAZADOR DE PDFs EN RSS: Buscamos en enclosure o en el guid (estilo BOE)
+            let enlacePdfRss = item.enclosure?.url || null;
+            if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) {
+                enlacePdfRss = item.guid;
+            }
+
             await procesarYGuardarConvocatoria({ 
               title: item.title, 
               link: item.link, 
-              pdf_rss: item.enclosure?.url, // 💡 Extraemos el PDF nativo del RSS si viene oculto
+              guid: item.guid, // 👈 Se lo pasamos para generar bien el slug
+              pdf_rss: enlacePdfRss, // 👈 Pasamos el PDF atrapado
               section: categoriaSeccion, 
               department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
@@ -659,7 +667,11 @@ async function extraerBoletines() {
             if(!textoInterior) continue;
 
             await procesarYGuardarConvocatoria({ 
-              title: item.titulo, link: enlaceFinal, section: `Boletín ${fuente.nombre}`, department: item.departamento 
+              title: item.titulo, 
+              link: enlaceFinal, 
+              guid: enlaceFinal, // 👈 Usamos el enlace web como guid de respaldo
+              section: `Boletín ${fuente.nombre}`, 
+              department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
             await esperar(500);
