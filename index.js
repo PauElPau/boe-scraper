@@ -43,11 +43,11 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  //{ nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  //{ nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  //{ nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  //{ nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
   { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
@@ -113,7 +113,7 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
       if (reintentos > 0) {
          // Si es el primer reintento (reintentos = 3), espera 3 segundos.
          // Si es el segundo (2), espera 6s. El tercero (1) espera 9s.
-         const tiempoPausa = (4 - reintentos) * 3000; 
+         const tiempoPausa = (4 - reintentos) * 5000;
          console.log(`   ⏳ Límite de Cloudflare. Pausa inteligente de ${tiempoPausa/1000}s...`);
          await esperar(tiempoPausa); 
          return obtenerTextoUniversal(url, reintentos - 1); 
@@ -242,7 +242,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
 // --- 6. LÓGICA DE BASE DE DATOS (SUPABASE) ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
-  if (!textoParaIA || textoParaIA.length < 150) {
+  if (!textoParaIA || textoParaIA.length < 50) {
       console.log(`   ⏭️ Ignorado: El texto extraído es demasiado corto.`);
       return;
   }
@@ -315,7 +315,12 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   // Generamos el slug usando el departamento REAL
-  let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
+  // Generamos el slug usando el departamento REAL y plural/singular correcto
+  let textoPlazas = '';
+  if (analisisIA.plazas) {
+      textoPlazas = analisisIA.plazas === 1 ? '1-plaza-' : `${analisisIA.plazas}-plazas-`;
+  }
+  let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
@@ -529,7 +534,7 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
 
   const topConv = convocatoriasReales.slice(0, 10);
   topConv.forEach(c => {
-    const plazas = c.plazas ? `(*${c.plazas} plazas*) ` : '';
+    const plazas = c.plazas ? `(*${c.plazas} ${c.plazas === 1 ? 'plaza' : 'plazas'}*) ` : '';
     texto += `💼 *${c.profesion || 'Plaza'}* ${plazas}\n`;
     texto += `🏛️ ${c.department || 'Administración'} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n`;
     texto += `👉 [Ver plazos](https://topos.es/convocatorias/${c.slug})\n\n`;
@@ -577,9 +582,9 @@ async function extraerBoletines() {
             if (fuente.nombre === "BOE") {
               textoParaIA = await obtenerTextoBOE(item.link);
             } else if (item.link.toLowerCase().includes('pdf')) { 
-              // 👈 Usamos INCLUDES en lugar de endsWith para atrapar los de Murcia (/pdf)
+              // 👈 Unimos el título y el resumen para que nunca sea demasiado corto
               console.log("   📄 Enlace PDF detectado en la URL. Usando resumen del RSS...");
-              textoParaIA = item.contentSnippet || item.content;
+              textoParaIA = item.title + " - " + (item.contentSnippet || item.content || "");
             } else {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
@@ -609,7 +614,7 @@ async function extraerBoletines() {
               department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(500);
+            await esperar(2500);
           }
         } 
         
@@ -683,7 +688,7 @@ async function extraerBoletines() {
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(500);
+            await esperar(2500);
           }
         }
       } catch (err) {
