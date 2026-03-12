@@ -3,9 +3,9 @@ const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
 const { OpenAI } = require("openai");
-const cheerio = require("cheerio"); 
 const { Resend } = require('resend'); 
 
+// --- 1. INICIALIZACIÓN DE CLIENTES ---
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
@@ -18,12 +18,34 @@ const groq = new OpenAI({
 
 const parser = new Parser({
   headers: {
-    "User-Agent":
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   },
 });
 
-const BOE_RSS_URL = "https://www.boe.es/rss/boe.php?s=2B";
+// --- 2. CONFIGURACIÓN DE BOLETINES ---
+const FUENTES_BOLETINES = [
+  // 🟢 BOLETINES CON RSS FUNCIONAL
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/rss", ambito: "Madrid" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/2.xml", ambito: "Galicia" },
+
+  // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
+  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/ultimo-diario", ambito: "Comunidad Valenciana" },
+  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/", ambito: "Aragón" },
+  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
+  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" },
+  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },
+  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.castillalamancha.es/portaldocm/verUltimoDiario.do", ambito: "Castilla-La Mancha" },
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/ultimoBoletin.do", ambito: "Castilla y León" },
+  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },
+  { nombre: "DOE", tipo: "html_directo", url: "https://doe.juntaex.es/ultima-portada/", ambito: "Extremadura" },
+  { nombre: "BORM", tipo: "html_directo", url: "https://www.borm.es/#/borm/sumario", ambito: "Región de Murcia" },
+  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/boletin-del-dia", ambito: "Navarra" },
+  { nombre: "BOPV", tipo: "html_directo", url: "https://www.euskadi.eus/r48-bopv/es/bopv2/datos/Ultimo.shtml", ambito: "País Vasco" },
+  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-ultimo", ambito: "La Rioja" }
+];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -36,27 +58,63 @@ async function gestionarDepartamento(nombre) {
   if (error) console.error(`⚠️ Error departamento ${nombre}:`, error.message);
 }
 
-// --- LEER EL INTERIOR DEL BOE ---
-async function obtenerTextoBOE(url) {
+// --- 3. EXTRACCIÓN UNIVERSAL (API CLOUDFLARE) ---
+async function obtenerTextoUniversal(url) {
   try {
-    const respuesta = await fetch(url);
-    const html = await respuesta.text();
-    const $ = cheerio.load(html);
-    let textoLimpio = $('#textoxslt').text();
-    textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    return textoLimpio.substring(0, 5000);
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser_rendering/crawl`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ url: url, format: "markdown", follow_links: false })
+    });
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    let textoLimpio = data.result?.markdown || "";
+    return textoLimpio.substring(0, 15000); // Límite de tokens para Llama-3
   } catch (error) {
-    console.error(`⚠️ No se pudo leer el interior de ${url}`);
+    console.error(`⚠️ Error en Cloudflare para ${url}:`, error.message);
     return null; 
   }
 }
 
-// --- CEREBRO IA ACTUALIZADO ---
+// --- 4. MOTORES DE IA ---
+async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
+  const prompt = `
+    Eres un experto en empleo público. Aquí tienes el sumario/portada del boletín ${nombreBoletin} en Markdown.
+    Busca TODAS las convocatorias de empleo público (oposiciones, concursos, bolsas de trabajo, estabilización).
+    Ignora subvenciones, multas, nombramientos de altos cargos o ceses.
+    Devuelve ÚNICAMENTE un objeto JSON con un array llamado "convocatorias".
+    Estructura esperada:
+    {
+      "convocatorias": [
+        { "titulo": "Título de la convocatoria", "enlace": "URL completa absoluta extraída del markdown", "departamento": "Organismo que convoca" }
+      ]
+    }
+    Si no hay nada relevante, devuelve { "convocatorias": [] }.
+    TEXTO:
+    ${markdownWeb}
+  `;
+
+  try {
+    const response = await groq.chat.completions.create({
+      model: "llama-3.1-8b-instant",
+      temperature: 0.1, 
+      response_format: { type: "json_object" },
+      messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
+    });
+    return JSON.parse(response.choices[0].message.content).convocatorias || [];
+  } catch (error) {
+    console.error("⚠️ Error IA extrayendo sumario:", error.message);
+    return [];
+  }
+}
+
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
-  Eres un experto en extraer datos del Boletín Oficial del Estado (BOE).
-  Analiza el texto oficial de esta publicación.
-  
+  Eres un experto en extraer datos del empleo público. Analiza el texto oficial de esta publicación.
   TÍTULO: ${titulo}
   TEXTO INTERIOR: ${textoInterior}
   
@@ -73,8 +131,8 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
     "tasa": "Importe de la tasa. Si no, null.",
-    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín (ej: 'Boletín Oficial de la Provincia de...'). Si lo menciona, extrae el nombre del boletín, número y fecha. Si no, devuelve null.",
-    "referencia_boe_original": "Si esto es una actualización (listas de admitidos, fechas de examen, tribunal), busca el código BOE original de la convocatoria a la que hace referencia (formato 'BOE-A-YYYY-XXXX'). Si no es una actualización o no aparece el código exacto, devuelve null."
+    "referencia_bases": "Busca si el texto menciona que las bases íntegras están publicadas en otro boletín. Si lo menciona, extrae el nombre del boletín, número y fecha. Si no, devuelve null.",
+    "referencia_boe_original": "Si esto es una actualización, busca el código original de la convocatoria a la que hace referencia (ej: BOE-A-YYYY-XXXX o similar). Si no, null."
   }
   `;
 
@@ -83,24 +141,71 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       model: "llama-3.1-8b-instant",
       temperature: 0.1, 
       response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "You are a helpful assistant designed to output strict JSON." },
-        { role: "user", content: prompt }
-      ]
+      messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
     });
-
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
-    console.error("⚠️ Error con la IA:", error.message);
-    return { 
-      tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo, plazo_texto: null,
-      grupo: null, sistema: null, profesion: null, provincia: null, titulacion: null, enlace_inscripcion: null, tasa: null,
-      referencia_bases: null, referencia_boe_original: null
-    };
+    console.error("⚠️ Error con IA analizando detalle:", error.message);
+    return { tipo: "OPOSICION - Otros Trámites", plazas: null, resumen: titulo };
   }
 }
 
-// --- FUNCIÓN ORIGINAL: ALERTAS GENÉRICAS ---
+// --- 5. LÓGICA DE BASE DE DATOS (SUPABASE) ---
+async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
+  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
+  
+  let parentSlug = null;
+  if (analisisIA.referencia_boe_original) {
+    const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
+      .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
+    if (parentMatch) parentSlug = parentMatch.slug;
+  }
+
+  let textoParaSlug = analisisIA.profesion ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${analisisIA.profesion}-${itemData.department || fuente.nombre}` : (analisisIA.resumen || itemData.title);
+  let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
+  if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
+  
+  // Usamos un sufijo único para evitar colisiones
+  const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
+  const slugFinal = `${slugBase}-${suffix}`;
+
+  const convocatoria = {
+    slug: slugFinal, 
+    title: itemData.title, 
+    meta_description: analisisIA.resumen?.substring(0, 150) + "..." || "Ver detalles.",
+    section: itemData.section, 
+    department: itemData.department, 
+    guid: itemData.link, 
+    parent_type: "OPOSICION", 
+    type: analisisIA.tipo, 
+    plazas: analisisIA.plazas, 
+    resumen: analisisIA.resumen, 
+    plazo_texto: analisisIA.plazo_texto, 
+    grupo: analisisIA.grupo, 
+    sistema: analisisIA.sistema, 
+    profesion: analisisIA.profesion, 
+    provincia: analisisIA.provincia || fuente.ambito, 
+    titulacion: analisisIA.titulacion, 
+    enlace_inscripcion: analisisIA.enlace_inscripcion, 
+    tasa: analisisIA.tasa,
+    referencia_bases: analisisIA.referencia_bases, 
+    parent_slug: parentSlug, 
+    publication_date: new Date().toISOString().split('T')[0], 
+    link_boe: itemData.link, 
+    raw_text: textoParaIA,
+  };
+
+  const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
+  
+  if (error) {
+    console.error(`❌ Error BD:`, error.message);
+  } else {
+    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
+    if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
+  }
+}
+
+// --- 6. SISTEMAS DE ALERTAS (ORIGINALES) ---
 async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
@@ -153,14 +258,14 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
           html: `
             <div style="font-family: system-ui, -apple-system, sans-serif; color: #1e293b; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px;">
               <h2 style="color: #ea580c; text-align: center; margin-bottom: 20px;">¡Hola! El Topo tiene noticias 🐾</h2>
-              <p style="font-size: 16px;">Nuevas publicaciones en el BOE que coinciden con tu alerta de <strong>"${sub.interes}"</strong>:</p>
+              <p style="font-size: 16px;">Nuevas publicaciones que coinciden con tu alerta de <strong>"${sub.interes}"</strong>:</p>
               <ul style="list-style: none; padding: 0;">${htmlLista}</ul>
               <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 30px 0 20px 0;" />
               <p style="font-size: 12px; text-align: center;"><a href="${enlaceBaja}" style="color: #94a3b8;">Cancelar suscripción</a></p>
             </div>
           `
         });
-        await new Promise(resolve => setTimeout(resolve, 1000)); 
+        await esperar(1000); 
       } catch (err) {
         console.error(`❌ Error enviando email a ${sub.email}:`, err);
       }
@@ -168,9 +273,7 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   }
 }
 
-// --- NUEVA FUNCIÓN: ALERTAS A FAVORITOS (USUARIOS REGISTRADOS) ---
 async function enviarAlertasFavoritos(nuevasConvocatorias) {
-  // Filtramos solo las que son actualizaciones y tienen un "padre" asociado
   const actualizaciones = nuevasConvocatorias.filter(c => c.parent_slug);
 
   if (actualizaciones.length === 0) return;
@@ -180,7 +283,6 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
   console.log(`🔔 Se han detectado ${actualizaciones.length} actualizaciones de trámites. Buscando seguidores...`);
 
   for (const update of actualizaciones) {
-    // Buscamos quién sigue a la plaza original (el padre)
     const { data: seguidores, error } = await supabase
       .from('favoritos')
       .select('user_id')
@@ -191,7 +293,6 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
     console.log(`   -> La actualización '${update.title.substring(0, 30)}...' tiene ${seguidores.length} seguidores.`);
 
     for (const seguidor of seguidores) {
-      // Usamos el Service Key para extraer el email del sistema de autenticación de Supabase
       const { data: userData } = await supabase.auth.admin.getUserById(seguidor.user_id);
       
       if (userData && userData.user && userData.user.email) {
@@ -207,7 +308,7 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
                   <span style="font-size: 40px;">🔔</span>
                   <h2 style="color: #10b981; margin: 10px 0 0 0;">¡Actualización en tu plaza!</h2>
                 </div>
-                <p style="font-size: 16px;">Acabamos de detectar un nuevo trámite oficial en el BOE para la plaza que tienes guardada en favoritos.</p>
+                <p style="font-size: 16px;">Acabamos de detectar un nuevo trámite oficial para la plaza que tienes guardada en favoritos.</p>
                 <div style="background: #f8fafc; padding: 15px; border-left: 4px solid #10b981; border-radius: 0 8px 8px 0; margin: 20px 0;">
                   <strong style="color: #0f172a; display: block; margin-bottom: 5px;">Nuevo trámite publicado:</strong>
                   <span style="color: #475569; font-size: 14px;">${update.resumen || update.title}</span>
@@ -219,7 +320,7 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
             `
           });
           console.log(`      ✅ Aviso enviado al usuario: ${email}`);
-          await new Promise(resolve => setTimeout(resolve, 1000)); 
+          await esperar(1000); 
         } catch (err) {
           console.error(`      ❌ Error enviando novedad a ${email}:`, err);
         }
@@ -228,7 +329,6 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
   }
 }
 
-// --- TELEGRAM ---
 async function enviarAlertaTelegram(nuevasConvocatorias) {
   const convocatoriasReales = nuevasConvocatorias.filter(c => 
     c.type === 'OPOSICION - Nueva Convocatoria' || 
@@ -244,7 +344,7 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   if (!token || !chatId) return;
 
   console.log(`📣 Preparando resumen para Telegram...`);
-  let texto = `🚨 *¡Nuevas Oposiciones en el BOE!* 🚨\n\nHoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
+  let texto = `🚨 *¡Nuevas Oposiciones!* 🚨\n\nHoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
 
   const topConv = convocatoriasReales.slice(0, 10);
   topConv.forEach(c => {
@@ -268,120 +368,89 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   }
 }
 
-// --- BUCLE PRINCIPAL ---
-async function extraerBOE() {
+// --- 7. BUCLE PRINCIPAL ---
+async function extraerBoletines() {
   try {
-    console.log(`📡 Conectando con el BOE...`);
-    const feed = await parser.parseURL(BOE_RSS_URL);
-    let nuevasInsertadas = 0;
-    const items = feed.items.reverse();
     const convocatoriasInsertadasHoy = [];
 
-    for (const item of items) {
-      // --- FILTRO: Omitir el Sumario del día ---
-      if (item.title === "Sumario") {
-        console.log("⏩ Saltando item: Sumario del día.");
-        continue;
-      }
-      const fechaRaw = new Date(item.pubDate);
-      fechaRaw.setHours(fechaRaw.getHours() + 14);
-      const fechaCorrecta = fechaRaw.toISOString().split('T')[0];
+    for (const fuente of FUENTES_BOLETINES) {
+      console.log(`\n==============================================`);
+      console.log(`📡 Rastreando ${fuente.nombre} (${fuente.ambito}) - Modo: ${fuente.tipo}`);
+      console.log(`==============================================`);
+      
+      try {
+        if (fuente.tipo === "rss") {
+          const feed = await parser.parseURL(fuente.url);
+          for (const item of feed.items.reverse()) {
+            // Filtro rápido para no gastar IA en nombramientos o ceses
+            const t = item.title.toLowerCase();
+            if (!t.includes('oposición') && !t.includes('concurso') && !t.includes('provisión') && !t.includes('empleo') && !t.includes('plaza') && !t.includes('bolsa')) continue;
 
-      const categoriaSeccion = item.categories && item.categories[0] ? item.categories[0] : "Otros";
-      const categoriaOrganismo = item.categories && item.categories[1] ? item.categories[1] : "Administración Pública";
+            const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
+            const categoriaOrganismo = item.categories?.[1] || fuente.ambito;
+            await gestionarDepartamento(categoriaOrganismo);
 
-      await gestionarDepartamento(categoriaOrganismo);
+            console.log(`\n📄 Extrayendo interior de: ${item.title.substring(0,60)}...`);
+            let textoParaIA = await obtenerTextoUniversal(item.link) || item.contentSnippet;
+            
+            await procesarYGuardarConvocatoria({ 
+              title: item.title, link: item.link, section: categoriaSeccion, department: categoriaOrganismo 
+            }, textoParaIA, fuente, convocatoriasInsertadasHoy);
+            
+            await esperar(2000);
+          }
+        } 
+        
+        else if (fuente.tipo === "html_directo") {
+          const markdownWeb = await obtenerTextoUniversal(fuente.url); 
+          if (!markdownWeb) continue;
 
-      console.log(`\n📄 Leyendo interior de: ${item.link}`);
-      let textoParaIA = await obtenerTextoBOE(item.link);
-      if (!textoParaIA || textoParaIA.length < 50) {
-        textoParaIA = item.contentSnippet || item.content || item.description;
-      }
-
-      console.log(`🤖 Analizando con IA...`);
-      const analisisIA = await analizarConvocatoriaIA(item.title, textoParaIA);
-
-      // LÓGICA DE PADRE E HIJO (Enlazar trámites)
-      let parentSlug = null;
-      if (analisisIA.referencia_boe_original) {
-        console.log(`   🔗 Se ha detectado referencia original: ${analisisIA.referencia_boe_original}. Buscando padre...`);
-        // Buscamos en nuestra tabla si tenemos alguna convocatoria que contenga ese ID del BOE en su enlace
-        const { data: parentMatch } = await supabase
-          .from('convocatorias')
-          .select('slug')
-          .like('link_boe', `%${analisisIA.referencia_boe_original}%`)
-          .single();
+          console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
+          const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
           
-        if (parentMatch) {
-          parentSlug = parentMatch.slug;
-          console.log(`   🎯 ¡Padre encontrado! Enlazado a: ${parentSlug}`);
-        } else {
-          console.log(`   ⚠️ El padre no está en nuestra base de datos (es muy antiguo).`);
+          if (listado.length > 0) {
+              console.log(`✅ Encontradas ${listado.length} posibles convocatorias.`);
+          } else {
+              console.log(`ℹ️ Hoy no se ha encontrado empleo público en este boletín.`);
+          }
+
+          for (const item of listado) {
+            await gestionarDepartamento(item.departamento);
+            
+            console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
+            let textoInterior = await obtenerTextoUniversal(item.enlace);
+            if(!textoInterior) continue;
+
+            await procesarYGuardarConvocatoria({ 
+              title: item.titulo, link: item.enlace, section: `Boletín ${fuente.nombre}`, department: item.departamento 
+            }, textoInterior, fuente, convocatoriasInsertadasHoy);
+            
+            await esperar(2000);
+          }
         }
+      } catch (err) {
+        console.error(`❌ Error procesando ${fuente.nombre}:`, err.message);
       }
-
-      let textoParaSlug = "";
-      if (analisisIA.profesion) {
-        const plazasStr = analisisIA.plazas ? `${analisisIA.plazas}-plazas-` : '';
-        const depStr = categoriaOrganismo ? categoriaOrganismo.replace('Ayuntamiento de', '').replace('Ministerio de', '').trim() : '';
-        textoParaSlug = `oposiciones-${plazasStr}${analisisIA.profesion}-${depStr}`;
-      } else if (analisisIA.resumen) {
-        textoParaSlug = analisisIA.resumen;
-      } else {
-        textoParaSlug = item.title;
-      }
-
-      let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
-      if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
-      
-      const matchBOE = item.link.match(/id=BOE-[A-Z]-(\d{4}-\d+)/);
-      const boeSuffix = matchBOE ? matchBOE[1] : new Date().getTime().toString().slice(-6);
-      const slugFinal = `${slugBase}-${boeSuffix}`;
-
-      const convocatoria = {
-        slug: slugFinal, title: item.title, meta_description: item.contentSnippet?.substring(0, 150) + "..." || "Ver detalles.",
-        section: categoriaSeccion, department: categoriaOrganismo, guid: item.guid, parent_type: "OPOSICION", 
-        type: analisisIA.tipo, plazas: analisisIA.plazas, resumen: analisisIA.resumen, plazo_texto: analisisIA.plazo_texto,
-        grupo: analisisIA.grupo, sistema: analisisIA.sistema, profesion: analisisIA.profesion, provincia: analisisIA.provincia,
-        titulacion: analisisIA.titulacion, enlace_inscripcion: analisisIA.enlace_inscripcion, tasa: analisisIA.tasa,
-        referencia_bases: analisisIA.referencia_bases, parent_slug: parentSlug, // <- Aquí guardamos el enlace
-        publication_date: fechaCorrecta, link_boe: item.link, raw_text: textoParaIA,
-      };
-
-      const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
-
-      if (error) {
-        console.error(`❌ Error BD:`, error.message);
-      } else {
-        console.log(`✅ Guardado -> Tipo: ${analisisIA.tipo} | Plazas: ${analisisIA.plazas}`);
-        nuevasInsertadas++;
-        if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
-      }
-      
-      await esperar(3000); 
     }
 
-    console.log(`🎉 Proceso completado. Insertadas: ${nuevasInsertadas}`);
+    console.log(`\n🎉 RASTREO COMPLETADO. Total nuevas insertadas: ${convocatoriasInsertadasHoy.length}`);
     
-    // --- LLAMADAS A LOS MOTORES DE AVISO ---
-    if (convocatoriasInsertadasHoy.length > 0) {
-      console.log('🚀 Iniciando alertas generales de Boletín...');
+    // --- LLAMADAS A MOTORES DE AVISOS ---
+   /*  if (convocatoriasInsertadasHoy.length > 0) {
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
-      
-      console.log('🚀 Iniciando alertas de Novedades a Favoritos...');
       await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
-
-      console.log('🚀 Iniciando envío a Telegram...');
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
-    }
+    } */
 
-    if (nuevasInsertadas > 0 && process.env.VERCEL_WEBHOOK) {
+    if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
     }
+
   } catch (error) {
-    console.error("🔥 Error crítico:", error);
+    console.error("🔥 Error crítico general:", error);
     process.exit(1);
   }
 }
 
-extraerBOE();
+// ¡Ejecutar!
+extraerBoletines();
