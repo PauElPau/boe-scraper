@@ -82,14 +82,26 @@ async function obtenerTextoUniversal(url) {
     const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
     const MI_TOKEN_API = "j-iMVNZe0JocbS4_ZsGnDkinrKrBv1Fe100t6Z2y";
 
-    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser-rendering/crawl`, {
+    const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser-rendering/markdown`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${MI_TOKEN_API}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url: url, format: "markdown", follow_links: false })
+      body: JSON.stringify({ url: url })
     });
+
+    // 💡 CAMBIO 3: Escudo anti-bloqueos (Manejo del límite de velocidad 429)
+    if (response.status === 429) {
+      if (reintentos > 0) {
+         console.log(`   ⏳ Límite de velocidad (429). Cloudflare pide frenar. Esperando 10 segundos...`);
+         await esperar(10000); // Pausamos el script 10 segundos
+         return obtenerTextoUniversal(url, reintentos - 1); // Lo reintentamos mágicamente
+      } else {
+         console.error(`❌ Demasiados bloqueos seguidos para la URL: ${url}`);
+         return null;
+      }
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -99,11 +111,14 @@ async function obtenerTextoUniversal(url) {
       return null;
     }
     
+    // 💡 CAMBIO 4: El endpoint /markdown devuelve directamente el texto en "data.result"
     const data = await response.json();
-    let textoLimpio = data.result?.markdown || "";
-    return textoLimpio.substring(0, 15000); 
+    let textoLimpio = data.result || "";
+    
+    return typeof textoLimpio === "string" ? textoLimpio.substring(0, 15000) : ""; 
+    
   } catch (error) {
-    console.error(`⚠️ Fallo de conexión con Cloudflare para ${url}:`, error.message);
+    console.error(`⚠️ Fallo de conexión interno para ${url}:`, error.message);
     return null; 
   }
 }
