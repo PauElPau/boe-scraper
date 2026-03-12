@@ -176,6 +176,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "plazas": "Busca exhaustivamente cuántas plazas, puestos o vacantes se convocan en total. Busca en el primer párrafo o en el título. Puede estar escrito con letras (ej: 'tres', 'diez') o con números (ej: '3', '10'). Conviértelo SIEMPRE a un número entero. Si es una bolsa de empleo sin número fijo o no se menciona, devuelve null.",
     "resumen": "Resumen claro de 1-2 frases.",
     "plazo_texto": "Extrae SOLO la duración (ej: '20 días hábiles'). Si no hay, null.",
+    "plazo_dias": "Extrae la duración del plazo en días. REGLA ESTRICTA: Convierte siempre los números escritos con letras a dígitos matemáticos (ej: si el texto dice 'veinte días hábiles', devuelve '20 días hábiles'; si dice 'diez días naturales', devuelve '10 días naturales'). Si no hay plazo, devuelve null.",
     "grupo": "El grupo (ej: 'A1', 'C2'). Si no, null.",
     "sistema": "'Oposición', 'Concurso-oposición', 'Concurso', o null.",
     "profesion": "Nombre limpio del puesto (ej: 'Policía Local'). Si no, null.",
