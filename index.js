@@ -76,6 +76,8 @@ async function obtenerTextoBOE(url) {
 }
 
 async function obtenerTextoUniversal(url, reintentos = 3) {
+    const MI_CUENTA_ID = "6c06ad7321c0b5e96c5921f94470e05e";
+    const MI_TOKEN_API = "j-iMVNZe0JocbS4_ZsGnDkinrKrBv1Fe100t6Z2y";
   try {
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${MI_CUENTA_ID}/browser-rendering/markdown`, {
       method: 'POST',
