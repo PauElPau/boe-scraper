@@ -404,7 +404,7 @@ async function extraerBoletines() {
       
       try {
         if (fuente.tipo === "rss") {
-          const feed = await parser.parseURL(fuente.url);
+   /*        const feed = await parser.parseURL(fuente.url);
           for (const item of feed.items.reverse()) {
             const t = item.title.toLowerCase();
             if (!t.includes('oposición') && !t.includes('concurso') && !t.includes('provisión') && !t.includes('empleo') && !t.includes('plaza') && !t.includes('bolsa')) continue;
@@ -435,7 +435,7 @@ async function extraerBoletines() {
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
             await esperar(2000);
-          }
+          } */
         } 
         
         else if (fuente.tipo === "html_directo") {
@@ -472,11 +472,11 @@ async function extraerBoletines() {
 
     console.log(`\n🎉 RASTREO COMPLETADO. Total nuevas insertadas: ${convocatoriasInsertadasHoy.length}`);
     
-    if (convocatoriasInsertadasHoy.length > 0) {
+  /*   if (convocatoriasInsertadasHoy.length > 0) {
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
       await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
-    }
+    } */
 
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
