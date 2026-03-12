@@ -316,10 +316,19 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   // Generamos el slug usando el departamento REAL
-let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);  let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
+  let textoParaSlug = profesionPrincipal ? `oposiciones-${analisisIA.plazas ? analisisIA.plazas + '-plazas-' : ''}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
+  let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
-  const suffix = itemData.guid ? itemData.guid.split('=').pop().replace(/\W/g, '').substring(0,6) : new Date().getTime().toString().slice(-6);
+  // 💡 NUEVO GENERADOR DE SUFIJOS: Cogemos el FINAL de la URL, tenga el formato que tenga
+  let suffix = new Date().getTime().toString().slice(-6); // Fallback por defecto
+  if (itemData.guid) {
+      const guidLimpio = itemData.guid.replace(/\W/g, ''); // Quitamos símbolos (https://... -> httpswww...)
+      if (guidLimpio.length > 6) {
+          suffix = guidLimpio.slice(-6); // Cogemos las ÚLTIMAS 6 letras/números (ej: 732pdf)
+      }
+  }
+  
   const slugFinal = `${slugBase}-${suffix}`;
 
   // 1. PDF de la IA | 2. PDF del RSS (BOE) | 3. Enlace web normal
