@@ -65,8 +65,8 @@ const FUENTES_BOLETINES = [
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
-  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
+//  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
+//  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -83,7 +83,10 @@ async function gestionarDepartamento(nombre) {
 // --- 3. EXTRACCIÓN BOE NATIVA (LA VÍA RÁPIDA) ---
 async function obtenerTextoNativo(url) {
   try {
-    const respuesta = await fetch(url);
+    // 💡 AÑADIMOS EL DISFRAZ (USER-AGENT) PARA QUE NO DEN "FETCH FAILED"
+    const respuesta = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
+    });
     const html = await respuesta.text();
     const $ = cheerio.load(html);
     
@@ -102,19 +105,21 @@ async function obtenerTextoNativo(url) {
 }
 
 // --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
+// --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
 async function obtenerSumarioCataluna() {
   try {
-    // 1. Entramos a la portada para "robar" el número del DOGC de hoy
     const resPortada = await fetch('https://dogc.gencat.cat/es/inici/index.html');
     const htmlPortada = await resPortada.text();
     
-    // Buscamos con Regex el número (ej: numDOGC=9622)
-    const match = htmlPortada.match(/numDOGC=(\d+)/);
-    if (!match) return null;
+    // 💡 REGEX AMPLIADO Y AVISO DE ERROR
+    const match = htmlPortada.match(/numDOGC=(\d{4,5})/i);
+    if (!match) {
+        console.log("   ⚠️ Fallo: No se pudo detectar el número DOGC de hoy en la portada.");
+        return null;
+    }
     const numeroHoy = match[1];
     console.log(`   🔍 Número DOGC de hoy detectado: ${numeroHoy}`);
 
-    // 2. Hacemos el POST exacto a la API secreta que descubriste
     const formData = new URLSearchParams();
     formData.append('numDOGC', numeroHoy);
     formData.append('language', 'es');
@@ -126,7 +131,7 @@ async function obtenerSumarioCataluna() {
     });
     
     const data = await res.json();
-    return JSON.stringify(data); // Devolvemos el JSON crudo a Llama-3
+    return JSON.stringify(data); 
   } catch (error) {
     console.error(`⚠️ Error en API DOGC:`, error.message);
     return null;
@@ -740,30 +745,31 @@ async function extraerBoletines() {
             await gestionarDepartamento(item.departamento);
             
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
+            
             let textoInterior = null;
-            if (fuente.nombre === "BOCYL" || fuente.nombre === "DOCM") {
-                 // Castilla y León y Castilla-La Mancha van por el carril rápido
+            // 💡 ENRUTADOR DE TRÁFICO: Estas comunidades van por Vía Rápida Nativa
+            if (["BOA", "BOCYL", "DOCM", "DOGC"].includes(fuente.nombre)) {
                  textoInterior = await obtenerTextoNativo(enlaceFinal);
             } else {
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
+            if (!textoInterior) continue;
 
-            if(!textoInterior) continue;
-
-            // 💡 EL TIJERETAZO DE SEGURIDAD PARA HTML DIRECTO
-            if (textoInterior && textoInterior.length > 8000) {
-                textoInterior = textoInterior.substring(0, 8000) + "... [Texto cortado por seguridad para la IA]";
+            // 💡 REBAJA A 5000 CARACTERES PARA NO ESTALLAR LOS LÍMITES POR MINUTO DE GROQ
+            if (textoInterior.length > 5000) {
+                textoInterior = textoInterior.substring(0, 5000) + "... [Texto cortado]";
             }
 
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
               link: enlaceFinal, 
-              guid: enlaceFinal, // 👈 Usamos el enlace web como guid de respaldo
+              guid: enlaceFinal, 
               section: `Boletín ${fuente.nombre}`, 
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2500);
+            // 💡 AUMENTAMOS A 4 SEGUNDOS PARA QUE CLOUDFLARE Y GROQ RESPIRREN
+            await esperar(4000);
           }
         }else if (fuente.tipo === "api_dogc") {
           // Usamos tu API privada descubierta
