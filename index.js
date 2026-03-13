@@ -25,8 +25,9 @@ function getGroqClient() {
 
 function rotarKeyGroq() {
   currentKeyIndex++;
-  if (currentKeyIndex >= groqKeys.length) {
-    console.error("❌ Todas las API Keys de Groq han agotado su cuota diaria.");
+  // Comprobamos si la siguiente llave existe y no está vacía
+  if (currentKeyIndex >= groqKeys.length || !groqKeys[currentKeyIndex]) {
+    console.error("❌ Todas las API Keys de Groq han agotado su cuota o no son válidas. Deteniendo el rastreo de IA por hoy.");
     return false; // Ya no quedan llaves
   }
   console.log(`🔄 Cuota agotada. Cambiando a la API Key secundaria de Groq (Key ${currentKeyIndex + 1})...`);
@@ -43,8 +44,8 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+ // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+ // { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
