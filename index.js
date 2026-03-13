@@ -43,16 +43,16 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
-//  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-//  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-//  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-//  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-//  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-//  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
-//  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -65,11 +65,27 @@ const FUENTES_BOLETINES = [
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
-//  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
-//  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- FUNCIÓN LAVADORA DE TEXTOS (Arregla codificaciones raras) ---
+function limpiarCodificacion(texto) {
+  if (!texto) return texto;
+  // 1. Convierte los códigos \u00f3 de Aragón en letras reales (ó, á, ñ...)
+  let limpio = texto.replace(/\\u([\dA-Fa-f]{4})/g, (match, hex) => {
+      return String.fromCharCode(parseInt(hex, 16));
+  });
+  // 2. Limpia basura HTML que a veces se cuela en los títulos
+  return limpio.replace(/&quot;/g, '"')
+               .replace(/&apos;/g, "'")
+               .replace(/&amp;/g, "&")
+               .replace(/&lt;/g, "<")
+               .replace(/&gt;/g, ">")
+               .trim();
+}
 
 async function gestionarDepartamento(nombre) {
   if (!nombre) return;
@@ -83,36 +99,45 @@ async function gestionarDepartamento(nombre) {
 // --- 3. EXTRACCIÓN BOE NATIVA (LA VÍA RÁPIDA) ---
 async function obtenerTextoNativo(url) {
   try {
-    // 💡 AÑADIMOS EL DISFRAZ (USER-AGENT) PARA QUE NO DEN "FETCH FAILED"
     const respuesta = await fetch(url, {
         headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" }
     });
     const html = await respuesta.text();
     const $ = cheerio.load(html);
     
-    // Limpiamos la basura visual genérica de cualquier web
+    // 💡 CAZADOR DE PDFs NATIVO (Antes de borrar el HTML)
+    let pdfLink = null;
+    $('a').each((i, el) => {
+        const href = $(el).attr('href');
+        if (href && (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo'))) {
+            try { pdfLink = new URL(href, url).href; } catch(e){}
+            return false; // rompe el bucle al encontrar el primero
+        }
+    });
+
+    // Limpiamos la basura visual
     $('script, style, nav, footer, header, aside').remove();
     
-    let textoLimpio = $('#textoxslt').text(); // Prioridad si es el BOE
-    if (!textoLimpio) textoLimpio = $('body').text(); // Fallback para Galicia y otros
+    let textoLimpio = $('#textoxslt').text(); 
+    if (!textoLimpio) textoLimpio = $('body').text(); 
     
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    return textoLimpio.substring(0, 15000);
+    // Devolvemos un objeto con el texto para la IA y el PDF rescatado
+    return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
   } catch (error) {
     console.error(`⚠️ Error extrayendo web de forma nativa:`, error.message);
-    return null; 
+    return { texto: null, pdf: null }; 
   }
 }
 
-// --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
 // --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
 async function obtenerSumarioCataluna() {
   try {
     const resPortada = await fetch('https://dogc.gencat.cat/es/inici/index.html');
     const htmlPortada = await resPortada.text();
     
-    // 💡 REGEX AMPLIADO Y AVISO DE ERROR
-    const match = htmlPortada.match(/numDOGC=(\d{4,5})/i);
+    // 💡 REGEX CAZATODO: Busca "numDOGC", ignora cualquier símbolo raro, y atrapa el número
+    const match = htmlPortada.match(/numDOGC[^0-9]*(\d{4,5})/i);
     if (!match) {
         console.log("   ⚠️ Fallo: No se pudo detectar el número DOGC de hoy en la portada.");
         return null;
@@ -376,23 +401,35 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   
   const slugFinal = `${slugBase}-${suffix}`;
 
-  // 1. PDF de la IA | 2. PDF del RSS (BOE) | 3. Enlace web normal
-  const enlacePdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.link;
+  // 1. Recopilamos los enlaces
+  let webDefinitiva = itemData.link;
+  let pdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
+
+  // 💡 2. EL ARREGLO PARA DOCM: Si el link web "oficial" es en realidad un PDF, lo movemos a su sitio
+  if (webDefinitiva.toLowerCase().includes('.pdf') || webDefinitiva.toLowerCase().includes('descargararchivo')) {
+      pdfDefinitivo = webDefinitiva;
+      webDefinitiva = fuente.url; // Fallback: Ponemos la portada del boletín en la ficha web
+  } 
+  
+  // 3. Fallback final: Si después de todo no hay PDF, usamos el botón PDF para llevar a la web oficial
+  if (!pdfDefinitivo) {
+      pdfDefinitivo = webDefinitiva;
+  }
 
 const convocatoria = {
     slug: slugFinal, 
-    title: itemData.title, 
-    meta_description: analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles."),
+    title: limpiarCodificacion(itemData.title), 
+    meta_description: limpiarCodificacion(analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles.")),
     section: itemData.section, 
     department: departamentoFinal, 
 
     boletin: `${fuente.nombre} - ${fuente.ambito}`,
     // 💡 AQUÍ GUARDAMOS EL PDF PARA TU FRONTEND
-    guid: enlacePdfDefinitivo,
+  //  guid: enlacePdfDefinitivo,
     parent_type: "OPOSICION", 
     type: analisisIA.tipo, 
     plazas: analisisIA.plazas, 
-    resumen: analisisIA.resumen, 
+    resumen: limpiarCodificacion(analisisIA.resumen),
     
     // 💡 LAS 4 COLUMNAS NUEVAS DE ESTRUCTURACIÓN
     plazo_numero: analisisIA.plazo_numero,
@@ -416,7 +453,9 @@ const convocatoria = {
     tasa: analisisIA.tasa,
     parent_slug: parentSlug, 
     publication_date: new Date().toISOString().split('T')[0], 
-    link_boe: itemData.link, 
+   // link_boe: itemData.link, 
+    link_boe: webDefinitiva, 
+    guid: pdfDefinitivo,
     raw_text: analisisIA.texto_limpio || textoParaIA,
   };
 
@@ -607,7 +646,20 @@ async function extraerBoletines() {
       
       try {
         if (fuente.tipo === "rss") {
-          const feed = await parser.parseURL(fuente.url);
+          // 💡 DESCARGAMOS EL RSS MANUALMENTE PARA CONTROLAR EL IDIOMA
+          const resRss = await fetch(fuente.url, { headers: { "User-Agent": "Mozilla/5.0" } });
+          const buffer = await resRss.arrayBuffer();
+          
+          // 💡 LEEMOS EL PRINCIPIO DEL ARCHIVO PARA VER SI ES "ISO-8859-1" (Como Extremadura)
+          let decoder = new TextDecoder("utf-8"); // Por defecto moderno
+          const preview = new TextDecoder("utf-8").decode(buffer.slice(0, 250));
+          if (preview.toLowerCase().includes('iso-8859-1')) {
+              decoder = new TextDecoder("iso-8859-1"); // ¡Cambiamos al descodificador antiguo!
+          }
+          
+          const xmlDecodificado = decoder.decode(buffer);
+          const feed = await parser.parseString(xmlDecodificado); // Se lo pasamos limpio al parser
+
           for (const item of feed.items.reverse()) {
             // 💡 1. EXTRAEMOS TODO EL TEXTO POSIBLE PARA EL RADAR
             let contenidoItem = item.contentSnippet || item.content || item.description || "";
@@ -636,12 +688,14 @@ async function extraerBoletines() {
             console.log(`\n📄 Extrayendo interior de: ${tituloFinal.substring(0,60)}...`);
             
             let textoParaIA = null;
-            // 💡 AQUÍ ESTÁ EL ARREGLO:
-            if (fuente.nombre === "BOE" || fuente.nombre === "DOG" || fuente.nombre === "BOCM") {
-              // BOE, Galicia y Madrid van por la vía rápida nativa (Sin límites de Cloudflare)
-              textoParaIA = await obtenerTextoNativo(item.link);
+            let pdfExtraidoNativo = null; // 👈 Guardaremos el PDF aquí
+
+            // 💡 AÑADIMOS BOJA A LA VÍA RÁPIDA
+            if (["BOE", "DOG", "BOCM", "BOJA"].includes(fuente.nombre)) {
+              const nativo = await obtenerTextoNativo(item.link);
+              textoParaIA = nativo.texto;
+              pdfExtraidoNativo = nativo.pdf;
             } else if (item.link.toLowerCase().includes('pdf')) {
-              // 👈 Unimos el título y el resumen para que nunca sea demasiado corto
               console.log("   📄 Enlace PDF detectado en la URL. Usando resumen del RSS...");
               textoParaIA = item.title + " - " + (item.contentSnippet || item.content || "");
             } else {
@@ -668,7 +722,7 @@ async function extraerBoletines() {
               title: tituloFinal, 
               link: item.link, 
               guid: item.guid, // 👈 Se lo pasamos para generar bien el slug
-              pdf_rss: enlacePdfRss, // 👈 Pasamos el PDF atrapado
+              pdf_rss: enlacePdfRss || pdfExtraidoNativo, // 👈 Pasamos el PDF atrapado o el nativo
               section: categoriaSeccion, 
               department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
@@ -751,9 +805,13 @@ async function extraerBoletines() {
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
             
             let textoInterior = null;
-            // 💡 ENRUTADOR DE TRÁFICO: Estas comunidades van por Vía Rápida Nativa
+            let pdfExtraidoNativo = null; // 👈 Guardamos el PDF
+            
+            // 💡 ENRUTADOR DE TRÁFICO
             if (["BOA", "BOCYL", "DOCM", "DOGC"].includes(fuente.nombre)) {
-                 textoInterior = await obtenerTextoNativo(enlaceFinal);
+                 const nativo = await obtenerTextoNativo(enlaceFinal);
+                 textoInterior = nativo.texto;
+                 pdfExtraidoNativo = nativo.pdf;
             } else {
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
@@ -768,6 +826,7 @@ async function extraerBoletines() {
               title: item.titulo, 
               link: enlaceFinal, 
               guid: enlaceFinal, 
+              pdf_extraido: pdfExtraidoNativo, // 👈 Pasamos el PDF atrapado en esta fase, que suele ser el más limpio
               section: `Boletín ${fuente.nombre}`, 
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
