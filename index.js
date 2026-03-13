@@ -717,8 +717,12 @@ async function extraerBoletines() {
           for (const item of listado) {
             // 💡 1. Filtramos basura evidente que la IA haya colado
             const t = item.titulo.toLowerCase();
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) {
-               continue;
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
+            
+            // 💡 1.5. EL ESCUDO ANTI-MENÚS: Una resolución real nunca tiene un título tan corto
+            if (item.titulo.length < 30) {
+                console.log(`   ⏭️ Ignorado: El título es demasiado corto para ser oficial (suele ser un menú de la web). -> "${item.titulo}"`);
+                continue;
             }
 
             // 💡 2. LIMPIEZA EXTREMA DEL ENLACE OFICIAL
