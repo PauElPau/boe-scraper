@@ -15,6 +15,7 @@ const supabase = createClient(
 // 💡 SISTEMA MULTI-KEY PARA SALTARSE LOS LÍMITES DE GROQ
 const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
 let currentKeyIndex = 0;
+let iaDetenida = false; // 👈 NUEVO: El freno de mano global
 
 function getGroqClient() {
   return new OpenAI({
@@ -25,10 +26,10 @@ function getGroqClient() {
 
 function rotarKeyGroq() {
   currentKeyIndex++;
-  // Comprobamos si la siguiente llave existe y no está vacía
   if (currentKeyIndex >= groqKeys.length || !groqKeys[currentKeyIndex]) {
-    console.error("❌ Todas las API Keys de Groq han agotado su cuota o no son válidas. Deteniendo el rastreo de IA por hoy.");
-    return false; // Ya no quedan llaves
+    console.error("❌ Todas las API Keys de Groq han agotado su cuota. Apagando motores por hoy.");
+    iaDetenida = true; // 👈 Activamos el freno de mano
+    return false; 
   }
   console.log(`🔄 Cuota agotada. Cambiando a la API Key secundaria de Groq (Key ${currentKeyIndex + 1})...`);
   return true;
@@ -62,7 +63,7 @@ const FUENTES_BOLETINES = [
   { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, //"https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473"
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },   //"https://www.gobiernodecanarias.org/boc/archivo/2026/049/"
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },   //"https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22"
-  { nombre: "DOGC", tipo: "api_dogc", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" }, // 👈 Nuevo modo
+  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/", ambito: "Cataluña" },
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
   { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
@@ -131,38 +132,6 @@ async function obtenerTextoNativo(url) {
   }
 }
 
-// --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
-async function obtenerSumarioCataluna() {
-  try {
-    const resPortada = await fetch('https://dogc.gencat.cat/es/inici/index.html');
-    const htmlPortada = await resPortada.text();
-    
-    // 💡 REGEX CAZATODO: Busca "numDOGC", ignora cualquier símbolo raro, y atrapa el número
-    const match = htmlPortada.match(/numDOGC[^0-9]*(\d{4,5})/i);
-    if (!match) {
-        console.log("   ⚠️ Fallo: No se pudo detectar el número DOGC de hoy en la portada.");
-        return null;
-    }
-    const numeroHoy = match[1];
-    console.log(`   🔍 Número DOGC de hoy detectado: ${numeroHoy}`);
-
-    const formData = new URLSearchParams();
-    formData.append('numDOGC', numeroHoy);
-    formData.append('language', 'es');
-
-    const res = await fetch('https://portaldogc.gencat.cat/eadop-rest/api/dogc/summaryDOGC', {
-      method: 'POST',
-      body: formData,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
-    
-    const data = await res.json();
-    return JSON.stringify(data); 
-  } catch (error) {
-    console.error(`⚠️ Error en API DOGC:`, error.message);
-    return null;
-  }
-}
 
 //vtqmoMJ8Xhtgcvwj4BAjfPC22T3ndRkg7fyd6otl
 async function obtenerTextoUniversal(url, reintentos = 3) {
@@ -641,6 +610,10 @@ async function extraerBoletines() {
     const convocatoriasInsertadasHoy = [];
 
     for (const fuente of FUENTES_BOLETINES) {
+      if (iaDetenida) {
+          console.log("\n🛑 RASTREO DETENIDO: Nos hemos quedado sin saldo en las API Keys.");
+          break; // Corta el rastreo de raíz
+      }
       console.log(`\n==============================================`);
       console.log(`📡 Rastreando ${fuente.nombre} (${fuente.ambito}) - Modo: ${fuente.tipo}`);
       console.log(`==============================================`);
@@ -662,6 +635,7 @@ async function extraerBoletines() {
           const feed = await parser.parseString(xmlDecodificado); // Se lo pasamos limpio al parser
 
           for (const item of feed.items.reverse()) {
+            if (iaDetenida) break; // Si se acaba el saldo a mitad de boletín, para.
             // 💡 1. EXTRAEMOS TODO EL TEXTO POSIBLE PARA EL RADAR
             let contenidoItem = item.contentSnippet || item.content || item.description || "";
             const t = (item.title + " " + contenidoItem).toLowerCase();
@@ -770,6 +744,7 @@ async function extraerBoletines() {
           }
 
           for (const item of listado) {
+            if (iaDetenida) break; // Si se acaba el saldo a mitad de boletín, para.
             // 💡 1. Filtramos basura evidente que la IA haya colado
             const t = item.titulo.toLowerCase();
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
@@ -809,7 +784,7 @@ async function extraerBoletines() {
             let pdfExtraidoNativo = null; // 👈 Guardamos el PDF
             
             // 💡 ENRUTADOR DE TRÁFICO
-            if (["BOA", "BOCYL", "DOCM", "DOGC"].includes(fuente.nombre)) {
+            if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
@@ -834,54 +809,6 @@ async function extraerBoletines() {
             
             // 💡 AUMENTAMOS A 4 SEGUNDOS PARA QUE CLOUDFLARE Y GROQ RESPIRREN
             await esperar(4000);
-          }
-        }else if (fuente.tipo === "api_dogc") {
-          // Usamos tu API privada descubierta
-          let jsonCrudo = await obtenerSumarioCataluna();
-          if (!jsonCrudo) continue;
-
-          if (jsonCrudo.length > 20000) jsonCrudo = jsonCrudo.substring(0, 20000);
-
-          console.log(`🤖 Buscando enlaces de empleo en el JSON de Cataluña...`);
-          const listado = await extraerEnlacesSumarioIA(jsonCrudo, fuente.nombre);
-          
-          if (listado.length > 0) {
-              console.log(`✅ Encontradas ${listado.length} posibles convocatorias en Cataluña.`);
-          } else {
-              console.log(`ℹ️ Hoy no se ha encontrado empleo público en este boletín.`);
-          }
-
-          for (const item of listado) {
-            const t = item.titulo.toLowerCase();
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
-
-            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
-            if (!enlaceLimpio.startsWith('http') && !enlaceLimpio.startsWith('/') && !enlaceLimpio.startsWith('#')) enlaceLimpio = '/' + enlaceLimpio;
-
-            let enlaceFinal = enlaceLimpio;
-            try { enlaceFinal = new URL(enlaceLimpio, fuente.url).href; } catch (e) { continue; }
-            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
-
-            await gestionarDepartamento(item.departamento);
-            
-            console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
-            
-            // Los documentos de Cataluña son muy limpios, los leemos a la velocidad de la luz sin Cloudflare
-            let textoInterior = await obtenerTextoNativo(enlaceFinal); 
-            if (!textoInterior) textoInterior = await obtenerTextoUniversal(enlaceFinal); // Fallback por si acaso
-            if (!textoInterior) continue;
-
-            if (textoInterior.length > 8000) textoInterior = textoInterior.substring(0, 8000) + "... [Texto cortado]";
-
-            await procesarYGuardarConvocatoria({ 
-              title: item.titulo, 
-              link: enlaceFinal, 
-              guid: enlaceFinal, 
-              section: `Boletín ${fuente.nombre}`, 
-              department: item.departamento 
-            }, textoInterior, fuente, convocatoriasInsertadasHoy);
-            
-            await esperar(2000);
           }
         }
       } catch (err) {
