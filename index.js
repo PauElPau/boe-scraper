@@ -4,7 +4,7 @@ const Parser = require("rss-parser");
 const slugify = require("slugify");
 const { OpenAI } = require("openai");
 const { Resend } = require('resend'); 
-const cheerio = require("cheerio"); // 👈 VOLVEMOS A AÑADIR CHEERIO PARA EL BOE
+const cheerio = require("cheerio"); 
 
 // --- 1. INICIALIZACIÓN DE CLIENTES ---
 const supabase = createClient(
@@ -43,16 +43,16 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+//  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+//  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+//  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+//  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+//  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
-  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/inici", ambito: "Comunidad Valenciana" },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -616,9 +616,9 @@ async function extraerBoletines() {
               textoParaIA = item.contentSnippet || item.content;
             }
             
-            // 💡 EL TIJERETAZO DE SEGURIDAD (¡AQUÍ AFUERA! Para que afecte a todos los textos largos)
-            if (textoParaIA && textoParaIA.length > 15000) {
-                textoParaIA = textoParaIA.substring(0, 15000) + "... [Texto cortado por seguridad para la IA]";
+            // 💡 EL TIJERETAZO DE SEGURIDAD (Zona RSS)
+            if (textoParaIA && textoParaIA.length > 8000) {
+                textoParaIA = textoParaIA.substring(0, 8000) + "... [Texto cortado]";
             }
            
             // 💡 CAZADOR DE PDFs EN RSS: Buscamos en enclosure o en el guid (estilo BOE)
@@ -649,14 +649,15 @@ async function extraerBoletines() {
           
           let urlFinal = fuente.url
             .replace('{YYYYMMDD}', `${yyyy}${mm}${dd}`)
-            .replace('{DD/MM/YYYY}', `${dd}/${mm}/${yyyy}`);
+            .replace('{DD/MM/YYYY}', `${dd}/${mm}/${yyyy}`)
+            .replace('{YYYY}-{MM}-{DD}', `${yyyy}-${mm}-${dd}`); // 👈 Para Valencia
 
-          const markdownWeb = await obtenerTextoUniversal(urlFinal); // Usamos urlFinal
+          let markdownWeb = await obtenerTextoUniversal(urlFinal); // Usamos let
           if (!markdownWeb) continue;
 
-          // Tijeretazo de seguridad para sumarios gigantes
-          if (markdownWeb && markdownWeb.length > 20000) {
-              markdownWeb = markdownWeb.substring(0, 20000);
+          // Tijeretazo de seguridad para sumarios gigantes (Zona HTML)
+          if (markdownWeb && markdownWeb.length > 12000) {
+              markdownWeb = markdownWeb.substring(0, 12000); 
           }
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
@@ -720,11 +721,11 @@ async function extraerBoletines() {
 
     console.log(`\n🎉 RASTREO COMPLETADO. Total nuevas insertadas: ${convocatoriasInsertadasHoy.length}`);
     
-    if (convocatoriasInsertadasHoy.length > 0) {
+    /* if (convocatoriasInsertadasHoy.length > 0) {
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
       await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
-    }
+    } */
 
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
