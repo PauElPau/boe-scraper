@@ -45,8 +45,8 @@ const parser = new Parser({
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
- // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
- // { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
@@ -72,6 +72,52 @@ const FUENTES_BOLETINES = [
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// --- CALCULADORA LEGAL DE PLAZOS (Ley 39/2015) ---
+function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
+  if (!plazoNumero || !plazoTipo || !fechaPublicacion) return null;
+
+  const fechaBase = new Date(fechaPublicacion);
+  // Regla 1: El plazo empieza a contar al día siguiente de la publicación
+  fechaBase.setDate(fechaBase.getDate() + 1);
+
+  let fechaCierre = new Date(fechaBase);
+  const tipo = plazoTipo.toLowerCase();
+
+  try {
+    if (tipo.includes('hábil') || tipo.includes('habil')) {
+      // DÍAS HÁBILES: Saltamos los fines de semana (sábados = 6, domingos = 0)
+      let diasSumados = 0;
+      fechaCierre.setDate(fechaCierre.getDate() - 1); // Retrocedemos 1 para empezar el bucle correctamente
+      while (diasSumados < plazoNumero) {
+          fechaCierre.setDate(fechaCierre.getDate() + 1);
+          const diaSemana = fechaCierre.getDay();
+          if (diaSemana !== 0 && diaSemana !== 6) {
+              diasSumados++;
+          }
+      }
+    } 
+    else if (tipo.includes('natural') || tipo.includes('día') || tipo.includes('dia')) {
+      // DÍAS NATURALES: Sumamos todos los días de golpe (-1 porque el primer día ya cuenta)
+      fechaCierre.setDate(fechaCierre.getDate() + plazoNumero - 1);
+    } 
+    else if (tipo.includes('mes')) {
+      // MESES: De fecha a fecha (Ej: del 15 de marzo al 15 de abril)
+      fechaCierre.setMonth(fechaCierre.getMonth() + plazoNumero);
+      fechaCierre.setDate(fechaCierre.getDate() - 1); // Ajuste legal al día anterior
+    } 
+    else {
+      return null; // Tipo de plazo desconocido, mejor no inventar
+    }
+
+    // Devolvemos la fecha en formato YYYY-MM-DD para Supabase
+    return fechaCierre.toISOString().split('T')[0];
+
+  } catch (error) {
+    console.error("⚠️ Error calculando fecha de cierre:", error);
+    return null;
+  }
+}
 
 // --- FUNCIÓN LAVADORA DE TEXTOS (Arregla codificaciones raras) ---
 function limpiarCodificacion(texto) {
@@ -233,7 +279,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "resumen": "Resumen claro de 1-2 frases.",
     "plazo_numero": "Extrae SOLO la cantidad numérica del plazo (ej: 20, 15, 10). Devuelve siempre un número Integer. Si no hay plazo, null.",
     "plazo_tipo": "Extrae SOLO el tipo de días del plazo (ej: 'hábiles', 'naturales', 'meses'). Si no hay plazo, null.",
-    "grupo": "Grupo profesional (A1, A2, B, C1, C2, E). Si no se menciona explícitamente, dedúcelo: 'Técnica/Media' -> 'A2', 'Técnica Superior' -> 'A1', 'Administrativa' -> 'C1', 'Auxiliar' -> 'C2', 'Subalterna/Oficios' -> 'E'. Si no se puede deducir, null.",
+    "grupo": "REGLA MUY ESTRICTA: Devuelve ÚNICAMENTE y EXACTAMENTE uno de estos valores: 'A1', 'A2', 'B', 'C1', 'C2', o 'E'. ¡NUNCA devuelvas descripciones! Si el texto dice 'Técnica Superior' devuelve 'A1'. Si dice 'Técnica/Media' devuelve 'A2'. Si dice 'Administrativa' devuelve 'C1'. Si dice 'Auxiliar' devuelve 'C2'. Si dice 'Subalterna', 'Peón' o 'Oficios' devuelve 'E'. Si no se menciona, devuelve null.",
     "sistema": "REGLA ESTRICTA: Devuelve EXACTAMENTE 'Oposición', 'Concurso-oposición' o 'Concurso'. Si el texto menciona varios para distintas plazas, devuelve 'Concurso-oposición'. Si no, null.",
     "profesiones": "Devuelve siempre un ARRAY de strings con los nombres limpios de los puestos. Si hay varios, sepáralos como elementos (ej: ['Técnico en Turismo', 'Oficial Tallista']). Si solo hay uno, devuélvelo en el array (ej: ['Policía Local']). Si no hay, devuelve un array vacío [].",
     "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
@@ -309,34 +355,55 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
   // 🧠 CEREBRO DE DESDUPLICACIÓN CORREGIDO
- if (profesionPrincipal && departamentoFinal) {
-    const { data: coincidencias } = await supabase
+ // 🧠 CEREBRO DE AGRUPACIÓN INTELIGENTE (Fuzzy Matching)
+  if (departamentoFinal) {
+    // 1. Buscamos todas las plazas "Padre" de ese mismo organismo
+    const { data: posiblesPadres } = await supabase
       .from('convocatorias')
-      .select('slug, type, link_boe')
-      // Buscamos por el departamento REAL, no por la categoría genérica
+      .select('slug, type, link_boe, profesion, profesiones')
       .ilike('department', `%${departamentoFinal}%`)
-      .ilike('profesion', `%${profesionPrincipal}%`) // <-- CAMBIO AQUÍ
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
-      .limit(1);
+      .limit(10); // Traemos los 10 más recientes por si acaso
 
-    if (coincidencias && coincidencias.length > 0) {
-      const plazaExistente = coincidencias[0];
+    if (posiblesPadres && posiblesPadres.length > 0) {
+      let plazaExistente = null;
 
-      if (esTramite) {
-        console.log(`   🔗 Novedad detectada para la plaza: ${plazaExistente.slug}. Enlazando como trámite hijo...`);
-        parentSlug = plazaExistente.slug;
-      } 
-      else {
-        console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
-        if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
-            console.log(`   ✅ Actualizando la plaza original con la apertura oficial de plazos en el BOE.`);
-            await supabase.from("convocatorias").update({ 
-                link_boe: itemData.link, 
-                publication_date: new Date().toISOString().split('T')[0] 
-            }).eq('slug', plazaExistente.slug);
+      // 2. Buscamos coincidencias flexibles en el nombre de la profesión
+      if (profesionPrincipal) {
+        // Cogemos las palabras clave (ignoramos palabras cortas como "de", "la", "el", "en")
+        const palabrasClave = profesionPrincipal.toLowerCase().split(' ').filter(w => w.length > 3);
+        
+        plazaExistente = posiblesPadres.find(padre => {
+           const profPadre = (padre.profesion || '').toLowerCase();
+           // Si comparten alguna palabra importante (ej: "Reumatología", "Administrativo"), asumimos que es la misma
+           return palabrasClave.some(palabra => profPadre.includes(palabra));
+        });
+      }
+      
+      // 3. Fallback mágico: Si es un trámite (ej: "Aprobados") y la IA no supo sacar la profesión, 
+      // lo enlazamos al último proceso abierto de ese organismo por pura lógica.
+      if (!plazaExistente && !profesionPrincipal && esTramite) {
+         plazaExistente = posiblesPadres[0];
+      }
+
+      // 4. Actuamos en consecuencia
+      if (plazaExistente) {
+        if (esTramite) {
+          console.log(`   🔗 Trámite detectado. Enlazando al padre: ${plazaExistente.slug}...`);
+          parentSlug = plazaExistente.slug;
+        } 
+        else {
+          console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
+          if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
+              console.log(`   ✅ Actualizando la plaza original con la apertura oficial de plazos en el BOE.`);
+              await supabase.from("convocatorias").update({ 
+                  link_boe: itemData.link, 
+                  publication_date: new Date().toISOString().split('T')[0] 
+              }).eq('slug', plazaExistente.slug);
+          }
+          return; // Si es un duplicado, paramos aquí y no insertamos
         }
-        return; 
       }
     }
   }
@@ -386,6 +453,10 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       pdfDefinitivo = webDefinitiva;
   }
 
+  // 💡 CALCULAMOS LA FECHA DE CIERRE SI HAY DATOS DE PLAZO
+  const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
+  const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo);
+
 const convocatoria = {
     slug: slugFinal, 
     title: limpiarCodificacion(itemData.title), 
@@ -404,6 +475,8 @@ const convocatoria = {
     // 💡 LAS 4 COLUMNAS NUEVAS DE ESTRUCTURACIÓN
     plazo_numero: analisisIA.plazo_numero,
     plazo_tipo: analisisIA.plazo_tipo,
+    fecha_cierre: fechaCierreCalculada,
+
     boletin_origen_nombre: analisisIA.boletin_origen_nombre,
     boletin_origen_fecha: analisisIA.boletin_origen_fecha,
     
@@ -818,11 +891,11 @@ async function extraerBoletines() {
 
     console.log(`\n🎉 RASTREO COMPLETADO. Total nuevas insertadas: ${convocatoriasInsertadasHoy.length}`);
     
-    /* if (convocatoriasInsertadasHoy.length > 0) {
+    if (convocatoriasInsertadasHoy.length > 0) {
       await enviarAlertasPorEmail(convocatoriasInsertadasHoy);
       await enviarAlertasFavoritos(convocatoriasInsertadasHoy);
       await enviarAlertaTelegram(convocatoriasInsertadasHoy);
-    } */
+    }
 
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
       await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
