@@ -44,7 +44,7 @@ const parser = new Parser({
 const FUENTES_BOLETINES = [
   // 🟢 BOLETINES CON RSS FUNCIONAL Y VERIFICADO
 //  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+//  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
 //  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
 //  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
 //  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
@@ -52,7 +52,7 @@ const FUENTES_BOLETINES = [
 //  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // 🌐 BOLETINES SIN RSS (Rastreo de Sumarios HTML vía Cloudflare)
-  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
+//  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -61,10 +61,10 @@ const FUENTES_BOLETINES = [
   { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, //"https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473"
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },   //"https://www.gobiernodecanarias.org/boc/archivo/2026/049/"
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },   //"https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22"
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" },     //"https://dogc.gencat.cat/es/sumari-del-dogc/?numDOGC=9623"
+  { nombre: "DOGC", tipo: "api_dogc", url: "https://dogc.gencat.cat/es/document-del-dogc/", ambito: "Cataluña" }, // 👈 Nuevo modo
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
-  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/#/resultados-fecha?from=busquedaFechaHome&PUBL={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
+  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
   { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
   { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
@@ -98,6 +98,38 @@ async function obtenerTextoNativo(url) {
   } catch (error) {
     console.error(`⚠️ Error extrayendo web de forma nativa:`, error.message);
     return null; 
+  }
+}
+
+// --- 4. FUNCIÓN EXCLUSIVA API CATALUÑA ---
+async function obtenerSumarioCataluna() {
+  try {
+    // 1. Entramos a la portada para "robar" el número del DOGC de hoy
+    const resPortada = await fetch('https://dogc.gencat.cat/es/inici/index.html');
+    const htmlPortada = await resPortada.text();
+    
+    // Buscamos con Regex el número (ej: numDOGC=9622)
+    const match = htmlPortada.match(/numDOGC=(\d+)/);
+    if (!match) return null;
+    const numeroHoy = match[1];
+    console.log(`   🔍 Número DOGC de hoy detectado: ${numeroHoy}`);
+
+    // 2. Hacemos el POST exacto a la API secreta que descubriste
+    const formData = new URLSearchParams();
+    formData.append('numDOGC', numeroHoy);
+    formData.append('language', 'es');
+
+    const res = await fetch('https://portaldogc.gencat.cat/eadop-rest/api/dogc/summaryDOGC', {
+      method: 'POST',
+      body: formData,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+    
+    const data = await res.json();
+    return JSON.stringify(data); // Devolvemos el JSON crudo a Llama-3
+  } catch (error) {
+    console.error(`⚠️ Error en API DOGC:`, error.message);
+    return null;
   }
 }
 
@@ -652,7 +684,15 @@ async function extraerBoletines() {
             .replace('{DD/MM/YYYY}', `${dd}/${mm}/${yyyy}`)
             .replace('{YYYY}-{MM}-{DD}', `${yyyy}-${mm}-${dd}`); // 👈 Para Valencia
 
-          let markdownWeb = await obtenerTextoUniversal(urlFinal); // Usamos let
+          let markdownWeb = null;
+          if (fuente.nombre === "BOA") {
+              // Aragón va por Vía Rápida porque es un JSON puro
+              const res = await fetch(urlFinal);
+              markdownWeb = await res.text();
+          } else {
+              // El resto (Valencia, etc) sí necesitan a Cloudflare
+              markdownWeb = await obtenerTextoUniversal(urlFinal);
+          }
           if (!markdownWeb) continue;
 
           // Tijeretazo de seguridad para sumarios gigantes (Zona HTML)
@@ -700,8 +740,20 @@ async function extraerBoletines() {
             await gestionarDepartamento(item.departamento);
             
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
-            let textoInterior = await obtenerTextoUniversal(enlaceFinal);
+            let textoInterior = null;
+            if (fuente.nombre === "BOCYL" || fuente.nombre === "DOCM") {
+                 // Castilla y León y Castilla-La Mancha van por el carril rápido
+                 textoInterior = await obtenerTextoNativo(enlaceFinal);
+            } else {
+                 textoInterior = await obtenerTextoUniversal(enlaceFinal);
+            }
+
             if(!textoInterior) continue;
+
+            // 💡 EL TIJERETAZO DE SEGURIDAD PARA HTML DIRECTO
+            if (textoInterior && textoInterior.length > 8000) {
+                textoInterior = textoInterior.substring(0, 8000) + "... [Texto cortado por seguridad para la IA]";
+            }
 
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
@@ -712,6 +764,54 @@ async function extraerBoletines() {
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
             await esperar(2500);
+          }
+        }else if (fuente.tipo === "api_dogc") {
+          // Usamos tu API privada descubierta
+          let jsonCrudo = await obtenerSumarioCataluna();
+          if (!jsonCrudo) continue;
+
+          if (jsonCrudo.length > 20000) jsonCrudo = jsonCrudo.substring(0, 20000);
+
+          console.log(`🤖 Buscando enlaces de empleo en el JSON de Cataluña...`);
+          const listado = await extraerEnlacesSumarioIA(jsonCrudo, fuente.nombre);
+          
+          if (listado.length > 0) {
+              console.log(`✅ Encontradas ${listado.length} posibles convocatorias en Cataluña.`);
+          } else {
+              console.log(`ℹ️ Hoy no se ha encontrado empleo público en este boletín.`);
+          }
+
+          for (const item of listado) {
+            const t = item.titulo.toLowerCase();
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
+
+            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            if (!enlaceLimpio.startsWith('http') && !enlaceLimpio.startsWith('/') && !enlaceLimpio.startsWith('#')) enlaceLimpio = '/' + enlaceLimpio;
+
+            let enlaceFinal = enlaceLimpio;
+            try { enlaceFinal = new URL(enlaceLimpio, fuente.url).href; } catch (e) { continue; }
+            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
+
+            await gestionarDepartamento(item.departamento);
+            
+            console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
+            
+            // Los documentos de Cataluña son muy limpios, los leemos a la velocidad de la luz sin Cloudflare
+            let textoInterior = await obtenerTextoNativo(enlaceFinal); 
+            if (!textoInterior) textoInterior = await obtenerTextoUniversal(enlaceFinal); // Fallback por si acaso
+            if (!textoInterior) continue;
+
+            if (textoInterior.length > 8000) textoInterior = textoInterior.substring(0, 8000) + "... [Texto cortado]";
+
+            await procesarYGuardarConvocatoria({ 
+              title: item.titulo, 
+              link: enlaceFinal, 
+              guid: enlaceFinal, 
+              section: `Boletín ${fuente.nombre}`, 
+              department: item.departamento 
+            }, textoInterior, fuente, convocatoriasInsertadasHoy);
+            
+            await esperar(2000);
           }
         }
       } catch (err) {
