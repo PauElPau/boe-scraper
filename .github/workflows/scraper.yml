@@ -4,7 +4,7 @@ name: BOE Scraper Diario
 on:
   schedule:
     # 06:15 AM UTC -> (07:15 España Invierno / 08:15 España Verano) de Lunes a Sábado
-    - cron: "15 6 * * 1-6"
+    - cron: "15 5 * * 1-6"
   workflow_dispatch:
 
 # 💡 PRO-TIP 1: Evita que se ejecuten dos scrapers al mismo tiempo
@@ -15,8 +15,8 @@ concurrency:
 jobs:
   extraer-datos:
     runs-on: ubuntu-latest
-    # 💡 PRO-TIP 2: Freno de emergencia (Mata el proceso si tarda más de 60 mins)
-    timeout-minutes: 60
+    # 💡 PRO-TIP 2: Freno de emergencia (Mata el proceso si tarda más de 120 mins)
+    timeout-minutes: 120
 
     steps:
       - name: Descargar repositorio
