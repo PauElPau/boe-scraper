@@ -188,11 +188,11 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 }
 
 
-// --- 5. MOTORES DE IA (AHORA CON GEMINI) ---
-async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
+// --- 5. MOTORES DE IA (AHORA CON GEMINI Y ANTI-BUCLES) ---
+async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin, reintentos = 3) { // 👈 Añadido contador de reintentos
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.0-flash",
+        model: "gemini-2.0-flash-lite", // 👈 Usamos la versión LITE (Más cuota)
         generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -216,21 +216,21 @@ async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
     const data = JSON.parse(text);
     return data.convocatorias || [];
   } catch (error) {
-    // 💡 SI LLEGAMOS AL LÍMITE POR MINUTO (429), PAUSAMOS Y REINTENTAMOS
-    if (error.message.includes('429') || error.status === 429) {
-        console.log("   ⏳ Límite de Gemini alcanzado (15 RPM). Pausando 60 segundos...");
-        await esperar(60000); // Esperamos 1 minuto a que se limpie la cuota
-        return extraerEnlacesSumarioIA(textoSumario, nombreBoletin); // Lo volvemos a intentar
+    // 💡 SI FALLA, REINTENTA SOLO SI QUEDAN INTENTOS
+    if ((error.message.includes('429') || error.status === 429) && reintentos > 0) {
+        console.log(`   ⏳ Límite de Gemini alcanzado. Pausando 60s... (Quedan ${reintentos} reintentos)`);
+        await esperar(60000); 
+        return extraerEnlacesSumarioIA(textoSumario, nombreBoletin, reintentos - 1); // 👈 Restamos 1 intento
     }
-    console.error("⚠️ Error con Gemini analizando detalle:", error.message);
+    console.error("⚠️ Error con Gemini extrayendo sumario:", error.message);
     return [];
   }
 }
 
-async function analizarConvocatoriaIA(titulo, textoInterior) {
+async function analizarConvocatoriaIA(titulo, textoInterior, reintentos = 3) { // 👈 Añadido contador de reintentos
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.0-flash",
+        model: "gemini-2.0-flash-lite", // 👈 Usamos la versión LITE (Más cuota)
         generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     });
 
@@ -252,7 +252,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       "titulacion": "Titulación mínima exigida.",
       "enlace_inscripcion": "URL exacta para presentar instancia.",
       "tasa": "Importe de la tasa.",
-      "boletin_origen_nombre": "Si menciona que las bases íntegras de ESTA convocatoria están publicadas en otro boletín, extrae SOLO el nombre (ej: 'BOP Córdoba'). IMPORTANTE: Ignora los boletines que citen leyes, estatutos o decretos antiguos."
+      "boletin_origen_nombre": "Si menciona que las bases íntegras de ESTA convocatoria están publicadas en otro boletín, extrae SOLO el nombre (ej: 'BOP Córdoba'). IMPORTANTE: Ignora los boletines que citen leyes, estatutos o decretos antiguos.",
       "boletin_origen_fecha": "Fecha de publicación del boletín de origen en formato 'YYYY-MM-DD'.",
       "referencia_boe_original": "Si es un trámite, busca el código BOE original (BOE-A-YYYY-XXXX).",
       "organismo": "Nombre exacto del ayuntamiento u organismo convocante.",
@@ -265,11 +265,11 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     const text = result.response.text();
     return JSON.parse(text);
   } catch (error) {
-    // 💡 SI LLEGAMOS AL LÍMITE POR MINUTO (429), PAUSAMOS Y REINTENTAMOS
-    if (error.message.includes('429') || error.status === 429) {
-        console.log("   ⏳ Límite de Gemini alcanzado (15 RPM). Pausando 60 segundos...");
-        await esperar(60000); // Esperamos 1 minuto a que se limpie la cuota
-        return analizarConvocatoriaIA(titulo, textoInterior); // Lo volvemos a intentar
+    // 💡 SI FALLA, REINTENTA SOLO SI QUEDAN INTENTOS
+    if ((error.message.includes('429') || error.status === 429) && reintentos > 0) {
+        console.log(`   ⏳ Límite de Gemini alcanzado. Pausando 60s... (Quedan ${reintentos} reintentos)`);
+        await esperar(60000); 
+        return analizarConvocatoriaIA(titulo, textoInterior, reintentos - 1); // 👈 Restamos 1 intento
     }
     console.error("⚠️ Error con Gemini analizando detalle:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
