@@ -2,7 +2,8 @@ require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
-const { OpenAI } = require("openai");
+// 💡 NUEVO: Importamos Gemini en lugar de OpenAI
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 const { Resend } = require('resend'); 
 const cheerio = require("cheerio"); 
 
@@ -12,35 +13,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY,
 );
 
-// 💡 SISTEMA MULTI-KEY PARA SALTARSE LOS LÍMITES DE GROQ
-const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
-let currentKeyIndex = 0;
-let iaDetenida = false; // 👈 NUEVO: El freno de mano global
-
-function getGroqClient() {
-  return new OpenAI({
-    apiKey: groqKeys[currentKeyIndex],
-    baseURL: "https://api.groq.com/openai/v1",
-  });
-}
-
-function rotarKeyGroq() {
-  currentKeyIndex++;
-  if (currentKeyIndex >= groqKeys.length || !groqKeys[currentKeyIndex]) {
-    console.error("❌ Todas las API Keys de Groq han agotado su cuota. Apagando motores por hoy.");
-    iaDetenida = true; // 👈 Activamos el freno de mano
-    return false; 
-  }
-  console.log(`🔄 Cuota agotada. Cambiando a la API Key secundaria de Groq (Key ${currentKeyIndex + 1})...`);
-  return true;
-}
+// 💡 NUEVO: Inicializamos el cliente de Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 const parser = new Parser({
   headers: {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
   },
 });
-
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
@@ -60,9 +40,9 @@ const FUENTES_BOLETINES = [
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
   
   // 🔄 BOLETINES CON URL ESTABLE (Redirigen solos al número de hoy)
-  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, //"https://www.caib.es/eboibfront/es/2026/12243/seccion-ii-autoridades-y-personal/473"
-  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },   //"https://www.gobiernodecanarias.org/boc/archivo/2026/049/"
-  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },   //"https://boc.cantabria.es/boces/boletines.do?boton=accesos&id=44185#sec22"
+  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" },
+  { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },
+  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },
   { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/", ambito: "Cataluña" },
 
   // 📅 BOLETINES CON FECHA DINÁMICA (El código sustituirá los comodines)
@@ -78,7 +58,6 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
   if (!plazoNumero || !plazoTipo || !fechaPublicacion) return null;
 
   const fechaBase = new Date(fechaPublicacion);
-  // Regla 1: El plazo empieza a contar al día siguiente de la publicación
   fechaBase.setDate(fechaBase.getDate() + 1);
 
   let fechaCierre = new Date(fechaBase);
@@ -86,9 +65,8 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
 
   try {
     if (tipo.includes('hábil') || tipo.includes('habil')) {
-      // DÍAS HÁBILES: Saltamos los fines de semana (sábados = 6, domingos = 0)
       let diasSumados = 0;
-      fechaCierre.setDate(fechaCierre.getDate() - 1); // Retrocedemos 1 para empezar el bucle correctamente
+      fechaCierre.setDate(fechaCierre.getDate() - 1); 
       while (diasSumados < plazoNumero) {
           fechaCierre.setDate(fechaCierre.getDate() + 1);
           const diaSemana = fechaCierre.getDay();
@@ -98,19 +76,15 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
       }
     } 
     else if (tipo.includes('natural') || tipo.includes('día') || tipo.includes('dia')) {
-      // DÍAS NATURALES: Sumamos todos los días de golpe (-1 porque el primer día ya cuenta)
       fechaCierre.setDate(fechaCierre.getDate() + plazoNumero - 1);
     } 
     else if (tipo.includes('mes')) {
-      // MESES: De fecha a fecha (Ej: del 15 de marzo al 15 de abril)
       fechaCierre.setMonth(fechaCierre.getMonth() + plazoNumero);
-      fechaCierre.setDate(fechaCierre.getDate() - 1); // Ajuste legal al día anterior
+      fechaCierre.setDate(fechaCierre.getDate() - 1); 
     } 
     else {
-      return null; // Tipo de plazo desconocido, mejor no inventar
+      return null; 
     }
-
-    // Devolvemos la fecha en formato YYYY-MM-DD para Supabase
     return fechaCierre.toISOString().split('T')[0];
 
   } catch (error) {
@@ -122,11 +96,9 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
 // --- FUNCIÓN LAVADORA DE TEXTOS (Arregla codificaciones raras) ---
 function limpiarCodificacion(texto) {
   if (!texto) return texto;
-  // 1. Convierte los códigos \u00f3 de Aragón en letras reales (ó, á, ñ...)
   let limpio = texto.replace(/\\u([\dA-Fa-f]{4})/g, (match, hex) => {
       return String.fromCharCode(parseInt(hex, 16));
   });
-  // 2. Limpia basura HTML que a veces se cuela en los títulos
   return limpio.replace(/&quot;/g, '"')
                .replace(/&apos;/g, "'")
                .replace(/&amp;/g, "&")
@@ -153,25 +125,23 @@ async function obtenerTextoNativo(url) {
     const html = await respuesta.text();
     const $ = cheerio.load(html);
     
-    // 💡 CAZADOR DE PDFs NATIVO (Antes de borrar el HTML)
     let pdfLink = null;
     $('a').each((i, el) => {
         const href = $(el).attr('href');
         if (href && (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo'))) {
             try { pdfLink = new URL(href, url).href; } catch(e){}
-            return false; // rompe el bucle al encontrar el primero
+            return false; 
         }
     });
 
-    // Limpiamos la basura visual
     $('script, style, nav, footer, header, aside').remove();
     
     let textoLimpio = $('#textoxslt').text(); 
     if (!textoLimpio) textoLimpio = $('body').text(); 
     
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    // Devolvemos un objeto con el texto para la IA y el PDF rescatado
-    return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
+    // 💡 Gemini no necesita recortes, enviamos todo el texto que haya
+    return { texto: textoLimpio, pdf: pdfLink };
   } catch (error) {
     console.error(`⚠️ Error extrayendo web de forma nativa:`, error.message);
     return { texto: null, pdf: null }; 
@@ -179,7 +149,6 @@ async function obtenerTextoNativo(url) {
 }
 
 
-//vtqmoMJ8Xhtgcvwj4BAjfPC22T3ndRkg7fyd6otl
 async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
@@ -193,8 +162,6 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 
   if (response.status === 429) {
       if (reintentos > 0) {
-         // Si es el primer reintento (reintentos = 3), espera 3 segundos.
-         // Si es el segundo (2), espera 6s. El tercero (1) espera 9s.
          const tiempoPausa = (4 - reintentos) * 5000;
          console.log(`   ⏳ Límite de Cloudflare. Pausa inteligente de ${tiempoPausa/1000}s...`);
          await esperar(tiempoPausa); 
@@ -206,17 +173,13 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
     }
 
     if (!response.ok) {
-      const errorText = await response.text();
       console.error(`⚠️ Cloudflare falló al procesar ${url} - Status: ${response.status}`);
       return null;
     }
     
     const data = await response.json();
-    let textoLimpio = data.result || "";
-    
-    // 💡 AUMENTAMOS EL LÍMITE A 80.000 CARACTERES PARA NO CORTAR EL BOLETÍN
-    return typeof textoLimpio === "string" ? textoLimpio.substring(0, 80000) : ""; 
-    
+    return data.result || ""; 
+    // 💡 Ya no recortamos a 80.000, Gemini se lo traga todo
   } catch (error) {
     console.error(`⚠️ Fallo de conexión interno para ${url}:`, error.message);
     return null; 
@@ -224,10 +187,15 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 }
 
 
-// --- 5. MOTORES DE IA ---
-async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
-  const prompt = `
-    Eres un experto en empleo público. Analiza este sumario/portada del boletín ${nombreBoletin} en Markdown.
+// --- 5. MOTORES DE IA (AHORA CON GEMINI) ---
+async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
+  try {
+    const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        generationConfig: { responseMimeType: "application/json" }
+    });
+
+    const prompt = `Eres un experto en empleo público. Analiza este sumario/portada del boletín ${nombreBoletin} en Markdown.
     Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, estabilización).
     
     REGLAS ESTRICTAS:
@@ -240,84 +208,57 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     Si no hay nada relevante, devuelve { "convocatorias": [] }.
     
     TEXTO:
-    ${markdownWeb}
-  `;
+    ${textoSumario}`;
 
-  try {
-    const groq = getGroqClient(); // <-- Usamos el cliente dinámico
-    const response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      temperature: 0.0, // 💡 Bajamos a 0.0 para máxima precisión
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
-    });
-    return JSON.parse(response.choices[0].message.content).convocatorias || [];
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const data = JSON.parse(text);
+    return data.convocatorias || [];
   } catch (error) {
-    // 💡 SI EL ERROR ES POR CUOTA DIARIA (Rate Limit 429)
-    if (error.message.includes('429 Rate limit reached') || error.status === 429) {
-        if (rotarKeyGroq()) {
-            // Si hemos podido cambiar a la llave 2, esperamos 2 segundos y reintentamos esta misma plaza
-            await esperar(2000);
-            return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin);
-        }
-    }
-    console.error("⚠️ Error IA extrayendo sumario:", error.message);
+    console.error("⚠️ Error con Gemini extrayendo sumario:", error.message);
     return [];
   }
 }
 
 async function analizarConvocatoriaIA(titulo, textoInterior) {
-  const prompt = `
-  Eres un experto en extraer datos del empleo público. Analiza el texto de esta web.
-  TÍTULO: ${titulo}
-  TEXTO WEB: ${textoInterior}
-  
-  Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
-  {
-    "tipo": "Debes clasificar el texto obligatoriamente en UNA de estas categorías exactas: 'Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites'.",
-    "plazas": "Busca cuántas plazas se convocan en total. Convierte letras a números. Devuelve SIEMPRE un Integer. Si es bolsa o no hay, null.",
-    "resumen": "Resumen claro de 1-2 frases.",
-    "plazo_numero": "Extrae SOLO la cantidad numérica del plazo (ej: 20, 15, 10). Devuelve siempre un número Integer. Si no hay plazo, null.",
-    "plazo_tipo": "Extrae SOLO el tipo de días del plazo (ej: 'hábiles', 'naturales', 'meses'). Si no hay plazo, null.",
-    "grupo": "REGLA MUY ESTRICTA: Devuelve ÚNICAMENTE y EXACTAMENTE uno de estos valores: 'A1', 'A2', 'B', 'C1', 'C2', o 'E'. ¡NUNCA devuelvas descripciones! Si el texto dice 'Técnica Superior' devuelve 'A1'. Si dice 'Técnica/Media' devuelve 'A2'. Si dice 'Administrativa' devuelve 'C1'. Si dice 'Auxiliar' devuelve 'C2'. Si dice 'Subalterna', 'Peón' o 'Oficios' devuelve 'E'. Si no se menciona, devuelve null.",
-    "sistema": "REGLA ESTRICTA: Devuelve EXACTAMENTE 'Oposición', 'Concurso-oposición' o 'Concurso'. Si el texto menciona varios para distintas plazas, devuelve 'Concurso-oposición'. Si no, null.",
-    "profesiones": "Devuelve siempre un ARRAY de strings con los nombres limpios de los puestos. Si hay varios, sepáralos como elementos (ej: ['Técnico en Turismo', 'Oficial Tallista']). Si solo hay uno, devuélvelo en el array (ej: ['Policía Local']). Si no hay, devuelve un array vacío [].",
-    "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
-    "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
-    "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
-    "tasa": "Importe de la tasa. Si no, null.",
-    "boletin_origen_nombre": "Si menciona que las bases íntegras están publicadas en otro boletín, extrae SOLO el nombre de ese boletín (ej: 'BOP Córdoba', 'DOGV'). Si no lo menciona, null.",
-    "boletin_origen_fecha": "Si menciona la fecha de publicación de ese otro boletín de origen, devuélvela en formato estricto 'YYYY-MM-DD' (ej: '2026-02-17'). Si no, null.",
-    "referencia_boe_original": "Si esto es un trámite posterior, busca el código BOE original (BOE-A-YYYY-XXXX). Si no, null.",
-    "organismo": "Nombre exacto del ayuntamiento, diputación u organismo (ej: 'Ayuntamiento de Madrid'). Si no lo encuentras, null.",
-    "texto_limpio": "Extrae el texto oficial limpio. Elimina menús de navegación, enlaces rotos y basura visual.",
-    "meta_description": "Crea una descripción corta (máx 150 caracteres) directa al grano, ideal para SEO. Ejemplo: 'Convocatoria para proveer 3 plazas de Policía Local en el Ayuntamiento de Madrid.'",
-    "enlace_pdf": "Busca en el texto la URL directa al documento oficial en formato PDF. En los boletines autonómicos suele ser un enlace explícito de descarga. Si lo encuentras, devuélvelo. Si no hay ningún enlace a un PDF, devuelve null.",
-  }
-  `;
-
   try {
-    const groq = getGroqClient(); // <-- Usamos el cliente dinámico
-    const response = await groq.chat.completions.create({
-      model: "llama-3.1-8b-instant",
-      temperature: 0.1, 
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: "You output strict JSON. Eres un experto analista legal. Tu prioridad es estructurar datos: extrae números enteros para plazos y plazas, y formatea fechas como YYYY-MM-DD." }, 
-        { role: "user", content: prompt }
-      ]
+    const model = genAI.getGenerativeModel({ 
+        model: "gemini-1.5-flash",
+        generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     });
-    return JSON.parse(response.choices[0].message.content);
+
+    const prompt = `Analiza este texto de una convocatoria de empleo público.
+    TÍTULO: ${titulo}
+    TEXTO WEB: ${textoInterior}
+    
+    Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta. Si un dato no aparece, pon null:
+    {
+      "tipo": "UNA de estas categorías: 'Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites'. Por defecto: 'Oposiciones (Turno Libre)'.",
+      "plazas": "Número entero de plazas (ej: 3). Si es bolsa o no hay, null.",
+      "resumen": "Resumen claro de 1-2 frases.",
+      "plazo_numero": "SOLO la cantidad numérica del plazo (ej: 20). Integer.",
+      "plazo_tipo": "SOLO el tipo de días del plazo (ej: 'hábiles', 'naturales', 'meses').",
+      "grupo": "REGLA MUY ESTRICTA: ÚNICAMENTE 'A1', 'A2', 'B', 'C1', 'C2', o 'E'. (Técnica Superior=A1, Técnica/Media=A2, Administrativa=C1, Auxiliar=C2, Subalterna/Oficios=E).",
+      "sistema": "EXACTAMENTE 'Oposición', 'Concurso-oposición' o 'Concurso'.",
+      "profesiones": "ARRAY de strings con nombres limpios de los puestos (ej: ['Técnico en Turismo']).",
+      "provincia": "Provincia deducida. Si es Ministerio, 'Estatal'.",
+      "titulacion": "Titulación mínima exigida.",
+      "enlace_inscripcion": "URL exacta para presentar instancia.",
+      "tasa": "Importe de la tasa.",
+      "boletin_origen_nombre": "Si menciona que las bases íntegras están publicadas en otro boletín, extrae SOLO el nombre (ej: 'BOP Córdoba').",
+      "boletin_origen_fecha": "Fecha de publicación del boletín de origen en formato 'YYYY-MM-DD'.",
+      "referencia_boe_original": "Si es un trámite, busca el código BOE original (BOE-A-YYYY-XXXX).",
+      "organismo": "Nombre exacto del ayuntamiento u organismo convocante.",
+      "texto_limpio": "Texto oficial limpio sin menús ni enlaces.",
+      "meta_description": "Descripción corta máx 150 caracteres para SEO.",
+      "enlace_pdf": "URL directa al documento oficial PDF si se menciona en el texto."
+    }`;
+
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    return JSON.parse(text);
   } catch (error) {
-    // 💡 SI EL ERROR ES POR CUOTA DIARIA (Rate Limit 429)
-    if (error.message.includes('429 Rate limit reached') || error.status === 429) {
-        if (rotarKeyGroq()) {
-            // Si hemos podido cambiar a la llave 2, esperamos 2 segundos y reintentamos esta misma plaza
-            await esperar(2000);
-            return analizarConvocatoriaIA(titulo, textoInterior);
-        }
-    }
-    console.error("⚠️ Error con IA analizando detalle:", error.message);
+    console.error("⚠️ Error con Gemini analizando detalle:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
   }
 }
@@ -337,7 +278,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
 
-  // 💡 NUEVO: Sacamos la primera profesión del array para usarla como "Principal"
   const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
   
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
@@ -345,49 +285,38 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       return;
   }
 
-  // 💡 AQUÍ ESTÁ LA MAGIA: Usamos el organismo exacto de la IA (Ej: "Ayuntamiento de Pals") 
-  // Si la IA falla, usamos el genérico del RSS como plan B.
   const departamentoFinal = analisisIA.organismo || itemData.department;
 
   let parentSlug = null;
-  // 💡 Consideramos "trámite" a todo lo que NO sea abrir plazos nuevos o traslados
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
-  // 🧠 CEREBRO DE DESDUPLICACIÓN CORREGIDO
- // 🧠 CEREBRO DE AGRUPACIÓN INTELIGENTE (Fuzzy Matching)
+  // 🧠 CEREBRO DE AGRUPACIÓN INTELIGENTE (Fuzzy Matching)
   if (departamentoFinal) {
-    // 1. Buscamos todas las plazas "Padre" de ese mismo organismo
     const { data: posiblesPadres } = await supabase
       .from('convocatorias')
       .select('slug, type, link_boe, profesion, profesiones')
       .ilike('department', `%${departamentoFinal}%`)
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
-      .limit(10); // Traemos los 10 más recientes por si acaso
+      .limit(10); 
 
     if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = null;
 
-      // 2. Buscamos coincidencias flexibles en el nombre de la profesión
       if (profesionPrincipal) {
-        // Cogemos las palabras clave (ignoramos palabras cortas como "de", "la", "el", "en")
         const palabrasClave = profesionPrincipal.toLowerCase().split(' ').filter(w => w.length > 3);
         
         plazaExistente = posiblesPadres.find(padre => {
            const profPadre = (padre.profesion || '').toLowerCase();
-           // Si comparten alguna palabra importante (ej: "Reumatología", "Administrativo"), asumimos que es la misma
            return palabrasClave.some(palabra => profPadre.includes(palabra));
         });
       }
       
-      // 3. Fallback mágico: Si es un trámite (ej: "Aprobados") y la IA no supo sacar la profesión, 
-      // lo enlazamos al último proceso abierto de ese organismo por pura lógica.
       if (!plazaExistente && !profesionPrincipal && esTramite) {
          plazaExistente = posiblesPadres[0];
       }
 
-      // 4. Actuamos en consecuencia
       if (plazaExistente) {
         if (esTramite) {
           console.log(`   🔗 Trámite detectado. Enlazando al padre: ${plazaExistente.slug}...`);
@@ -402,7 +331,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
                   publication_date: new Date().toISOString().split('T')[0] 
               }).eq('slug', plazaExistente.slug);
           }
-          return; // Si es un duplicado, paramos aquí y no insertamos
+          return; 
         }
       }
     }
@@ -417,8 +346,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     }
   }
 
-  // Generamos el slug usando el departamento REAL
-  // Generamos el slug usando el departamento REAL y plural/singular correcto
   let textoPlazas = '';
   if (analisisIA.plazas) {
       textoPlazas = analisisIA.plazas === 1 ? '1-plaza-' : `${analisisIA.plazas}-plazas-`;
@@ -427,33 +354,28 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
-  // 💡 NUEVO GENERADOR DE SUFIJOS: Cogemos el FINAL de la URL, tenga el formato que tenga
-  let suffix = new Date().getTime().toString().slice(-6); // Fallback por defecto
+  let suffix = new Date().getTime().toString().slice(-6); 
   if (itemData.guid) {
-      const guidLimpio = itemData.guid.replace(/\W/g, ''); // Quitamos símbolos (https://... -> httpswww...)
+      const guidLimpio = itemData.guid.replace(/\W/g, ''); 
       if (guidLimpio.length > 6) {
-          suffix = guidLimpio.slice(-6); // Cogemos las ÚLTIMAS 6 letras/números (ej: 732pdf)
+          suffix = guidLimpio.slice(-6); 
       }
   }
   
   const slugFinal = `${slugBase}-${suffix}`;
 
-  // 1. Recopilamos los enlaces
   let webDefinitiva = itemData.link;
   let pdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
 
-  // 💡 2. EL ARREGLO PARA DOCM: Si el link web "oficial" es en realidad un PDF, lo movemos a su sitio
   if (webDefinitiva.toLowerCase().includes('.pdf') || webDefinitiva.toLowerCase().includes('descargararchivo')) {
       pdfDefinitivo = webDefinitiva;
-      webDefinitiva = fuente.url; // Fallback: Ponemos la portada del boletín en la ficha web
+      webDefinitiva = fuente.url; 
   } 
   
-  // 3. Fallback final: Si después de todo no hay PDF, usamos el botón PDF para llevar a la web oficial
   if (!pdfDefinitivo) {
       pdfDefinitivo = webDefinitiva;
   }
 
-  // 💡 CALCULAMOS LA FECHA DE CIERRE SI HAY DATOS DE PLAZO
   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
   const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo);
 
@@ -465,14 +387,11 @@ const convocatoria = {
     department: departamentoFinal, 
 
     boletin: `${fuente.nombre} - ${fuente.ambito}`,
-    // 💡 AQUÍ GUARDAMOS EL PDF PARA TU FRONTEND
-  //  guid: enlacePdfDefinitivo,
     parent_type: "OPOSICION", 
     type: analisisIA.tipo, 
     plazas: analisisIA.plazas, 
     resumen: limpiarCodificacion(analisisIA.resumen),
     
-    // 💡 LAS 4 COLUMNAS NUEVAS DE ESTRUCTURACIÓN
     plazo_numero: analisisIA.plazo_numero,
     plazo_tipo: analisisIA.plazo_tipo,
     fecha_cierre: fechaCierreCalculada,
@@ -480,15 +399,12 @@ const convocatoria = {
     boletin_origen_nombre: analisisIA.boletin_origen_nombre,
     boletin_origen_fecha: analisisIA.boletin_origen_fecha,
     
-    // 💡 Mantenemos las columnas antiguas autogeneradas por si tu web aún las usa
     plazo_texto: (analisisIA.plazo_numero && analisisIA.plazo_tipo) ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` : null,
     referencia_bases: (analisisIA.boletin_origen_nombre && analisisIA.boletin_origen_fecha) ? `${analisisIA.boletin_origen_nombre} | ${analisisIA.boletin_origen_fecha}` : null,
 
     grupo: analisisIA.grupo, 
     sistema: analisisIA.sistema, 
-    // Guardamos la principal para retrocompatibilidad
     profesion: profesionPrincipal, 
-    // Guardamos el ARRAY completo para el buscador de tu web
     profesiones: analisisIA.profesiones,
     provincia: analisisIA.provincia || fuente.ambito, 
     titulacion: analisisIA.titulacion, 
@@ -496,7 +412,6 @@ const convocatoria = {
     tasa: analisisIA.tasa,
     parent_slug: parentSlug, 
     publication_date: new Date().toISOString().split('T')[0], 
-   // link_boe: itemData.link, 
     link_boe: webDefinitiva, 
     guid: pdfDefinitivo,
     raw_text: analisisIA.texto_limpio || textoParaIA,
@@ -507,7 +422,6 @@ const convocatoria = {
   if (error) {
     console.error(`❌ Error BD:`, error.message);
   } else {
-    // 💡 Aseguramos que el departamento se guarde también en tu tabla 'departments'
     await gestionarDepartamento(departamentoFinal);
     
     console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal}`);
@@ -683,37 +597,28 @@ async function extraerBoletines() {
     const convocatoriasInsertadasHoy = [];
 
     for (const fuente of FUENTES_BOLETINES) {
-      if (iaDetenida) {
-          console.log("\n🛑 RASTREO DETENIDO: Nos hemos quedado sin saldo en las API Keys.");
-          break; // Corta el rastreo de raíz
-      }
       console.log(`\n==============================================`);
       console.log(`📡 Rastreando ${fuente.nombre} (${fuente.ambito}) - Modo: ${fuente.tipo}`);
       console.log(`==============================================`);
       
       try {
         if (fuente.tipo === "rss") {
-          // 💡 DESCARGAMOS EL RSS MANUALMENTE PARA CONTROLAR EL IDIOMA
           const resRss = await fetch(fuente.url, { headers: { "User-Agent": "Mozilla/5.0" } });
           const buffer = await resRss.arrayBuffer();
           
-          // 💡 LEEMOS EL PRINCIPIO DEL ARCHIVO PARA VER SI ES "ISO-8859-1" (Como Extremadura)
-          let decoder = new TextDecoder("utf-8"); // Por defecto moderno
+          let decoder = new TextDecoder("utf-8"); 
           const preview = new TextDecoder("utf-8").decode(buffer.slice(0, 250));
           if (preview.toLowerCase().includes('iso-8859-1')) {
-              decoder = new TextDecoder("iso-8859-1"); // ¡Cambiamos al descodificador antiguo!
+              decoder = new TextDecoder("iso-8859-1"); 
           }
           
           const xmlDecodificado = decoder.decode(buffer);
-          const feed = await parser.parseString(xmlDecodificado); // Se lo pasamos limpio al parser
+          const feed = await parser.parseString(xmlDecodificado); 
 
           for (const item of feed.items.reverse()) {
-            if (iaDetenida) break; // Si se acaba el saldo a mitad de boletín, para.
-            // 💡 1. EXTRAEMOS TODO EL TEXTO POSIBLE PARA EL RADAR
             let contenidoItem = item.contentSnippet || item.content || item.description || "";
             const t = (item.title + " " + contenidoItem).toLowerCase();
 
-            // 💡 2. EL RADAR AMPLIADO: Añadimos vocabulario de Madrid ('selectiv', 'ingreso', 'convocatoria', 'vacante')
             if (!t.includes('oposición') && !t.includes('oposicion') && !t.includes('concurso') && 
                 !t.includes('provisión') && !t.includes('provision') && !t.includes('empleo') && 
                 !t.includes('plaza') && !t.includes('bolsa') && !t.includes('selectiv') && 
@@ -721,12 +626,10 @@ async function extraerBoletines() {
                 continue;
             }
 
-            // 💡 3. ARREGLO DEL TÍTULO PARA MADRID (BOCM)
-            // Si es el BOCM, el título original no sirve. Usamos la descripción limpia como título.
             let tituloFinal = item.title;
             if (fuente.nombre === "BOCM" && contenidoItem) {
-                tituloFinal = contenidoItem.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim(); // Limpiamos HTML
-                if (tituloFinal.length > 200) tituloFinal = tituloFinal.substring(0, 200) + "..."; // Lo acortamos si es gigante
+                tituloFinal = contenidoItem.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim(); 
+                if (tituloFinal.length > 200) tituloFinal = tituloFinal.substring(0, 200) + "..."; 
             }
 
             const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
@@ -736,9 +639,8 @@ async function extraerBoletines() {
             console.log(`\n📄 Extrayendo interior de: ${tituloFinal.substring(0,60)}...`);
             
             let textoParaIA = null;
-            let pdfExtraidoNativo = null; // 👈 Guardaremos el PDF aquí
+            let pdfExtraidoNativo = null; 
 
-            // 💡 AÑADIMOS BOJA A LA VÍA RÁPIDA
             if (["BOE", "DOG", "BOCM", "BOJA"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
               textoParaIA = nativo.texto;
@@ -750,17 +652,10 @@ async function extraerBoletines() {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
             
-            // Si por cualquier motivo falla o viene vacío, nos quedamos con el Snippet
             if (!textoParaIA || textoParaIA.length < 50) {
               textoParaIA = item.contentSnippet || item.content;
             }
             
-            // 💡 EL TIJERETAZO DE SEGURIDAD (Zona RSS)
-            if (textoParaIA && textoParaIA.length > 8000) {
-                textoParaIA = textoParaIA.substring(0, 8000) + "... [Texto cortado]";
-            }
-           
-            // 💡 CAZADOR DE PDFs EN RSS: Buscamos en enclosure o en el guid (estilo BOE)
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) {
                 enlacePdfRss = item.guid;
@@ -769,18 +664,18 @@ async function extraerBoletines() {
             await procesarYGuardarConvocatoria({ 
               title: tituloFinal, 
               link: item.link, 
-              guid: item.guid, // 👈 Se lo pasamos para generar bien el slug
-              pdf_rss: enlacePdfRss || pdfExtraidoNativo, // 👈 Pasamos el PDF atrapado o el nativo
+              guid: item.guid, 
+              pdf_rss: enlacePdfRss || pdfExtraidoNativo, 
               section: categoriaSeccion, 
               department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2500);
+            // 💡 Gemini: Pausa de seguridad (Max 15 RPM)
+            await esperar(4200);
           }
         } 
         
         else if (fuente.tipo === "html_directo") {
-          // 💡 CALCULAMOS LA FECHA DE HOY PARA LAS URLs DINÁMICAS
           const hoy = new Date();
           const yyyy = hoy.getFullYear();
           const mm = String(hoy.getMonth() + 1).padStart(2, '0');
@@ -789,23 +684,16 @@ async function extraerBoletines() {
           let urlFinal = fuente.url
             .replace('{YYYYMMDD}', `${yyyy}${mm}${dd}`)
             .replace('{DD/MM/YYYY}', `${dd}/${mm}/${yyyy}`)
-            .replace('{YYYY}-{MM}-{DD}', `${yyyy}-${mm}-${dd}`); // 👈 Para Valencia
+            .replace('{YYYY}-{MM}-{DD}', `${yyyy}-${mm}-${dd}`); 
 
           let markdownWeb = null;
           if (fuente.nombre === "BOA") {
-              // Aragón va por Vía Rápida porque es un JSON puro
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
           } else {
-              // El resto (Valencia, etc) sí necesitan a Cloudflare
               markdownWeb = await obtenerTextoUniversal(urlFinal);
           }
           if (!markdownWeb) continue;
-
-          // Tijeretazo de seguridad para sumarios gigantes (Zona HTML)
-          if (markdownWeb && markdownWeb.length > 12000) {
-              markdownWeb = markdownWeb.substring(0, 12000); 
-          }
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
@@ -817,36 +705,28 @@ async function extraerBoletines() {
           }
 
           for (const item of listado) {
-            if (iaDetenida) break; // Si se acaba el saldo a mitad de boletín, para.
-            // 💡 1. Filtramos basura evidente que la IA haya colado
-            const t = item.titulo.toLowerCase();
+            const t = (item.titulo || "").toLowerCase();
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
             
-            // 💡 1.5. EL ESCUDO ANTI-MENÚS: Una resolución real nunca tiene un título tan corto
             if (item.titulo.length < 30) {
                 console.log(`   ⏭️ Ignorado: El título es demasiado corto para ser oficial (suele ser un menú de la web). -> "${item.titulo}"`);
                 continue;
             }
 
-            // 💡 2. LIMPIEZA EXTREMA DEL ENLACE OFICIAL
-            // Quitamos paréntesis, comillas o corchetes que la IA haya arrastrado del Markdown
-            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            let enlaceLimpio = (item.enlace || "").replace(/[>)"'\]]/g, '').trim();
             
-            // Si es un enlace relativo y la IA se comió la barra inicial, se la ponemos
             if (!enlaceLimpio.startsWith('http') && !enlaceLimpio.startsWith('/') && !enlaceLimpio.startsWith('#')) {
                 enlaceLimpio = '/' + enlaceLimpio;
             }
 
             let enlaceFinal = enlaceLimpio;
             try {
-               // Combinamos la URL base del boletín con la ruta relativa de forma nativa
                enlaceFinal = new URL(enlaceLimpio, fuente.url).href;
             } catch (e) {
                console.log(`⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
                continue;
             }
             
-            // Si el enlace es idéntico a la portada o está vacío, es un error de la IA, lo saltamos
             if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
 
             await gestionarDepartamento(item.departamento);
@@ -854,9 +734,9 @@ async function extraerBoletines() {
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
             
             let textoInterior = null;
-            let pdfExtraidoNativo = null; // 👈 Guardamos el PDF
+            let pdfExtraidoNativo = null; 
             
-            // 💡 ENRUTADOR DE TRÁFICO
+            // 💡 AVISO: Hemos sacado a Cataluña (DOGC) de la Vía Rápida para que pase por Cloudflare
             if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
@@ -866,22 +746,17 @@ async function extraerBoletines() {
             }
             if (!textoInterior) continue;
 
-            // 💡 REBAJA A 5000 CARACTERES PARA NO ESTALLAR LOS LÍMITES POR MINUTO DE GROQ
-            if (textoInterior.length > 5000) {
-                textoInterior = textoInterior.substring(0, 5000) + "... [Texto cortado]";
-            }
-
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
               link: enlaceFinal, 
               guid: enlaceFinal, 
-              pdf_extraido: pdfExtraidoNativo, // 👈 Pasamos el PDF atrapado en esta fase, que suele ser el más limpio
+              pdf_extraido: pdfExtraidoNativo, 
               section: `Boletín ${fuente.nombre}`, 
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            // 💡 AUMENTAMOS A 4 SEGUNDOS PARA QUE CLOUDFLARE Y GROQ RESPIRREN
-            await esperar(4000);
+            // 💡 Gemini: Pausa de seguridad (Max 15 RPM)
+            await esperar(4200);
           }
         }
       } catch (err) {
