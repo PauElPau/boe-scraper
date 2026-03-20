@@ -191,7 +191,7 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
+        model: "gemini-1.5-flash-latest",
         generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -223,7 +223,7 @@ async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-1.5-flash",
+        model: "gemini-1.5-flash-latest",
         generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     });
 
