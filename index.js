@@ -140,8 +140,8 @@ async function obtenerTextoNativo(url) {
     if (!textoLimpio) textoLimpio = $('body').text(); 
     
     textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    // 💡 Gemini no necesita recortes, enviamos todo el texto que haya
-    return { texto: textoLimpio, pdf: pdfLink };
+    // 💡 Tijeretazo a 35.000 (unas 15 páginas) para no atascar a la IA con listas de nombres
+    return { texto: textoLimpio.substring(0, 35000), pdf: pdfLink };
   } catch (error) {
     console.error(`⚠️ Error extrayendo web de forma nativa:`, error.message);
     return { texto: null, pdf: null }; 
@@ -178,8 +178,9 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
     }
     
     const data = await response.json();
-    return data.result || ""; 
-    // 💡 Ya no recortamos a 80.000, Gemini se lo traga todo
+    let textoLimpio = data.result || ""; 
+    // 💡 Tijeretazo a 35.000 también para la Vía Cloudflare
+    return typeof textoLimpio === "string" ? textoLimpio.substring(0, 35000) : "";
   } catch (error) {
     console.error(`⚠️ Fallo de conexión interno para ${url}:`, error.message);
     return null; 
@@ -191,7 +192,7 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         generationConfig: { responseMimeType: "application/json" }
     });
 
@@ -215,7 +216,13 @@ async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
     const data = JSON.parse(text);
     return data.convocatorias || [];
   } catch (error) {
-    console.error("⚠️ Error con Gemini extrayendo sumario:", error.message);
+    // 💡 SI LLEGAMOS AL LÍMITE POR MINUTO (429), PAUSAMOS Y REINTENTAMOS
+    if (error.message.includes('429') || error.status === 429) {
+        console.log("   ⏳ Límite de Gemini alcanzado (15 RPM). Pausando 60 segundos...");
+        await esperar(60000); // Esperamos 1 minuto a que se limpie la cuota
+        return extraerEnlacesSumarioIA(textoSumario, nombreBoletin); // Lo volvemos a intentar
+    }
+    console.error("⚠️ Error con Gemini analizando detalle:", error.message);
     return [];
   }
 }
@@ -223,7 +230,7 @@ async function extraerEnlacesSumarioIA(textoSumario, nombreBoletin) {
 async function analizarConvocatoriaIA(titulo, textoInterior) {
   try {
     const model = genAI.getGenerativeModel({ 
-        model: "gemini-2.5-flash",
+        model: "gemini-2.0-flash",
         generationConfig: { responseMimeType: "application/json", temperature: 0.1 }
     });
 
@@ -245,7 +252,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       "titulacion": "Titulación mínima exigida.",
       "enlace_inscripcion": "URL exacta para presentar instancia.",
       "tasa": "Importe de la tasa.",
-      "boletin_origen_nombre": "Si menciona que las bases íntegras están publicadas en otro boletín, extrae SOLO el nombre (ej: 'BOP Córdoba').",
+      "boletin_origen_nombre": "Si menciona que las bases íntegras de ESTA convocatoria están publicadas en otro boletín, extrae SOLO el nombre (ej: 'BOP Córdoba'). IMPORTANTE: Ignora los boletines que citen leyes, estatutos o decretos antiguos."
       "boletin_origen_fecha": "Fecha de publicación del boletín de origen en formato 'YYYY-MM-DD'.",
       "referencia_boe_original": "Si es un trámite, busca el código BOE original (BOE-A-YYYY-XXXX).",
       "organismo": "Nombre exacto del ayuntamiento u organismo convocante.",
@@ -258,6 +265,12 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     const text = result.response.text();
     return JSON.parse(text);
   } catch (error) {
+    // 💡 SI LLEGAMOS AL LÍMITE POR MINUTO (429), PAUSAMOS Y REINTENTAMOS
+    if (error.message.includes('429') || error.status === 429) {
+        console.log("   ⏳ Límite de Gemini alcanzado (15 RPM). Pausando 60 segundos...");
+        await esperar(60000); // Esperamos 1 minuto a que se limpie la cuota
+        return analizarConvocatoriaIA(titulo, textoInterior); // Lo volvemos a intentar
+    }
     console.error("⚠️ Error con Gemini analizando detalle:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
   }
@@ -670,8 +683,8 @@ async function extraerBoletines() {
               department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            // 💡 Gemini: Pausa de seguridad (Max 15 RPM)
-            await esperar(4200);
+            // 💡 Pausa de seguridad de 5 segundos (Asegura un máximo de 12 RPM, por debajo del límite de 15)
+            await esperar(5000);
           }
         } 
         
@@ -755,8 +768,8 @@ async function extraerBoletines() {
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            // 💡 Gemini: Pausa de seguridad (Max 15 RPM)
-            await esperar(4200);
+            // 💡 Gemini: Pausa de seguridad de 5 segundos (Max 12 RPM)
+            await esperar(5000);
           }
         }
       } catch (err) {
