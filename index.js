@@ -1,4 +1,7 @@
 require("dotenv").config();
+// 🛡️ ESCUDO ANTI-CERTIFICADOS CADUCADOS: Evita el "fetch failed" en webs del Gobierno
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
 const { createClient } = require("@supabase/supabase-js");
 const Parser = require("rss-parser");
 const slugify = require("slugify");
@@ -157,8 +160,8 @@ async function obtenerTextoNativo(url) {
   }
 }
 
-// 💡 MEJORA: Escudo Anti-422. Si Cloudflare falla, intentamos Vía Rápida Nativa como Plan B
-async function obtenerTextoUniversal(url, reintentos = 1) {
+// 💡 MEJORA: Cloudflare recupera la paciencia (3 reintentos)
+async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
       method: 'POST',
@@ -171,10 +174,12 @@ async function obtenerTextoUniversal(url, reintentos = 1) {
 
     if (response.status === 429) {
       if (reintentos > 0) {
-         console.log(`   ⏳ Límite de Cloudflare. Pausa rápida de 2s...`);
-         await esperar(2000); 
+         const tiempoPausa = (4 - reintentos) * 5000; // Hará pausas de 5s, 10s y 15s
+         console.log(`   ⏳ Límite de Cloudflare (429). Pausa de ${tiempoPausa/1000}s...`);
+         await esperar(tiempoPausa); 
          return obtenerTextoUniversal(url, reintentos - 1); 
       } else {
+         console.log(`   ❌ Cloudflare agotó los reintentos para la URL: ${url}`);
          return null;
       }
     }
@@ -293,10 +298,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
 
 // --- 6. LÓGICA DE BASE DE DATOS ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
-  if (!textoParaIA || textoParaIA.length < 50) {
-      console.log(`   ⏭️ Ignorado: El texto extraído es demasiado corto.`);
-      return;
-  }
+  if (!textoParaIA || textoParaIA.length < 50) return;
   
   const textoLower = textoParaIA.toLowerCase();
   if (textoLower.includes("error 404") || textoLower.includes("página no encontrada") || textoLower.includes("page not found")) {
@@ -307,10 +309,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
   const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
   
-  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
-      console.log(`   ⏭️ Ignorado: La IA determinó que no es empleo público real.`);
-      return;
-  }
+  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") return;
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
   let parentSlug = null;
@@ -654,10 +653,8 @@ async function extraerBoletines() {
                 if (!enlaceFinal.startsWith('http')) {
                     const urlBaseObj = new URL(fuente.url);
                     if (enlaceFinal.startsWith('/')) {
-                        // Si la ruta empieza por "/", se cuelga directamente del dominio principal
                         enlaceFinal = urlBaseObj.origin + enlaceFinal;
                     } else {
-                        // Si es ruta relativa sin "/", se pega a la URL base original
                         enlaceFinal = new URL(enlaceLimpio, fuente.url).href;
                     }
                 }
