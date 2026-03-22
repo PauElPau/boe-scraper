@@ -428,13 +428,15 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   if (convocatoriasReales.length === 0 || !process.env.RESEND_API_KEY) return 0;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-  const { data: suscriptores } = await supabase.from('suscriptores').select('*');
-  if (!suscriptores || suscriptores.length === 0) return 0;
+  
+  // CAMBIO CLAVE: Ahora leemos de filtros_radar
+  const { data: radares } = await supabase.from('filtros_radar').select('*');
+  if (!radares || radares.length === 0) return 0;
 
-  for (const sub of suscriptores) {
-    if (!sub.interes) continue;
-    const interesStr = sub.interes.toLowerCase().trim();
-    const provinciasSub = sub.provincias || []; 
+  for (const radar of radares) {
+    if (!radar.filtro) continue;
+    const interesStr = radar.filtro.toLowerCase().trim();
+    const provinciasSub = radar.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
       const enTitulo = conv.title && conv.title.toLowerCase().includes(interesStr);
@@ -446,11 +448,13 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
     });
 
     if (coincidencias.length > 0) {
-      // 💡 DISEÑO PREMIUM DE LAS TARJETAS (CARDS)
+      // CAMBIO CLAVE: Obtenemos el email real vinculado a ese radar
+      const { data: userData } = await supabase.auth.admin.getUserById(radar.user_id);
+      if (!userData || !userData.user || !userData.user.email) continue;
+      const userEmail = userData.user.email;
+
       const htmlLista = coincidencias.map(c => {
-        // Etiqueta de plazas
         const badgePlazas = c.plazas ? `<span style="background-color: #fff7ed; color: #c2410c; padding: 3px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 8px; vertical-align: middle; border: 1px solid #ffedd5;">${c.plazas} plaza${c.plazas > 1 ? 's' : ''}</span>` : '';
-        // Formatear la fecha de YYYY-MM-DD a DD/MM/YYYY
         const fechaCierreLimpia = c.fecha_cierre ? c.fecha_cierre.split('-').reverse().join('/') : null;
         const infoCierre = fechaCierreLimpia ? `<div style="color: #dc2626; font-size: 13px; font-weight: 600; margin-top: 6px;">⏳ Fin de plazo aprox: ${fechaCierreLimpia}</div>` : '';
 
@@ -464,26 +468,23 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
             <span style="display: block;">📍 ${c.provincia || 'Estatal'}</span>
             ${infoCierre}
           </div>
-          <a href="https://topos.es/convocatorias/${c.slug}" style="display: block; text-align: center; background-color: #ea580c; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 600;">Ver convocatoria oficial &rarr;</a>
+          <a href="https://topos.es/convocatorias/${c.slug}" style="display: block; text-align: center; background-color: #ea580c; color: #ffffff; text-decoration: none; padding: 10px 16px; border-radius: 6px; font-size: 14px; font-weight: 600;">Inspeccionar túnel &rarr;</a>
         </div>`
       }).join('');
 
       try {
-        const enlaceBaja = `https://topos.es/baja?email=${encodeURIComponent(sub.email)}`;
-        
-        // 💡 PLANTILLA DEL CORREO COMPLETO
         const emailHTML = `
         <div style="background-color: #f8fafc; padding: 30px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
           <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
             
             <div style="background-color: #ea580c; padding: 25px; text-align: center;">
-              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">El Topo de las Opos 🐾</h1>
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.5px;">TOPOS.es 🐾</h1>
             </div>
             
             <div style="padding: 30px 25px; background-color: #f8fafc;">
-              <h2 style="margin-top: 0; margin-bottom: 15px; color: #1e293b; font-size: 20px;">¡Nuevas plazas detectadas!</h2>
+              <h2 style="margin-top: 0; margin-bottom: 15px; color: #1e293b; font-size: 20px;">¡El Topo ha encontrado algo!</h2>
               <p style="color: #475569; font-size: 15px; line-height: 1.6; margin-bottom: 25px; margin-top: 0;">
-                El boletín de hoy ha publicado convocatorias que coinciden con tu alerta para: <strong style="color: #ea580c; background: #ffedd5; padding: 2px 6px; border-radius: 4px;">${sub.interes}</strong>
+                Escarbando en los boletines de hoy, hemos desenterrado nuevas plazas que coinciden con tu rastro: <strong style="color: #ea580c; background: #ffedd5; padding: 2px 6px; border-radius: 4px;">${radar.filtro}</strong>
               </p>
               
               ${htmlLista}
@@ -492,9 +493,9 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
             
             <div style="background-color: #ffffff; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
               <p style="color: #64748b; font-size: 13px; margin: 0 0 10px 0; line-height: 1.5;">
-                Recibes este correo porque creaste una alerta personalizada en Topos.es. Si ya has conseguido tu plaza o quieres dejar de recibir estos avisos, puedes darte de baja en cualquier momento.
+                Recibes este correo porque El Topo está vigilando este rastro para ti. Puedes gestionar tus alertas o decirle que deje de buscar desde tu Madriguera.
               </p>
-              <a href="${enlaceBaja}" style="color: #94a3b8; font-size: 12px; text-decoration: underline;">Cancelar mi suscripción</a>
+              <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline;">Ir a mi Madriguera</a>
             </div>
             
           </div>
@@ -502,9 +503,9 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
         `;
 
         await resend.emails.send({
-          from: 'El Topo de las Opos <alertas@topos.es>', 
-          to: sub.email,
-          subject: `🚨 Hay nuevas plazas de ${sub.interes}`,
+          from: 'TOPOS.es <alertas@topos.es>', 
+          to: userEmail,
+          subject: `🐾 Nuevas plazas rastreadas: ${radar.filtro}`,
           html: emailHTML
         });
         contadorEnviados++;
@@ -514,7 +515,6 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   }
   return contadorEnviados;
 }
-
 
 async function enviarAlertasFavoritos(nuevasConvocatorias) {
   let contadorEnviados = 0; 
@@ -534,25 +534,28 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
           <div style="background-color: #f8fafc; padding: 30px 10px; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
             <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
               <div style="background-color: #10b981; padding: 25px; text-align: center;">
-                <span style="font-size: 32px; display: block; margin-bottom: 10px;">🔔</span>
-                <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">Novedades en tu Oposición</h1>
+                <span style="font-size: 32px; display: block; margin-bottom: 10px;">🐾</span>
+                <h1 style="color: #ffffff; margin: 0; font-size: 22px; font-weight: 800;">Novedades en tu plaza vigilada</h1>
               </div>
               <div style="padding: 30px 25px;">
-                <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-top: 0;">Hemos detectado un <strong>nuevo trámite oficial</strong> publicado hoy en los boletines para la plaza que tienes guardada en favoritos.</p>
+                <p style="color: #475569; font-size: 16px; line-height: 1.6; margin-top: 0;">El Topo ha detectado un <strong>nuevo trámite oficial</strong> publicado hoy en los boletines para la plaza que tienes guardada en tu Madriguera.</p>
                 <div style="background-color: #ecfdf5; border-left: 4px solid #10b981; border-radius: 0 8px 8px 0; padding: 16px; margin: 25px 0;">
-                  <strong style="color: #065f46; display: block; margin-bottom: 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Actualización publicada:</strong>
+                  <strong style="color: #065f46; display: block; margin-bottom: 6px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Actualización detectada:</strong>
                   <span style="color: #047857; font-size: 15px; line-height: 1.5;">${update.resumen || update.title}</span>
                 </div>
                 <a href="https://topos.es/convocatorias/${update.slug}" style="display: block; text-align: center; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-size: 15px; font-weight: 600;">Ver documento oficial &rarr;</a>
+              </div>
+              <div style="background-color: #ffffff; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
+                <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline;">Gestionar mis plazas desde la Madriguera</a>
               </div>
             </div>
           </div>
           `;
 
           await resend.emails.send({
-            from: 'Novedades El Topo <alertas@topos.es>', 
+            from: 'TOPOS.es <alertas@topos.es>', 
             to: userData.user.email,
-            subject: `🔔 Hay novedades en la oposición que sigues`,
+            subject: `🐾 Hay novedades en la plaza que vigilas`,
             html: emailHTML
           });
           contadorEnviados++;
@@ -572,13 +575,21 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   const chatId = process.env.TELEGRAM_CHANNEL_ID; 
   if (!token || !chatId) return;
 
-  let texto = `🚨 *¡Nuevas Oposiciones!* 🚨\n\nHoy se han publicado *${convocatoriasReales.length}* nuevas oportunidades:\n\n`;
+  // Temática del Topo 🐾
+  let texto = `🐾 *¡El Topo acaba de salir a la superficie!* 🐾\n\nHoy ha desenterrado *${convocatoriasReales.length}* nuevas plazas:\n\n`;
+  
   convocatoriasReales.slice(0, 10).forEach(c => {
     const plazas = c.plazas ? `(*${c.plazas} ${c.plazas === 1 ? 'plaza' : 'plazas'}*) ` : '';
-    texto += `💼 *${c.profesion || 'Plaza'}* ${plazas}\n🏛️ ${c.department || 'Administración'} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n👉 [Ver plazos](https://topos.es/convocatorias/${c.slug})\n\n`;
+    texto += `💼 *${c.profesion || 'Nueva Convocatoria'}* ${plazas}\n🏛️ ${c.department || 'Administración'} ${c.provincia && c.provincia !== 'Estatal' ? `(${c.provincia})` : ''}\n👉 [Inspeccionar túnel](https://topos.es/convocatorias/${c.slug})\n\n`;
   });
-  if (convocatoriasReales.length > 10) texto += `_Y ${convocatoriasReales.length - 10} convocatorias más._\n`;
   
+  if (convocatoriasReales.length > 10) {
+    texto += `_Y ${convocatoriasReales.length - 10} convocatorias más en la web._\n\n`;
+  }
+  
+  // Call to Action (Llamada a la acción para captar usuarios)
+  texto += `🕳️ *Crea tu propia Madriguera* para que el Topo te avise por email solo de lo que te interesa: [Entrar gratis](https://topos.es)`;
+
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -592,7 +603,8 @@ async function enviarReporteAdmin(insertadas, alertasEmail, alertasFavs, errores
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID; 
   if (!token || !adminChatId) return;
 
-  const texto = `🤖 *Reporte Diario - El Topo de las Opos*\n\n✅ *${insertadas}* Plazas insertadas.\n📧 *${alertasEmail}* Correos enviados.\n⭐ *${alertasFavs}* Avisos de favoritos.\n⚠️ *${errores}* Errores detectados.\n⏱️ *Tiempo:* ${minutos} minutos.`;
+  // Temática del Topo Jefe 👷‍♂️
+  const texto = `🐾 *Reporte del Topo Jefe* 🐾\n\n⛏️ *${insertadas}* Plazas desenterradas.\n📨 *${alertasEmail}* Avisos de rastros enviados.\n🔔 *${alertasFavs}* Alertas de plazas vigiladas.\n⚠️ *${errores}* Túneles cortados (Errores web).\n⏱️ *Tiempo de excavación:* ${minutos} minutos.`;
 
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
