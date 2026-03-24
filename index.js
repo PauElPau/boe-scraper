@@ -233,7 +233,6 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     const textoRespuesta = response.choices[0].message.content;
     const datosParsed = JSON.parse(textoRespuesta);
     
-    // 💡 CHIVATO DE DEPURACIÓN: Si la IA colapsa y devuelve 0, nos avisará
     if (!datosParsed.convocatorias || datosParsed.convocatorias.length === 0) {
         console.log("   ⚠️ La IA devolvió un array vacío. Revisando si Llama-3 ha colapsado o no había nada...");
     }
@@ -241,6 +240,16 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     return datosParsed.convocatorias || [];
   } catch (error) {
     console.log("   ❌ Error IA extrayendo sumario:", error.message);
+    
+    // 🛡️ EL NUEVO ESCUDO ANTI-413 (Exceso de Tokens)
+    if (error.status === 413 || error.message.includes('too large') || error.message.includes('413')) {
+        console.log("   ✂️ El texto es demasiado grande para la memoria de Groq. Recortando un 5% y reintentando...");
+        const textoRecortado = markdownWeb.substring(0, Math.floor(markdownWeb.length * 0.95)); 
+        await esperar(2000);
+        return extraerEnlacesSumarioIA(textoRecortado, nombreBoletin);
+    }
+
+    // 🛡️ EL SISTEMA DE ROTACIÓN (Anti-429 por falta de saldo)
     if (error.message.includes('429 Rate limit reached') || error.status === 429) {
         if (rotarKeyGroq()) {
             await esperar(2000);
@@ -749,8 +758,8 @@ async function extraerBoletines() {
           }
           if (!markdownWeb) continue;
 
-         // 💡 AUMENTAMOS A 30.000 para que entren las listas largas del DOGV sin cortarse
-          if (markdownWeb.length > 30000) markdownWeb = markdownWeb.substring(0, 30000); 
+         // 💡 AUMENTAMOS A 24000 para que entren las listas largas del DOGV sin cortarse
+          if (markdownWeb.length > 24000) markdownWeb = markdownWeb.substring(0, 24000);
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
