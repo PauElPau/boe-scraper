@@ -198,17 +198,17 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   const prompt = `
     Eres un experto en empleo público. Analiza este sumario/portada del boletín ${nombreBoletin} en Markdown.
-    Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, bolsas, estabilización, libre designación).
+    Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo.
     
     REGLAS ESTRICTAS:
-   1. IGNORA menús, cabeceras, convenios colectivos, acuerdos de empresas y "cartas de servicios".
-    2. IGNORA CUALQUIER RESOLUCIÓN CUYA FECHA SEA DE AÑOS ANTERIORES.
-    3. Busca bajo CUALQUIER apartado que indique empleo (ej: "Entidades locales", "Administración local", "Sector público", "Oposiciones").
-    4. Devuelve la URL EXACTA que acompaña a cada resolución específica.
+    1. IGNORA menús, cabeceras, convenios colectivos y "cartas de servicios".
+    2. IGNORA CUALQUIER RESOLUCIÓN DE AÑOS ANTERIORES.
+    3. Devuelve la URL EXACTA. Ignora los enlaces que sean anclas internas (que contengan "#" o "sumari").
+    4. TÍTULO COMPLETO Y DESCRIPTIVO: El campo 'titulo' NO puede ser una sola palabra genérica como "Bases", "Apertura de plazo" o "Nombramiento". DEBE incluir el nombre del puesto o cuerpo al que se refiere. Ejemplo correcto: "Agente de la Policía Local - Bases" o "Técnica de Medioambiente - Adjudicación Provisional".
     5. DEDUCCIÓN DE DEPARTAMENTO INTELIGENTE: 
-       - Si la resolución está en la sección de "Entidades Locales", "Ayuntamientos" o "Administración Local", añade "Ayuntamiento de " seguido del nombre del municipio (ej: "Ayuntamiento de Torrevieja").
-       - Si la resolución está bajo "Administración de la Generalitat", "Conselleria", "Labora" o similar, el departamento DEBE SER "Generalitat Valenciana" o la Conselleria correspondiente. NUNCA escribas "Ayuntamiento de la Generalitat".
-    6. EXHAUSTIVIDAD: Debes extraer ABSOLUTAMENTE TODAS las convocatorias presentes en el texto. No resumas la lista ni te dejes ninguna del final.
+       - En las webs autonómicas (como DOGV), los ayuntamientos aparecen como títulos en MAYÚSCULAS (ej: "ELX/ELCHE", "PETRER", "SAX"). Si la resolución está debajo de uno de esos nombres, el departamento DEBE SER "Ayuntamiento de [Nombre del Municipio]" (ej: "Ayuntamiento de Elche").
+       - Si la resolución está bajo "Administración de la Generalitat", "Conselleria" o "LABORA", el departamento es "Generalitat Valenciana". NUNCA escribas "Ayuntamiento de la Generalitat".
+    6. EXHAUSTIVIDAD: Debes extraer ABSOLUTAMENTE TODAS las convocatorias presentes. No te saltes ninguna.
     
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
@@ -224,7 +224,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
       model: "llama-3.1-8b-instant",
       temperature: 0.0, 
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "You output strict JSON." }, { role: "user", content: prompt }]
+      messages: [{ role: "system", content: "You output strict JSON. Analiza todo el texto exhaustivamente." }, { role: "user", content: prompt }]
     });
     return JSON.parse(response.choices[0].message.content).convocatorias || [];
   } catch (error) {
@@ -312,10 +312,16 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") return;
 
-  const departamentoFinal = analisisIA.organismo || itemData.department;
-
+  let departamentoFinal = analisisIA.organismo || itemData.department;
   
-  let parentSlug = null;
+  // 🛡️ ESCUDO ANTI-ALUCINACIONES EXTRA FUERTE
+  if (departamentoFinal) {
+      const depLower = departamentoFinal.toLowerCase();
+      if (depLower.includes("ayuntamiento de la generalitat") || depLower.includes("ayuntamiento de generalitat") || depLower === "ayuntamiento de la") {
+          departamentoFinal = "Generalitat Valenciana";
+      }
+  }
+  
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
@@ -742,8 +748,8 @@ async function extraerBoletines() {
             const t = (item.titulo || "").toLowerCase();
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
             
-            // 💡 REBAJAMOS EL LÍMITE A 10 CARACTERES (Hay títulos que son solo "Bases" o "Oposición")
-            if (item.titulo.length < 10) {
+            // 💡 REBAJAMOS EL LÍMITE A 5 CARACTERES
+            if (item.titulo.length < 5) {
                 console.log(`   ⏭️ Ignorado por título corto: "${item.titulo}"`);
                 continue;
             }
