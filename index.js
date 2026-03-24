@@ -45,17 +45,17 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-//  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-//  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-//  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-//  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-//  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-//  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
- // { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
-  // { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+   { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true },
   { nombre: "BOPA", tipo: "html_directo", url: "https://miprincipado.asturias.es/bopa/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -63,9 +63,9 @@ const FUENTES_BOLETINES = [
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },  
   { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
 
- // { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
-  //{ nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
- // { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
+  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -254,7 +254,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     "grupo": "REGLA MUY ESTRICTA: Devuelve ÚNICAMENTE y EXACTAMENTE uno de estos valores: 'A1', 'A2', 'B', 'C1', 'C2', o 'E'. ¡NUNCA devuelvas descripciones! Si el texto dice 'Técnica Superior' devuelve 'A1'. Si dice 'Técnica/Media' devuelve 'A2'. Si dice 'Administrativa' devuelve 'C1'. Si dice 'Auxiliar' devuelve 'C2'. Si dice 'Subalterna', 'Peón' o 'Oficios' devuelve 'E'. Si no se menciona, devuelve null.",
     "sistema": "REGLA ESTRICTA: Devuelve EXACTAMENTE 'Oposición', 'Concurso-oposición' o 'Concurso'. Si el texto menciona varios para distintas plazas, devuelve 'Concurso-oposición'. Si no, null.",
     "profesiones": "Devuelve siempre un ARRAY de strings con los nombres limpios de los puestos. Si hay varios, sepáralos como elementos (ej: ['Técnico en Turismo', 'Oficial Tallista']). Si solo hay uno, devuélvelo en el array (ej: ['Policía Local']). Si no hay, devuelve un array vacío [].",
-    "provincia": "Provincia deducida (ej: 'Madrid'). Si es Ministerio, 'Estatal'.",
+    "provincia": "Deduce la provincia EXACTA. DEBES devolver SOLAMENTE uno de estos valores exactos: 'Almería', 'Cádiz', 'Córdoba', 'Granada', 'Huelva', 'Jaén', 'Málaga', 'Sevilla', 'Huesca', 'Teruel', 'Zaragoza', 'Asturias', 'Baleares', 'Las Palmas', 'Tenerife', 'Cantabria', 'Albacete', 'Ciudad Real', 'Cuenca', 'Guadalajara', 'Toledo', 'Ávila', 'Burgos', 'León', 'Palencia', 'Salamanca', 'Segovia', 'Soria', 'Valladolid', 'Zamora', 'Barcelona', 'Girona', 'Lleida', 'Tarragona', 'Alicante', 'Castellón', 'Valencia', 'Badajoz', 'Cáceres', 'A Coruña', 'Lugo', 'Ourense', 'Pontevedra', 'Madrid', 'Murcia', 'Navarra', 'Álava', 'Gipuzkoa', 'Vizcaya', 'La Rioja', 'Ceuta', 'Melilla', o 'Estatal'. Si no estás seguro, devuelve 'Estatal'.",
     "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
     "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
     "tasa": "Importe de la tasa. Si no, null.",
@@ -652,6 +652,19 @@ async function extraerBoletines() {
 
           for (const item of feed.items.reverse()) {
             if (iaDetenida) break; 
+
+            // 🛡️ NUEVO FILTRO: Ignorar noticias del RSS que no sean estrictamente de hoy
+            if (item.pubDate || item.isoDate) {
+                const itemDate = new Date(item.isoDate || item.pubDate);
+                const hoy = new Date();
+                
+                // Comparamos si el día, mes y año son idénticos
+                if (itemDate.toDateString() !== hoy.toDateString()) {
+                    // Es de un día anterior, lo ignoramos para no gastar tokens
+                    continue; 
+                }
+            }
+            
             let contenidoItem = item.contentSnippet || item.content || item.description || "";
             const t = (item.title + " " + contenidoItem).toLowerCase();
 
@@ -823,9 +836,9 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-      //alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-      //alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-     // await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+      alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+      alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+      await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
