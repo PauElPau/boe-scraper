@@ -53,12 +53,12 @@ const FUENTES_BOLETINES = [
 //  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
 //  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
-  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+ // { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
  // { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
  // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 //  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
   
-//  { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, 
+  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true },
  // { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },  
 //  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },  
 //  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
@@ -201,14 +201,12 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, bolsas, estabilización, libre designación).
     
     REGLAS ESTRICTAS:
-   1. IGNORA menús, cabeceras, convenios colectivos, acuerdos de empresas y "cartas de servicios".
+    1. IGNORA menús de navegación, cabeceras, convenios colectivos, acuerdos de empresas y "cartas de servicios".
     2. IGNORA CUALQUIER RESOLUCIÓN CUYA FECHA SEA DE AÑOS ANTERIORES.
-    3. Busca bajo CUALQUIER apartado que indique empleo (ej: "Entidades locales", "Administración local", "Sector público", "Oposiciones").
+    3. Busca bajo CUALQUIER apartado que indique empleo, ya sea autonómico, local o estatal. Ejemplos válidos: "Oposiciones", "Entidades locales", "Administración local", "Sector público", "Autoridades y personal", "Ayuntamientos", "Novedades".
     4. Devuelve la URL EXACTA que acompaña a cada resolución específica.
-    5. DEDUCCIÓN DE DEPARTAMENTO INTELIGENTE: 
-       - Si la resolución está en la sección de "Entidades Locales", "Ayuntamientos" o "Administración Local", añade "Ayuntamiento de " seguido del nombre del municipio (ej: "Ayuntamiento de Torrevieja").
-       - Si la resolución está bajo "Administración de la Generalitat", "Conselleria", "Labora" o similar, el departamento DEBE SER "Generalitat Valenciana" o la Conselleria correspondiente. NUNCA escribas "Ayuntamiento de la Generalitat".
-    6. EXHAUSTIVIDAD: Debes extraer ABSOLUTAMENTE TODAS las convocatorias presentes en el texto. No resumas la lista ni te dejes ninguna del final.
+    5. MUY IMPORTANTE: Ignora los enlaces que sean anclas internas de la misma página (que contengan "#" o "sumari"). Busca el enlace real al documento individual o al PDF (suele contener "document-del-dogc", "pdf" o enlazar a un detalle).
+    6. DEDUCCIÓN DEL DEPARTAMENTO: Si la resolución está debajo del nombre de un municipio (ejemplo: debajo de "ELX/ELCHE", "PETRER" o "SAX"), el departamento DEBE SER "Ayuntamiento de [Nombre del Municipio]".
     
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
@@ -228,17 +226,6 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     });
     return JSON.parse(response.choices[0].message.content).convocatorias || [];
   } catch (error) {
-    console.log("   ❌ Error IA extrayendo sumario:", error.message);
-    
-    // 🛡️ EL NUEVO ESCUDO ANTI-413 (Exceso de Tokens)
-    if (error.status === 413 || error.message.includes('too large') || error.message.includes('413')) {
-        console.log("   ✂️ El texto es demasiado grande para la memoria de Groq. Recortando un 5% y reintentando...");
-        const textoRecortado = markdownWeb.substring(0, Math.floor(markdownWeb.length * 0.95)); 
-        await esperar(2000);
-        return extraerEnlacesSumarioIA(textoRecortado, nombreBoletin);
-    }
-
-    // 🛡️ EL SISTEMA DE ROTACIÓN (Anti-429 por falta de saldo)
     if (error.message.includes('429 Rate limit reached') || error.status === 429) {
         if (rotarKeyGroq()) {
             await esperar(2000);
@@ -324,8 +311,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") return;
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
-
-  
   let parentSlug = null;
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
@@ -732,6 +717,29 @@ async function extraerBoletines() {
 
           console.log(`🌐 URL objetivo generada: ${urlFinal}`); // 👈 Imprimimos la URL para confirmar que está bien
 
+          // 🛡️ NUEVO: INTERCEPTOR RSS -> HTML (Para el BOIB)
+          if (fuente.rssToHtml) {
+              console.log(`   🔗 Extrayendo URL real del último boletín desde su RSS puente...`);
+              try {
+                  const resRss = await fetch(urlFinal);
+                  const xmlRss = await resRss.text();
+                  const feed = await parser.parseString(xmlRss);
+                  if (feed.items && feed.items.length > 0) {
+                      urlFinal = feed.items[0].link; // Sobrescribimos con el enlace directo al boletín de hoy
+                      console.log(`   ✅ Boletín localizado: ${urlFinal}`);
+                  } else {
+                      console.log(`   ⏭️ El RSS puente está vacío.`);
+                      continue;
+                  }
+              } catch (e) {
+                  console.error(`   ❌ Error leyendo el RSS puente: ${e.message}`);
+                  totalErrores++;
+                  continue;
+              }
+          }
+
+          console.log(`🌐 URL objetivo generada: ${urlFinal}`);
+
           let markdownWeb = null;
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
@@ -741,9 +749,7 @@ async function extraerBoletines() {
           }
           if (!markdownWeb) continue;
 
-        // 💡 AUMENTAMOS A 24000 para que entren las listas largas del DOGV sin cortarse
-          if (markdownWeb.length > 24000) markdownWeb = markdownWeb.substring(0, 24000);
-
+          if (markdownWeb.length > 12000) markdownWeb = markdownWeb.substring(0, 12000); 
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
@@ -751,19 +757,14 @@ async function extraerBoletines() {
 
           for (const item of listado) {
             if (iaDetenida) break; 
-            const t = (item.titulo || "").toLowerCase();
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
-            
-            // 💡 REBAJAMOS EL LÍMITE A 10 CARACTERES (Hay títulos que son solo "Bases" o "Oposición")
-            if (item.titulo.length < 10) {
-                console.log(`   ⏭️ Ignorado por título corto: "${item.titulo}"`);
-                continue;
-            }
+            const t = item.titulo.toLowerCase();
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30) continue;
 
-            let enlaceLimpio = (item.enlace || "").replace(/[>)"'\]]/g, '').trim();
+            // 🛡️ EL ESCUDO ANTI-404: Ignorar anclas internas (Arregla Cataluña)
+            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
-                console.log(`   ⏭️ Ignorado por ancla interna: ${enlaceLimpio}`);
+                console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
                 continue;
             }
 
@@ -778,16 +779,12 @@ async function extraerBoletines() {
                     }
                 }
             } catch (e) {
-               console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
+               console.log(`⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
                totalErrores++; 
                continue;
             }
             
-            // 💡 AÑADIMOS EL CHIVATO PARA ENLACES VACÍOS
-            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') {
-                console.log(`   ⏭️ Ignorado por falta de URL válida: "${item.titulo}"`);
-                continue;
-            }
+            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
 
             await gestionarDepartamento(item.departamento);
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
