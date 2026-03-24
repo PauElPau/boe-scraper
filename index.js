@@ -224,10 +224,23 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
       model: "llama-3.1-8b-instant",
       temperature: 0.0, 
       response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "You output strict JSON. Analiza todo el texto exhaustivamente." }, { role: "user", content: prompt }]
+      messages: [
+        { role: "system", content: "You output strict JSON. Analiza el texto exhaustivamente y extrae todas las convocatorias sin dejarte ninguna." }, 
+        { role: "user", content: prompt }
+      ]
     });
-    return JSON.parse(response.choices[0].message.content).convocatorias || [];
+    
+    const textoRespuesta = response.choices[0].message.content;
+    const datosParsed = JSON.parse(textoRespuesta);
+    
+    // 💡 CHIVATO DE DEPURACIÓN: Si la IA colapsa y devuelve 0, nos avisará
+    if (!datosParsed.convocatorias || datosParsed.convocatorias.length === 0) {
+        console.log("   ⚠️ La IA devolvió un array vacío. Revisando si Llama-3 ha colapsado o no había nada...");
+    }
+    
+    return datosParsed.convocatorias || [];
   } catch (error) {
+    console.log("   ❌ Error IA extrayendo sumario:", error.message);
     if (error.message.includes('429 Rate limit reached') || error.status === 429) {
         if (rotarKeyGroq()) {
             await esperar(2000);
@@ -321,7 +334,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           departamentoFinal = "Generalitat Valenciana";
       }
   }
-  
+
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
