@@ -45,15 +45,15 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+//  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+//  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+//  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+//  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+//  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+//  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
-  { nombre: "DOGV", tipo: "html_directo", url: "https://dogv.gva.es/es/sumari?data={YYYY}-{MM}-{DD}", ambito: "Comunidad Valenciana" },
+  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/bopa", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -61,11 +61,11 @@ const FUENTES_BOLETINES = [
   { nombre: "BOIB", tipo: "html_directo", url: "https://intranet.caib.es/eboibfront/es/ultimo-boletin", ambito: "Islas Baleares" }, 
   { nombre: "BOC", tipo: "html_directo", url: "https://www.gobiernodecanarias.org/boc/ultimo/", ambito: "Canarias" },  
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/ultimo-boletin", ambito: "Cantabria" },  
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/", ambito: "Cataluña" },
+  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
 
-  { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
-  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
+ // { nombre: "BOA", tipo: "html_directo", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERLST&BASE=BZHT&DOCS=1-250&SEC=OPENDATABOAJSONAPP&OUTPUTMODE=JSON&SEPARADOR=&PUBL-C={YYYYMMDD}&SECC-C=BOA%2Bo%2BDisposiciones%2Bo%2BPersonal%2Bo%2BAcuerdos%2Bo%2BJusticia%2Bo%2BAnuncios", ambito: "Aragón" },
+  //{ nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },
+ // { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -110,39 +110,49 @@ async function gestionarDepartamento(nombre) {
   await supabase.from('departments').upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
 }
 
-// 🛡️ MEJORA: Cabeceras de "Navegador Real" para evitar que el Gobierno nos haga "Connection Reset"
+// 🛡️ MEJORA: Escudo Anti-Geobloqueo (Si Github desde EE.UU. es bloqueado, usamos Proxy)
 async function obtenerTextoNativo(url) {
+  let html = "";
   try {
     const respuesta = await fetch(url, {
         headers: { 
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "es-ES,es;q=0.8,en-US;q=0.5,en;q=0.3",
-            "Upgrade-Insecure-Requests": "1"
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "es-ES,es;q=0.9"
         }
     });
-    const html = await respuesta.text();
-    const $ = cheerio.load(html);
-    
-    let pdfLink = null;
-    $('a').each((i, el) => {
-        const href = $(el).attr('href');
-        if (href && (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo'))) {
-            try { pdfLink = new URL(href, url).href; } catch(e){}
-            return false; 
-        }
-    });
-
-    $('script, style, nav, footer, header, aside').remove();
-    let textoLimpio = $('#textoxslt').text(); 
-    if (!textoLimpio) textoLimpio = $('body').text(); 
-    
-    textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-    return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
+    html = await respuesta.text();
   } catch (error) {
-    console.error(`⚠️ Error extrayendo web nativa para ${url}:`, error.message);
-    return { texto: null, pdf: null }; 
+    console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
+    try {
+      // Plan C: Usamos AllOrigins para saltar el bloqueo de IP a servidores de EE.UU.
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const resProxy = await fetch(proxyUrl);
+      if (!resProxy.ok) throw new Error("Proxy denegado");
+      html = await resProxy.text();
+    } catch (e2) {
+      console.error(`   ❌ Imposible acceder a la web ni con proxy: ${url}`);
+      return { texto: null, pdf: null }; 
+    }
   }
+
+  // Parseamos el HTML obtenido (sea por vía directa o por proxy)
+  const $ = cheerio.load(html);
+  let pdfLink = null;
+  $('a').each((i, el) => {
+      const href = $(el).attr('href');
+      if (href && (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc'))) {
+          try { pdfLink = new URL(href, url).href; } catch(e){}
+          return false; 
+      }
+  });
+
+  $('script, style, nav, footer, header, aside').remove();
+  let textoLimpio = $('#textoxslt').text(); 
+  if (!textoLimpio) textoLimpio = $('body').text(); 
+  
+  textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
+  return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
 }
 
 async function obtenerTextoUniversal(url, reintentos = 3) {
@@ -195,6 +205,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     2. IGNORA CUALQUIER RESOLUCIÓN CUYA FECHA SEA DE AÑOS ANTERIORES.
     3. Busca SOLO bajo apartados como "Oposiciones y concursos", "Autoridades y personal", o "Empleo público".
     4. Devuelve la URL EXACTA que acompaña a cada resolución específica.
+    5. MUY IMPORTANTE: Ignora los enlaces que sean anclas internas de la misma página (que contengan "#" o "sumari"). Busca el enlace real al documento individual o al PDF (suele contener "document-del-dogc" o "pdf").
     
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
@@ -716,7 +727,14 @@ async function extraerBoletines() {
             const t = item.titulo.toLowerCase();
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30) continue;
 
+            // 🛡️ EL ESCUDO ANTI-404: Ignorar anclas internas (Arregla Cataluña)
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            
+            if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
+                console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
+                continue;
+            }
+
             let enlaceFinal = enlaceLimpio;
             try {
                 if (!enlaceFinal.startsWith('http')) {
@@ -772,14 +790,14 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-      alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-      alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-      await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+      //alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+      //alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+     // await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
-    await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+    //await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
