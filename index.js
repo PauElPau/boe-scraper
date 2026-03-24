@@ -313,6 +313,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") return;
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
+
+  
   let parentSlug = null;
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
@@ -737,14 +739,19 @@ async function extraerBoletines() {
 
           for (const item of listado) {
             if (iaDetenida) break; 
-            const t = item.titulo.toLowerCase();
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30) continue;
+            const t = (item.titulo || "").toLowerCase();
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en')) continue;
+            
+            // 💡 REBAJAMOS EL LÍMITE A 10 CARACTERES (Hay títulos que son solo "Bases" o "Oposición")
+            if (item.titulo.length < 10) {
+                console.log(`   ⏭️ Ignorado por título corto: "${item.titulo}"`);
+                continue;
+            }
 
-            // 🛡️ EL ESCUDO ANTI-404: Ignorar anclas internas (Arregla Cataluña)
-            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            let enlaceLimpio = (item.enlace || "").replace(/[>)"'\]]/g, '').trim();
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
-                console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
+                console.log(`   ⏭️ Ignorado por ancla interna: ${enlaceLimpio}`);
                 continue;
             }
 
@@ -759,12 +766,16 @@ async function extraerBoletines() {
                     }
                 }
             } catch (e) {
-               console.log(`⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
+               console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
                totalErrores++; 
                continue;
             }
             
-            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
+            // 💡 AÑADIMOS EL CHIVATO PARA ENLACES VACÍOS
+            if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') {
+                console.log(`   ⏭️ Ignorado por falta de URL válida: "${item.titulo}"`);
+                continue;
+            }
 
             await gestionarDepartamento(item.departamento);
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
