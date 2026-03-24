@@ -201,12 +201,14 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, bolsas, estabilización, libre designación).
     
     REGLAS ESTRICTAS:
-    1. IGNORA menús de navegación, cabeceras, convenios colectivos, acuerdos de empresas y "cartas de servicios".
+   1. IGNORA menús, cabeceras, convenios colectivos, acuerdos de empresas y "cartas de servicios".
     2. IGNORA CUALQUIER RESOLUCIÓN CUYA FECHA SEA DE AÑOS ANTERIORES.
-    3. Busca bajo CUALQUIER apartado que indique empleo, ya sea autonómico, local o estatal. Ejemplos válidos: "Oposiciones", "Entidades locales", "Administración local", "Sector público", "Autoridades y personal", "Ayuntamientos", "Novedades".
+    3. Busca bajo CUALQUIER apartado que indique empleo (ej: "Entidades locales", "Administración local", "Sector público", "Oposiciones").
     4. Devuelve la URL EXACTA que acompaña a cada resolución específica.
-    5. MUY IMPORTANTE: Ignora los enlaces que sean anclas internas de la misma página (que contengan "#" o "sumari"). Busca el enlace real al documento individual o al PDF (suele contener "document-del-dogc", "pdf" o enlazar a un detalle).
-    6. DEDUCCIÓN DEL DEPARTAMENTO: Si la resolución está debajo del nombre de un municipio (ejemplo: debajo de "ELX/ELCHE", "PETRER" o "SAX"), el departamento DEBE SER "Ayuntamiento de [Nombre del Municipio]".
+    5. DEDUCCIÓN DE DEPARTAMENTO INTELIGENTE: 
+       - Si la resolución está en la sección de "Entidades Locales", "Ayuntamientos" o "Administración Local", añade "Ayuntamiento de " seguido del nombre del municipio (ej: "Ayuntamiento de Torrevieja").
+       - Si la resolución está bajo "Administración de la Generalitat", "Conselleria", "Labora" o similar, el departamento DEBE SER "Generalitat Valenciana" o la Conselleria correspondiente. NUNCA escribas "Ayuntamiento de la Generalitat".
+    6. EXHAUSTIVIDAD: Debes extraer ABSOLUTAMENTE TODAS las convocatorias presentes en el texto. No resumas la lista ni te dejes ninguna del final.
     
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
@@ -726,7 +728,8 @@ async function extraerBoletines() {
           }
           if (!markdownWeb) continue;
 
-          if (markdownWeb.length > 12000) markdownWeb = markdownWeb.substring(0, 12000); 
+         // 💡 AUMENTAMOS A 30.000 para que entren las listas largas del DOGV sin cortarse
+          if (markdownWeb.length > 30000) markdownWeb = markdownWeb.substring(0, 30000); 
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listado = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
