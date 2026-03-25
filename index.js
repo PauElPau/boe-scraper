@@ -654,15 +654,18 @@ async function extraerBoletines() {
           for (const item of feed.items.reverse()) {
             if (iaDetenida) break; 
 
-            // 🛡️ NUEVO FILTRO: Ignorar noticias del RSS que no sean estrictamente de hoy
+            // 🛡️ NUEVO FILTRO: Ignorar noticias que no sean de hoy (A prueba de zonas horarias)
             if (item.pubDate || item.isoDate) {
                 const itemDate = new Date(item.isoDate || item.pubDate);
                 const hoy = new Date();
                 
-                // Comparamos si el día, mes y año son idénticos
-                if (itemDate.toDateString() !== hoy.toDateString()) {
-                    // Es de un día anterior, lo ignoramos para no gastar tokens
-                    continue; 
+                // Forzamos la comparación usando el calendario de España
+                const opcionesFecha = { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' };
+                const fechaItemEspaña = itemDate.toLocaleDateString('es-ES', opcionesFecha);
+                const fechaHoyEspaña = hoy.toLocaleDateString('es-ES', opcionesFecha);
+                
+                if (fechaItemEspaña !== fechaHoyEspaña) {
+                    continue; // No es de hoy, lo ignoramos
                 }
             }
             
