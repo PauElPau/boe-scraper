@@ -84,9 +84,9 @@ const FUENTES_BOLETINES = [
  // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
 
  // 🎯 La Rioja: Usamos la puerta trasera del buscador (Asegúrate de copiarla bien)
-{ nombre: "BOR", tipo: "rss", url: "https://web.larioja.org/bor-rss", ambito: "La Rioja" },
+{ nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-busqueda?fecha_inicio={DD}%2F{MM}%2F{YYYY}&fecha_fin={DD}%2F{MM}%2F{YYYY}", ambito: "La Rioja" },
   { nombre: "BOC_CANTABRIA", tipo: "rss", url: "https://boc.cantabria.es/boces/ultimoBoletinRss.do", ambito: "Cantabria" },  
-  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/ca/pdogc_canals_interns/pdogc_rss_oposicions/index.xml", ambito: "Cataluña" }
+  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" }
 
 ];
 
@@ -132,17 +132,27 @@ async function gestionarDepartamento(nombre) {
   await supabase.from('departments').upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
 }
 
+
+// 🛡️ TRAJE DE CAMUFLAJE: Falsificamos la huella digital de un Google Chrome español
+const CABECERAS_CAMUFLAJE = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+    "Sec-Ch-Ua": '"Chromium";v="122", "Not(A:Brand";v="24", "Google Chrome";v="122"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1"
+};
 // 🛡️ MEJORA: Escudo Anti-Geobloqueo (Si Github desde EE.UU. es bloqueado, usamos Proxy)
 async function obtenerTextoNativo(url) {
   let html = "";
   try {
-    const respuesta = await fetch(url, {
-        headers: { 
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "es-ES,es;q=0.9"
-        }
-    });
+    const respuesta = await fetch(url, { headers: CABECERAS_CAMUFLAJE });
+    if (!respuesta.ok) throw new Error("Fetch nativo rechazado");
     html = await respuesta.text();
   } catch (error) {
     console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
@@ -201,7 +211,11 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
         'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url: url }) 
+      body: JSON.stringify({ 
+        url: url,
+        // 🛡️ TRUCO CLOUDFLARE: Le obligamos a esperar a que la web deje de cargar cosas
+        goToOptions: { waitUntil: "networkidle2" }
+      })
     });
 
     if (response.status === 429) {
@@ -706,7 +720,7 @@ async function fetchRssConProxy(url) {
   };
 
   try {
-    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+    const res = await fetch(url, { headers: CABECERAS_CAMUFLAJE });
     return await verificarXML(res, "Nativo");
   } catch (e) {
     console.log(`   ⚠️ Nativo falló: ${e.message.substring(0,50)}. Activando AllOrigins...`);
