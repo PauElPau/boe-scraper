@@ -79,9 +79,18 @@ const FUENTES_BOLETINES = [
 //  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
 //{ nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
-  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada?fecha={YYYY}-{MM}-{DD}", ambito: "La Rioja" },
+ // { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada?fecha={YYYY}-{MM}-{DD}", ambito: "La Rioja" },
  // { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do?boton=siguiente#sec22", ambito: "Cantabria" },
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
+ // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
+
+ // 🎯 La Rioja: Usamos la puerta trasera del buscador (Asegúrate de copiarla bien)
+  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-busqueda?fecha_inicio={DD}%2F{MM}%2F{YYYY}&fecha_fin={DD}%2F{MM}%2F{YYYY}", ambito: "La Rioja" },
+  
+  // 🎯 Cantabria: Pasamos al modo RSS Oficial (Infalible)
+  { nombre: "BOC_CANTABRIA", tipo: "rss", url: "https://boc.cantabria.es/boces/ultimoBoletinRss.do", ambito: "Cantabria" },
+  
+  // 🎯 Cataluña: Pasamos al modo RSS Oficial (Adiós problemas de JavaScript)
+  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_rss_oposicions/index.html", ambito: "Cataluña" }
 
 ];
 
@@ -843,7 +852,10 @@ async function extraerBoletines() {
           } else {
               markdownWeb = await obtenerTextoUniversal(urlFinal);
           }
-          if (!markdownWeb) continue;
+         if (!markdownWeb) {
+              console.log(`   ❌ Silencio de radio. La web devolvió contenido nulo o Cloudflare falló internamente.`);
+              continue; 
+          }
 
           if (markdownWeb.length > 12000) markdownWeb = markdownWeb.substring(0, 12000); 
 
