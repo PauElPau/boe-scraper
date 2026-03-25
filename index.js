@@ -84,13 +84,9 @@ const FUENTES_BOLETINES = [
  // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
 
  // 🎯 La Rioja: Usamos la puerta trasera del buscador (Asegúrate de copiarla bien)
-  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-busqueda?fecha_inicio={DD}%2F{MM}%2F{YYYY}&fecha_fin={DD}%2F{MM}%2F{YYYY}", ambito: "La Rioja" },
-  
-  // 🎯 Cantabria: Pasamos al modo RSS Oficial (Infalible)
-  { nombre: "BOC_CANTABRIA", tipo: "rss", url: "https://boc.cantabria.es/boces/ultimoBoletinRss.do", ambito: "Cantabria" },
-  
-  // 🎯 Cataluña: Pasamos al modo RSS Oficial (Adiós problemas de JavaScript)
-  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_rss_oposicions/index.xml", ambito: "Cataluña" }
+{ nombre: "BOR", tipo: "rss", url: "https://web.larioja.org/bor-rss", ambito: "La Rioja" },
+  { nombre: "BOC_CANTABRIA", tipo: "rss", url: "https://boc.cantabria.es/boces/ultimoBoletinRss.do", ambito: "Cantabria" },  
+  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/ca/pdogc_canals_interns/pdogc_rss_oposicions/index.xml", ambito: "Cataluña" }
 
 ];
 
@@ -691,27 +687,41 @@ async function enviarReporteAdmin(insertadas, alertasEmail, alertasFavs, errores
   } catch (err) {}
 }
 
-async function fetchBufferConProxy(url) {
+async function fetchRssConProxy(url) {
+  // Función interna para validar que no nos han colado un HTML de bloqueo
+  const verificarXML = async (res, nombreProxy) => {
+    if (!res.ok) throw new Error(`${nombreProxy} falló con status HTTP ${res.status}`);
+    
+    const buffer = await res.arrayBuffer();
+    let decoder = new TextDecoder("utf-8");
+    const preview = decoder.decode(buffer.slice(0, 250));
+    if (preview.toLowerCase().includes('iso-8859-1')) decoder = new TextDecoder("iso-8859-1");
+    const textoLimpio = decoder.decode(buffer);
+
+    // Si el texto devuelto no empieza por XML o RSS, es una página de bloqueo.
+    if (!textoLimpio.trim().startsWith("<?xml") && !textoLimpio.toLowerCase().includes("<rss") && !textoLimpio.toLowerCase().includes("<feed")) {
+        throw new Error(`Bloqueo WAF: ${nombreProxy} devolvió una página web (HTML) en lugar del XML esperado.`);
+    }
+    return textoLimpio;
+  };
+
   try {
     const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
-    if (!res.ok) throw new Error("Nativo bloqueado");
-    return await res.arrayBuffer();
+    return await verificarXML(res, "Nativo");
   } catch (e) {
-    console.log(`   ⚠️ RSS Nativo bloqueado. Activando proxy AllOrigins...`);
+    console.log(`   ⚠️ Nativo falló: ${e.message.substring(0,50)}. Activando AllOrigins...`);
     try {
       const res2 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
-      if (!res2.ok) throw new Error("AllOrigins bloqueado");
-      return await res2.arrayBuffer();
+      return await verificarXML(res2, "AllOrigins");
     } catch (e2) {
-      console.log(`   ⚠️ AllOrigins bloqueado. Activando proxy CodeTabs...`);
+      console.log(`   ⚠️ AllOrigins falló: ${e2.message.substring(0,50)}. Activando CodeTabs...`);
       try {
           const res3 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
-          if (!res3.ok) throw new Error("CodeTabs bloqueado");
-          return await res3.arrayBuffer();
+          return await verificarXML(res3, "CodeTabs");
       } catch (e3) {
-          console.log(`   ⚠️ CodeTabs bloqueado. Activando CorsProxy (Plan E)...`);
+          console.log(`   ⚠️ CodeTabs falló: ${e3.message.substring(0,50)}. Activando CorsProxy (Plan E)...`);
           const res4 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
-          return await res4.arrayBuffer();
+          return await verificarXML(res4, "CorsProxy");
       }
     }
   }
@@ -734,11 +744,7 @@ async function extraerBoletines() {
       try {
         if (fuente.tipo === "rss") {
           // 🛡️ NUEVO: Descargamos el XML atravesando hasta 4 proxies si es necesario
-          const buffer = await fetchBufferConProxy(fuente.url);
-          let decoder = new TextDecoder("utf-8"); 
-          const preview = new TextDecoder("utf-8").decode(buffer.slice(0, 250));
-          if (preview.toLowerCase().includes('iso-8859-1')) decoder = new TextDecoder("iso-8859-1"); 
-          const xmlDecodificado = decoder.decode(buffer);
+          const xmlDecodificado = await fetchRssConProxy(fuente.url);
           const feed = await parser.parseString(xmlDecodificado);
 
           for (const item of feed.items.reverse()) {
