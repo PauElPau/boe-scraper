@@ -90,7 +90,7 @@ const FUENTES_BOLETINES = [
   { nombre: "BOC_CANTABRIA", tipo: "rss", url: "https://boc.cantabria.es/boces/ultimoBoletinRss.do", ambito: "Cantabria" },
   
   // 🎯 Cataluña: Pasamos al modo RSS Oficial (Adiós problemas de JavaScript)
-  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_rss_oposicions/index.html", ambito: "Cataluña" }
+  { nombre: "DOGC", tipo: "rss", url: "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_rss_oposicions/index.xml", ambito: "Cataluña" }
 
 ];
 
@@ -159,14 +159,21 @@ async function obtenerTextoNativo(url) {
     } catch (e2) {
       console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
       try {
-        // Plan D: Usamos CodeTabs (Suele saltar firewalls gubernamentales)
         const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
         const resProxy2 = await fetch(proxyUrl2);
         if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
         html = await resProxy2.text();
       } catch (e3) {
-        console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
-        return { texto: null, pdf: null }; 
+        console.log(`   ⚠️ CodeTabs bloqueado. Activando Plan E (CorsProxy)...`);
+        try {
+           const proxyUrl3 = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+           const resProxy3 = await fetch(proxyUrl3);
+           if (!resProxy3.ok) throw new Error("CorsProxy denegado");
+           html = await resProxy3.text();
+        } catch (e4) {
+           console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
+           return { texto: null, pdf: null }; 
+        }
       }
     }
   }
@@ -684,6 +691,32 @@ async function enviarReporteAdmin(insertadas, alertasEmail, alertasFavs, errores
   } catch (err) {}
 }
 
+async function fetchBufferConProxy(url) {
+  try {
+    const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
+    if (!res.ok) throw new Error("Nativo bloqueado");
+    return await res.arrayBuffer();
+  } catch (e) {
+    console.log(`   ⚠️ RSS Nativo bloqueado. Activando proxy AllOrigins...`);
+    try {
+      const res2 = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`);
+      if (!res2.ok) throw new Error("AllOrigins bloqueado");
+      return await res2.arrayBuffer();
+    } catch (e2) {
+      console.log(`   ⚠️ AllOrigins bloqueado. Activando proxy CodeTabs...`);
+      try {
+          const res3 = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+          if (!res3.ok) throw new Error("CodeTabs bloqueado");
+          return await res3.arrayBuffer();
+      } catch (e3) {
+          console.log(`   ⚠️ CodeTabs bloqueado. Activando CorsProxy (Plan E)...`);
+          const res4 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+          return await res4.arrayBuffer();
+      }
+    }
+  }
+}
+
 // --- 8. BUCLE PRINCIPAL ---
 async function extraerBoletines() {
   const startTime = Date.now(); 
@@ -700,13 +733,13 @@ async function extraerBoletines() {
       
       try {
         if (fuente.tipo === "rss") {
-          const resRss = await fetch(fuente.url, { headers: { "User-Agent": "Mozilla/5.0" } });
-          const buffer = await resRss.arrayBuffer();
+          // 🛡️ NUEVO: Descargamos el XML atravesando hasta 4 proxies si es necesario
+          const buffer = await fetchBufferConProxy(fuente.url);
           let decoder = new TextDecoder("utf-8"); 
           const preview = new TextDecoder("utf-8").decode(buffer.slice(0, 250));
           if (preview.toLowerCase().includes('iso-8859-1')) decoder = new TextDecoder("iso-8859-1"); 
           const xmlDecodificado = decoder.decode(buffer);
-          const feed = await parser.parseString(xmlDecodificado); 
+          const feed = await parser.parseString(xmlDecodificado);
 
           for (const item of feed.items.reverse()) {
             if (iaDetenida) break; 
