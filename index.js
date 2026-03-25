@@ -16,24 +16,39 @@ const supabase = createClient(
 );
 
 const groqKeys = [process.env.GROQ_API_KEY, process.env.GROQ_API_KEY_2].filter(Boolean);
-let currentKeyIndex = 0;
-let iaDetenida = false; 
+let llavesActivas = [...groqKeys]; // Copia de trabajo dinámica
+let rrIndex = 0; // Índice para el Round-Robin
+let iaDetenida = false;
 
 function getGroqClient() {
+  if (llavesActivas.length === 0) {
+    iaDetenida = true;
+    throw new Error("IA_DETENIDA");
+  }
+  
+  // 🔀 BALANCEO ROUND-ROBIN: Usamos la llave tocante y avanzamos el contador
+  const keyToUse = llavesActivas[rrIndex % llavesActivas.length];
+  rrIndex++;
+  
   return new OpenAI({
-    apiKey: groqKeys[currentKeyIndex],
+    apiKey: keyToUse,
     baseURL: "https://api.groq.com/openai/v1",
   });
 }
 
-function rotarKeyGroq() {
-  currentKeyIndex++;
-  if (currentKeyIndex >= groqKeys.length || !groqKeys[currentKeyIndex]) {
+function reportarFalloKey() {
+  // Como rrIndex ya avanzó, la llave que acaba de dar Error 429 es la anterior
+  const indexFallido = (rrIndex - 1) % llavesActivas.length;
+  console.warn(`⚠️ Llave de Groq saturada (429). Retirándola de la rotación activa...`);
+  
+  // Eliminamos la llave temporalmente de la rotación
+  llavesActivas.splice(indexFallido, 1);
+  
+  if (llavesActivas.length === 0) {
     console.error("❌ Todas las API Keys de Groq han agotado su cuota. Apagando motores por hoy.");
-    iaDetenida = true; 
-    return false; 
+    iaDetenida = true;
+    return false;
   }
-  console.log(`🔄 Cuota agotada. Cambiando a la API Key secundaria de Groq (Key ${currentKeyIndex + 1})...`);
   return true;
 }
 
@@ -43,15 +58,17 @@ const parser = new Parser({
   },
 });
 
+
+
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+//  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+//  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+//  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+//  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+//  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+//  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
   { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
   { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
@@ -227,10 +244,12 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     });
     return JSON.parse(response.choices[0].message.content).convocatorias || [];
   } catch (error) {
+    if (error.message === "IA_DETENIDA") return [];
+    
     if (error.message.includes('429 Rate limit reached') || error.status === 429) {
-        if (rotarKeyGroq()) {
+        if (reportarFalloKey()) {
             await esperar(2000);
-            return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin);
+            return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin); // Reintenta con la llave que queda viva
         }
     }
     return [];
@@ -280,14 +299,35 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
+    if (error.message === "IA_DETENIDA") return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
+    
     if (error.message.includes('429 Rate limit reached') || error.status === 429) {
-        if (rotarKeyGroq()) {
+        if (reportarFalloKey()) {
             await esperar(2000);
-            return analizarConvocatoriaIA(titulo, textoInterior);
+            return analizarConvocatoriaIA(titulo, textoInterior); // Reintenta con la llave que queda viva
         }
     }
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
   }
+}
+
+// 🛡️ ESCUDO PRE-FILTRADO: Detecta basura administrativa por el título
+function esTramiteBasura(titulo) {
+  if (!titulo) return false;
+  const t = titulo.toLowerCase();
+
+  // 1. Ceses, renuncias y jubilaciones
+  const esCese = t.includes('cese') || t.includes('jubilación') || t.includes('jubilacion') || t.includes('renuncia');
+  
+  // 2. Nombramiento de Tribunales (Bloquea designaciones, pero deja pasar fechas de examen y notas)
+  const accionTribunal = t.includes('nombramiento') || t.includes('designación') || t.includes('composición') || t.includes('modificación');
+  const esTribunal = t.includes('tribunal') || t.includes('comisión de selección') || t.includes('comisión de valoración') || t.includes('órgano de selección');
+  const esNombramientoTribunal = accionTribunal && esTribunal;
+
+  // 3. Ruido clásico de boletines (Subvenciones, convenios, licitaciones)
+  const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvencion') || t.includes('licitación') || t.includes('adjudicación de contrato') || t.includes('impacto ambiental');
+
+  return esCese || esNombramientoTribunal || esRuido;
 }
 
 // --- 6. LÓGICA DE BASE DE DATOS ---
@@ -685,12 +725,45 @@ async function extraerBoletines() {
                 if (tituloFinal.length > 200) tituloFinal = tituloFinal.substring(0, 200) + "..."; 
             }
 
+            // 🛑 NUEVO: Filtramos la basura antes de hacer NADA
+            if (esTramiteBasura(tituloFinal)) {
+                console.log(`   🧹 Barrido por el Topo (Regex): ${tituloFinal.substring(0,60)}...`);
+                continue;
+            }
+
             const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
             const categoriaOrganismo = item.categories?.[1] || fuente.ambito;
 
+            // Encontrar enlaces PDF incrustados en el RSS de forma nativa
+            let enlacePdfRss = item.enclosure?.url || null;
+            if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
+
+            // 🛡️ PARCHE CANARIAS (BOC): Sus enlaces RSS llevan a un 404. Reconstruimos desde el GUID.
+            if (fuente.nombre === "BOC" && item.guid && item.guid.includes("BOC-A-")) {
+                const partesGuid = item.guid.split("-"); // Esto lo divide en ["BOC", "A", "2026", "058", "971"]
+                if (partesGuid.length === 5) {
+                    const anio = partesGuid[2];
+                    const boletinNum = partesGuid[3];
+                    const docNum = partesGuid[4];
+                    
+                    // Sobrescribimos el enlace roto por el bueno
+                    item.link = `https://www.gobiernodecanarias.org/boc/${anio}/${boletinNum}/${docNum}.html`;
+                    // Fabricamos el PDF directo que has descubierto
+                    enlacePdfRss = `https://sede.gobiernodecanarias.org/boc/boc-a-${anio}-${boletinNum}-${docNum}.pdf`.toLowerCase();
+                    
+                    console.log(`   🔧 BOC Canarias: URL arreglada internamente -> ${item.link}`);
+                }
+            }
+
+            // 🛡️ PARCHE ARAGÓN (BOA): Sus enlaces RSS vienen rotos (relativos)
+            if (fuente.nombre === "BOA" && item.link && item.link.startsWith('/cgi-bin')) {
+                item.link = "https://www.boa.aragon.es" + item.link;
+                console.log(`   🔧 BOA Aragón: URL arreglada internamente -> ${item.link}`);
+            }
+
             console.log(`\n📄 Extrayendo interior de: ${tituloFinal.substring(0,60)}...`);
             let textoParaIA = null;
-            let pdfExtraidoNativo = null; 
+            let pdfExtraidoNativo = null;
 
             if (["BOE", "DOG", "BOCM", "BOJA"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
@@ -703,17 +776,15 @@ async function extraerBoletines() {
             }
             
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
-            if (textoParaIA && textoParaIA.length > 8000) textoParaIA = textoParaIA.substring(0, 8000) + "... [Texto cortado]";
+            if (textoParaIA && textoParaIA.length > 4500) textoParaIA = textoParaIA.substring(0, 4500) + "... [Texto cortado]";
             
-            let enlacePdfRss = item.enclosure?.url || null;
-            if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
             await procesarYGuardarConvocatoria({ 
               title: tituloFinal, link: item.link, guid: item.guid, 
               pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(1500);
+            await esperar(8000);
           }
         } 
         
@@ -775,7 +846,12 @@ async function extraerBoletines() {
           for (const item of listado) {
             if (iaDetenida) break; 
             const t = item.titulo.toLowerCase();
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30) continue;
+            
+            // 🛑 NUEVO: Usamos nuestra función de Regex avanzada
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30 || esTramiteBasura(item.titulo)) {
+                console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...`);
+                continue;
+            }
 
             // 🛡️ EL ESCUDO ANTI-404: Ignorar anclas internas (Arregla Cataluña)
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
@@ -789,6 +865,7 @@ async function extraerBoletines() {
             try {
                 if (!enlaceFinal.startsWith('http')) {
                     const urlBaseObj = new URL(fuente.url);
+                    
                     if (enlaceFinal.startsWith('/')) {
                         enlaceFinal = urlBaseObj.origin + enlaceFinal;
                     } else {
@@ -818,14 +895,14 @@ async function extraerBoletines() {
             }
             if (!textoInterior) continue;
 
-            if (textoInterior.length > 5000) textoInterior = textoInterior.substring(0, 5000) + "... [Texto cortado]";
+            if (textoInterior.length > 4500) textoInterior = textoInterior.substring(0, 4500) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, link: enlaceFinal, guid: enlaceFinal, 
               pdf_extraido: pdfExtraidoNativo, section: `Boletín ${fuente.nombre}`, department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(1500);
+            await esperar(8000);
           }
         }
       } catch (err) {
