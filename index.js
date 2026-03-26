@@ -41,9 +41,9 @@ const FUENTES_BOLETINES = [
 //   { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
   { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
-  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
-  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+//  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
+//  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+//  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
  //  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
 //   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
@@ -94,7 +94,7 @@ async function gestionarDepartamento(nombre) {
   await supabase.from('departments').upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
 }
 
-// 🛡️ MEJORA: Escudo Anti-Geobloqueo y Atajo Directo
+// 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let html = "";
   
@@ -110,11 +110,10 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
       return { texto: null, pdf: null }; 
     }
   } else {
-    // Cascada de proxies original para el resto de boletines
     try {
       const respuesta = await fetch(url, {
           headers: { 
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
               "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
               "Accept-Language": "es-ES,es;q=0.9"
           }
@@ -145,11 +144,23 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
 
   const $ = cheerio.load(html);
   let pdfLink = null;
+  
+  // 🧠 MAGIA AQUÍ: Convertimos los enlaces <a> en texto Markdown para que la IA los vea
   $('a').each((i, el) => {
       const href = $(el).attr('href');
-      if (href && (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc'))) {
-          try { pdfLink = new URL(href, url).href; } catch(e){}
-          return false; 
+      if (!href) return;
+      
+      // Guardamos el PDF directo si lo hay (Escudo Anti-PDF)
+      if (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc')) {
+          if (!pdfLink) {
+              try { pdfLink = new URL(href, url).href; } catch(e){}
+          }
+      }
+      
+      // Reescribimos el texto del enlace para que .text() no lo borre
+      const textoEnlace = $(el).text().replace(/\s+/g, ' ').trim();
+      if (textoEnlace && !href.startsWith('javascript') && !href.startsWith('#')) {
+          $(el).text(`[${textoEnlace}](${href})`);
       }
   });
 
@@ -160,7 +171,6 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
   return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
 }
- 
 async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
@@ -901,7 +911,7 @@ async function extraerBoletines() {
             if (iaDetenida) break; 
             const t = item.titulo.toLowerCase();
             
-            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30 || esTramiteBasura(item.titulo)) {
+            if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || esTramiteBasura(item.titulo)) {
                 console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...\n      🔗 ${item.enlace}`);
                 continue;
             }
