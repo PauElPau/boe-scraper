@@ -94,35 +94,51 @@ async function gestionarDepartamento(nombre) {
   await supabase.from('departments').upsert({ name: nombre, slug: slugDep }, { onConflict: 'slug', ignoreDuplicates: true });
 }
 
-// 🛡️ MEJORA: Escudo Anti-Geobloqueo
-async function obtenerTextoNativo(url) {
+// 🛡️ MEJORA: Escudo Anti-Geobloqueo y Atajo Directo
+async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let html = "";
-  try {
-    const respuesta = await fetch(url, {
-        headers: { 
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "es-ES,es;q=0.9"
-        }
-    });
-    html = await respuesta.text();
-  } catch (error) {
-    console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
+  
+  if (forzarCodeTabs) {
+    console.log(`   🚀 Atajo activado: Saltando barreras y yendo directo al Plan D (CodeTabs)...`);
     try {
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
       const resProxy = await fetch(proxyUrl);
-      if (!resProxy.ok) throw new Error("Proxy denegado");
+      if (!resProxy.ok) throw new Error("Proxy CodeTabs denegado");
       html = await resProxy.text();
-    } catch (e2) {
-      console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
+    } catch (e) {
+      console.error(`   ❌ Imposible acceder a la web con CodeTabs directo: ${url}`);
+      return { texto: null, pdf: null }; 
+    }
+  } else {
+    // Cascada de proxies original para el resto de boletines
+    try {
+      const respuesta = await fetch(url, {
+          headers: { 
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+              "Accept-Language": "es-ES,es;q=0.9"
+          }
+      });
+      if (!respuesta.ok) throw new Error("Nativo bloqueado");
+      html = await respuesta.text();
+    } catch (error) {
+      console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
       try {
-        const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-        const resProxy2 = await fetch(proxyUrl2);
-        if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
-        html = await resProxy2.text();
-      } catch (e3) {
-        console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
-        return { texto: null, pdf: null }; 
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const resProxy = await fetch(proxyUrl);
+        if (!resProxy.ok) throw new Error("Proxy denegado");
+        html = await resProxy.text();
+      } catch (e2) {
+        console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
+        try {
+          const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+          const resProxy2 = await fetch(proxyUrl2);
+          if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
+          html = await resProxy2.text();
+        } catch (e3) {
+          console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
+          return { texto: null, pdf: null }; 
+        }
       }
     }
   }
@@ -238,19 +254,19 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
   {
     "tipo": "Enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR']. Si es un convenio o subvención, devuelve 'IGNORAR'.",
-    "plazas": "Integer numérico. Busca cuántas plazas, puestos o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si es plaza única, 1. Si es bolsa, null.",
+    "plazas": "Integer numérico. Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si es bolsa, null.",
     "resumen": "Resumen claro de 1-2 frases.",
     "descripcion_extendida": "Redacta un párrafo atractivo y humano de unas 4 líneas. Describe en qué consiste la oferta o el puesto y da un breve contexto sobre la entidad, organismo o localidad que lo convoca. Tono profesional, informativo y útil para el opositor.",
-    "plazo_numero": "Integer numérico. Extrae SOLO la cantidad numérica del plazo (ej: 20). Si no hay plazo, null.",
-    "plazo_tipo": "String. Extrae SOLO el tipo de días del plazo (ej: 'hábiles', 'naturales', 'meses'). Si no hay plazo, null.",
+    "plazo_numero": "Integer numérico. Extrae SOLO la cantidad numérica del plazo (ej: 20). Si no hay plazo explícito, null.",
+    "plazo_tipo": "Enum estricto: ['hábiles', 'naturales', 'meses', null]. Si el texto dice 'días hábiles', devuelve 'hábiles'. NUNCA devuelvas la palabra 'días' a secas.",
     "grupo": "Enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null]. Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.",
-    "sistema": "Enum: ['Oposición', 'Concurso-oposición', 'Concurso', null].",
+    "sistema": "Enum estricto: ['Oposición', 'Concurso-oposición', 'Concurso', null].",
     "profesiones": "Array de Strings. Nombres limpios de los puestos. Si no hay, [].",
-    "provincia": "Enum. Deduce la provincia EXACTA. 🌍 IMPORTANTE: Si el texto menciona un municipio o ayuntamiento (ej: 'Ayuntamiento de Sabadell'), UTILIZA TU CONOCIMIENTO GEOGRÁFICO para deducir la provincia correcta ('Barcelona'). DEBES devolver SOLAMENTE una de estas 53 opciones: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal'].",
-    "titulacion": "Titulación mínima exigida. Si no se menciona, null.",
-    "enlace_inscripcion": "URL exacta para presentar instancia. Si no, null.",
-    "tasa": "Importe de la tasa numérico. Si no, null.",
-    "boletin_origen_nombre": "Si menciona que las bases íntegras están en otro boletín, extrae SOLO el nombre. Si no, null.",
+    "provincia": "Enum. Deduce la provincia EXACTA. 🌍 IMPORTANTE: Si el texto menciona un municipio, UTILIZA TU CONOCIMIENTO GEOGRÁFICO para deducir la provincia. Opciones válidas: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal']. NUNCA devuelvas pueblos.",
+    "titulacion": "Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso. Si no se menciona, null.",
+    "enlace_inscripcion": "URL exacta para presentar instancia (sede electrónica). Si no hay, null.",
+    "tasa": "Importe de la tasa (derechos de examen) numérico. Ej: 15.20. Si no hay, null.",
+    "boletin_origen_nombre": "Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo o nombre (ej: 'BOE', 'BOP Córdoba'). Si no, null.",
     "boletin_origen_fecha": "Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'. Si no, null.",
     "referencia_boe_original": "Código BOE original (BOE-A-YYYY-XXXX). Si no, null.",
     "organismo": "Nombre exacto del ayuntamiento, diputación u organismo. Si no lo encuentras, null.",
@@ -262,7 +278,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.2, // Lo subimos un poco (de 0.0 a 0.2) para darle un pelín de soltura redactando la descripción extendida
+      temperature: 0.1, // Balance perfecto: determinista para los Enums, un pelín creativo para la descripción
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: "You output strict JSON. Respond ONLY with valid JSON." }, { role: "user", content: prompt }]
     });
@@ -290,6 +306,28 @@ function esTramiteBasura(titulo) {
   return esCese || esNombramientoTribunal || esRuido;
 }
 
+// 🧠 NEUTRALIZADOR DE PALABRAS (Stemmer para Fuzzy Matching)
+function limpiarPalabraParaFuzzy(palabra) {
+  // 1. Quitar acentos, puntuación y pasar a minúsculas
+  let p = palabra.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, "").toLowerCase();
+  
+  // 2. Quitar sufijos de género típicos (/a, (a))
+  p = p.replace(/\/a$/, '').replace(/\(a\)$/, '');
+  
+  // 3. Quitar plurales básicos ('s' o 'es') si la palabra es larga
+  if (p.length > 4 && p.endsWith('s')) p = p.slice(0, -1);
+  if (p.length > 4 && p.endsWith('e')) p = p.slice(0, -1); 
+  
+  // 4. Normalizar abreviaturas clásicas de la Administración
+  if (p === 'adm' || p.startsWith('admin')) return 'admin';
+  if (p === 'gen' || p.startsWith('gener')) return 'gener';
+  if (p.startsWith('tecnic')) return 'tecnic';
+  if (p.startsWith('auxil')) return 'auxil';
+  if (p.startsWith('ayud')) return 'ayud';
+  
+  return p;
+}
+
 // --- 6. LÓGICA DE BASE DE DATOS ---
 async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
   if (!textoParaIA || textoParaIA.length < 50) return;
@@ -315,33 +353,57 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
-  if (departamentoFinal) {
+  // 🥇 PRIORIDAD 1: Cruce seguro e infalible por Referencia BOE
+  if (analisisIA.referencia_boe_original) {
+    const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
+      .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
+    
+    if (parentMatch) {
+        parentSlug = parentMatch.slug;
+        console.log(`   🔗 Enlazado de forma SEGURA por código BOE al padre: ${parentSlug}`);
+    }
+  }
+
+  // 🥈 PRIORIDAD 2: Fuzzy Matching (Solo si no hemos encontrado el BOE)
+  if (!parentSlug && departamentoFinal && profesionPrincipal) {
     const { data: posiblesPadres } = await supabase
       .from('convocatorias')
       .select('slug, type, link_boe, profesion, profesiones')
       .ilike('department', `%${departamentoFinal}%`)
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
-      .limit(15); 
+      .limit(20); // Aumentamos un poco la ventana de búsqueda a 20
 
     if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = null;
-      if (profesionPrincipal) {
-        const ignorar = ["de", "la", "el", "en", "para", "del", "las", "los", "jefe/a", "jefe", "jefa", "superior", "técnico", "tecnico"];
-        const palabrasClave = profesionPrincipal.toLowerCase().split(' ').filter(w => w.length > 3 && !ignorar.includes(w));
-        
-        if (palabrasClave.length > 0) {
-            plazaExistente = posiblesPadres.find(padre => {
-               const profPadre = (padre.profesion || '').toLowerCase();
-               const coincidencias = palabrasClave.filter(palabra => profPadre.includes(palabra)).length;
-               return (coincidencias / palabrasClave.length) >= 0.6;
-            });
-        }
+      
+      // Palabras que no aportan valor
+      const ignorar = ["de", "la", "el", "en", "para", "del", "las", "los", "jefe", "jefa", "superior", "cuerpo", "escala", "plaza", "plazas", "turno", "libre", "acceso"];
+      
+      // Pasamos las palabras de la profesión por nuestro Neutralizador
+      const palabrasClave = profesionPrincipal.split(' ')
+        .map(limpiarPalabraParaFuzzy)
+        .filter(w => w.length > 3 && !ignorar.includes(w));
+      
+      if (palabrasClave.length > 0) {
+          plazaExistente = posiblesPadres.find(padre => {
+             const profPadreStr = (padre.profesion || '');
+             // Neutralizamos también la profesión del padre en BD
+             const profPadreLimpia = profPadreStr.split(' ').map(limpiarPalabraParaFuzzy).join(' ');
+             
+             let coincidencias = 0;
+             for (const palabra of palabrasClave) {
+                 if (profPadreLimpia.includes(palabra)) coincidencias++;
+             }
+             
+             // 📉 BAJAMOS EL UMBRAL: Con que coincida el 50% es suficiente
+             return (coincidencias / palabrasClave.length) >= 0.5;
+          });
       }
 
       if (plazaExistente) {
         if (esTramite) {
-          console.log(`   🔗 Trámite detectado de forma segura. Enlazando al padre: ${plazaExistente.slug}...`);
+          console.log(`   🔗 Trámite detectado por Fuzzy Matching (50%). Enlazando al padre: ${plazaExistente.slug}...`);
           parentSlug = plazaExistente.slug;
         } else {
           console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
@@ -350,7 +412,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
                   link_boe: itemData.link, publication_date: new Date().toISOString().split('T')[0] 
               }).eq('slug', plazaExistente.slug);
           }
-          return; 
+          return; // Abortamos la inserción si es duplicado
         }
       }
     }
@@ -775,6 +837,10 @@ async function extraerBoletines() {
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
+          } else if (fuente.nombre === "BOPA") {
+              // 🚀 ATAJO BOPA: Descargar la portada directo por CodeTabs
+              const nativo = await obtenerTextoNativo(urlFinal, true);
+              markdownWeb = nativo.texto;
           } else {
               markdownWeb = await obtenerTextoUniversal(urlFinal);
           }
@@ -835,8 +901,18 @@ async function extraerBoletines() {
             let textoInterior = null;
             let pdfExtraidoNativo = null; 
             
-            if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
-                 const nativo = await obtenerTextoNativo(enlaceFinal);
+            // 🛡️ ESCUDO ANTI-PDF y RUTAS RÁPIDAS
+            if (enlaceFinal.toLowerCase().includes('.pdf')) {
+                console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
+                textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
+                pdfExtraidoNativo = enlaceFinal;
+            } else if (fuente.nombre === "BOPA") {
+                 // 🚀 ATAJO BOPA: Bajar el interior directo por CodeTabs
+                 const nativo = await obtenerTextoNativo(enlaceFinal, true);
+                 textoInterior = nativo.texto;
+                 pdfExtraidoNativo = nativo.pdf;
+            } else if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
+                 const nativo = await obtenerTextoNativo(enlaceFinal, false);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else {
