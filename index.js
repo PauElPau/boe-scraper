@@ -249,38 +249,75 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   TÍTULO: ${titulo}
   TEXTO WEB: ${textoInterior}
   
-  ⚠️ REGLA CRÍTICA: Debes ceñirte a los valores enumerados (Enums) proporcionados. SIEMPRE debes devolver un JSON sintácticamente válido.
-  
-  Devuelve ÚNICAMENTE un objeto JSON válido con esta estructura exacta:
-  {
-    "tipo": "Enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR']. Si es un convenio o subvención, devuelve 'IGNORAR'.",
-    "plazas": "Integer numérico. Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si es bolsa, null.",
-    "resumen": "Resumen claro de 1-2 frases.",
-    "descripcion_extendida": "Redacta un párrafo atractivo y humano de unas 4 líneas. Describe en qué consiste la oferta o el puesto y da un breve contexto sobre la entidad, organismo o localidad que lo convoca. Tono profesional, informativo y útil para el opositor.",
-    "plazo_numero": "Integer numérico. Extrae SOLO la cantidad numérica del plazo (ej: 20). Si no hay plazo explícito, null.",
-    "plazo_tipo": "Enum estricto: ['hábiles', 'naturales', 'meses', null]. Si el texto dice 'días hábiles', devuelve 'hábiles'. NUNCA devuelvas la palabra 'días' a secas.",
-    "grupo": "Enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null]. Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.",
-    "sistema": "Enum estricto: ['Oposición', 'Concurso-oposición', 'Concurso', null].",
-    "profesiones": "Array de Strings. Nombres limpios de los puestos. Si no hay, [].",
-    "provincia": "Enum. Deduce la provincia EXACTA. 🌍 IMPORTANTE: Si el texto menciona un municipio, UTILIZA TU CONOCIMIENTO GEOGRÁFICO para deducir la provincia. Opciones válidas: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal']. NUNCA devuelvas pueblos.",
-    "titulacion": "Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso. Si no se menciona, null.",
-    "enlace_inscripcion": "URL exacta para presentar instancia (sede electrónica). Si no hay, null.",
-    "tasa": "Importe de la tasa (derechos de examen) numérico. Ej: 15.20. Si no hay, null.",
-    "boletin_origen_nombre": "Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo o nombre (ej: 'BOE', 'BOP Córdoba'). Si no, null.",
-    "boletin_origen_fecha": "Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'. Si no, null.",
-    "referencia_boe_original": "Código BOE original (BOE-A-YYYY-XXXX). Si no, null.",
-    "organismo": "Nombre exacto del ayuntamiento, diputación u organismo. Si no lo encuentras, null.",
-    "meta_description": "Descripción corta (máx 150 caracteres) directa al grano, ideal para SEO.",
-    "enlace_pdf": "URL directa al documento oficial PDF. Si no hay, null."
-  }
+  ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN:
+  - plazas: Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si habla en singular ("un puesto", "la plaza", "la vacante"), el valor es 1. Si es bolsa, null.
+  - resumen: Resumen claro de 1-2 frases.
+  - descripcion_extendida: Redacta un párrafo atractivo y humano de unas 4 líneas. Describe en qué consiste la oferta o el puesto y da un breve contexto sobre la entidad, organismo o localidad que lo convoca. Tono profesional, informativo y útil para el opositor.
+  - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
+  - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
+  - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
+  - sistema: Deduce si es Oposición, Concurso-oposición o Concurso.
+  - profesiones: Nombres limpios de los puestos.
+  - provincia: 🌍 IMPORTANTE: Si el texto menciona un municipio, UTILIZA TU CONOCIMIENTO GEOGRÁFICO para deducir la provincia exacta.
+  - titulacion: Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso.
+  - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
+  - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
+  - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo o nombre (ej: 'BOE', 'BOP Córdoba').
+  - boletin_origen_fecha: Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'.
+  - referencia_boe_original: Código BOE original (BOE-A-YYYY-XXXX).
+  - organismo: Nombre exacto del ayuntamiento, diputación u organismo.
+  - meta_description: Descripción corta (máx 150 caracteres) directa al grano, ideal para SEO.
+  - enlace_pdf: URL directa al documento oficial PDF.
   `;
 
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.1, // Balance perfecto: determinista para los Enums, un pelín creativo para la descripción
-      response_format: { type: "json_object" },
-      messages: [{ role: "system", content: "You output strict JSON. Respond ONLY with valid JSON." }, { role: "user", content: prompt }]
+      temperature: 0.1, // Balance para permitir creatividad en la descripción extendida
+      messages: [
+        { role: "system", content: "Extrae los datos estructurados siguiendo estrictamente el esquema y las reglas proporcionadas." },
+        { role: "user", content: prompt }
+      ],
+      // 🛡️ EL CANDADO DE TITANIO: Obliga a la IA a devolver la estructura exacta y sin inventar valores
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "convocatoria_schema",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              tipo: { 
+                type: "string", 
+                enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR'] 
+              },
+              plazas: { type: ["integer", "null"] },
+              resumen: { type: "string" },
+              descripcion_extendida: { type: "string" },
+              plazo_numero: { type: ["integer", "null"] },
+              plazo_tipo: { type: ["string", "null"], enum: ['hábiles', 'naturales', 'meses', null] },
+              grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
+              sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-oposición', 'Concurso', null] },
+              profesiones: { type: "array", items: { type: "string" } },
+              provincia: { 
+                type: "string", 
+                enum: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal'] 
+              },
+              titulacion: { type: ["string", "null"] },
+              enlace_inscripcion: { type: ["string", "null"] },
+              tasa: { type: ["number", "null"] },
+              boletin_origen_nombre: { type: ["string", "null"] },
+              boletin_origen_fecha: { type: ["string", "null"] },
+              referencia_boe_original: { type: ["string", "null"] },
+              organismo: { type: ["string", "null"] },
+              meta_description: { type: "string" },
+              enlace_pdf: { type: ["string", "null"] }
+            },
+            required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
+            additionalProperties: false
+          }
+        }
+      }
     });
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
@@ -288,6 +325,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       await esperar(3000);
       return analizarConvocatoriaIA(titulo, textoInterior);
     }
+    console.error("❌ Error en analizarConvocatoriaIA:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
   }
 }
@@ -364,7 +402,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     }
   }
 
-  // 🥈 PRIORIDAD 2: Fuzzy Matching (Solo si no hemos encontrado el BOE)
+  // 🥈 PRIORIDAD 2: Fuzzy Matching
   if (!parentSlug && departamentoFinal && profesionPrincipal) {
     const { data: posiblesPadres } = await supabase
       .from('convocatorias')
@@ -372,31 +410,21 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       .ilike('department', `%${departamentoFinal}%`)
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
-      .limit(20); // Aumentamos un poco la ventana de búsqueda a 20
+      .limit(20); 
 
     if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = null;
-      
-      // Palabras que no aportan valor
       const ignorar = ["de", "la", "el", "en", "para", "del", "las", "los", "jefe", "jefa", "superior", "cuerpo", "escala", "plaza", "plazas", "turno", "libre", "acceso"];
-      
-      // Pasamos las palabras de la profesión por nuestro Neutralizador
-      const palabrasClave = profesionPrincipal.split(' ')
-        .map(limpiarPalabraParaFuzzy)
-        .filter(w => w.length > 3 && !ignorar.includes(w));
+      const palabrasClave = profesionPrincipal.split(' ').map(limpiarPalabraParaFuzzy).filter(w => w.length > 3 && !ignorar.includes(w));
       
       if (palabrasClave.length > 0) {
           plazaExistente = posiblesPadres.find(padre => {
              const profPadreStr = (padre.profesion || '');
-             // Neutralizamos también la profesión del padre en BD
              const profPadreLimpia = profPadreStr.split(' ').map(limpiarPalabraParaFuzzy).join(' ');
-             
              let coincidencias = 0;
              for (const palabra of palabrasClave) {
                  if (profPadreLimpia.includes(palabra)) coincidencias++;
              }
-             
-             // 📉 BAJAMOS EL UMBRAL: Con que coincida el 50% es suficiente
              return (coincidencias / palabrasClave.length) >= 0.5;
           });
       }
@@ -412,18 +440,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
                   link_boe: itemData.link, publication_date: new Date().toISOString().split('T')[0] 
               }).eq('slug', plazaExistente.slug);
           }
-          return; // Abortamos la inserción si es duplicado
+          return; 
         }
       }
-    }
-  }
-
-  if (!parentSlug && analisisIA.referencia_boe_original) {
-    const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
-      .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
-    if (parentMatch) {
-        parentSlug = parentMatch.slug;
-        console.log(`   🔗 Enlazado de forma segura por código BOE al padre: ${parentSlug}`);
     }
   }
 
@@ -482,7 +501,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     publication_date: new Date().toISOString().split('T')[0], 
     link_boe: webDefinitiva, 
     guid: pdfDefinitivo,
-    raw_text: textoParaIA, // 🧠 CLAVE: Guardamos el texto puro escrapeado por Cheerio, sin basura de la IA
+    raw_text: textoParaIA, 
   };
 
   const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
@@ -491,7 +510,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     console.error(`❌ Error BD:`, error.message);
   } else {
     await gestionarDepartamento(departamentoFinal);
-    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal}`);
+    // 🪵 LOG MEJORADO: Añadidos Slug y Link
+    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal} | Slug: ${slugFinal} | 🔗 ${webDefinitiva}`);
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
 }
@@ -688,8 +708,26 @@ async function extraerBoletines() {
 
     for (const fuente of FUENTES_BOLETINES) {
       if (iaDetenida) break; 
+      
+      // 🪵 LOG MEJORADO: Construimos la URL si es HTML antes de imprimir la cabecera
+      let urlFinalLog = fuente.url;
+      if (fuente.tipo === "html_directo") {
+          const hoy = new Date();
+          const yyyy = hoy.getFullYear();
+          const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+          const dd = String(hoy.getDate()).padStart(2, '0');
+          urlFinalLog = fuente.url
+            .replace(/{YYYYMMDD}/g, `${yyyy}${mm}${dd}`)
+            .replace(/{DD\/MM\/YYYY}/g, `${dd}/${mm}/${yyyy}`)
+            .replace(/{YYYY}-{MM}-{DD}/g, `${yyyy}-${mm}-${dd}`)
+            .replace(/{YYYY}/g, yyyy)
+            .replace(/{MM}/g, mm)
+            .replace(/{DD}/g, dd);
+      }
+
       console.log(`\n==============================================`);
       console.log(`📡 Rastreando ${fuente.nombre} (${fuente.ambito}) - Modo: ${fuente.tipo}`);
+      console.log(`🌐 URL objetivo: ${urlFinalLog}`);
       console.log(`==============================================`);
       
       try {
@@ -702,21 +740,16 @@ async function extraerBoletines() {
           const xmlDecodificado = decoder.decode(buffer);
           const feed = await parser.parseString(xmlDecodificado); 
 
+          // 🪵 MEJORA: Filtramos la basura PRIMERO para poder contar las válidas
+          const listadoValidoRss = [];
+          
           for (const item of feed.items.reverse()) {
-            if (iaDetenida) break; 
-
-            // 🛡️ NUEVO FILTRO: Ignorar noticias que no sean de hoy (A prueba de zonas horarias)
             if (item.pubDate || item.isoDate) {
                 const itemDate = new Date(item.isoDate || item.pubDate);
                 const hoy = new Date();
-                
-                // Forzamos la comparación usando el calendario de España
                 const opcionesFecha = { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' };
-                const fechaItemEspaña = itemDate.toLocaleDateString('es-ES', opcionesFecha);
-                const fechaHoyEspaña = hoy.toLocaleDateString('es-ES', opcionesFecha);
-                
-                if (fechaItemEspaña !== fechaHoyEspaña) {
-                    continue; // No es de hoy, lo ignoramos
+                if (itemDate.toLocaleDateString('es-ES', opcionesFecha) !== hoy.toLocaleDateString('es-ES', opcionesFecha)) {
+                    continue; 
                 }
             }
             
@@ -736,11 +769,21 @@ async function extraerBoletines() {
                 if (tituloFinal.length > 200) tituloFinal = tituloFinal.substring(0, 200) + "..."; 
             }
 
-            // 🛑 NUEVO: Filtramos la basura antes de hacer NADA
             if (esTramiteBasura(tituloFinal)) {
                 console.log(`   🧹 Barrido por el Topo (Regex): ${tituloFinal.substring(0,60)}...`);
                 continue;
             }
+            
+            item.tituloLimpioParaLog = tituloFinal; // Lo guardamos para el log
+            listadoValidoRss.push(item);
+          }
+
+          console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
+          console.log(`✅ Encontradas ${listadoValidoRss.length} posibles convocatorias únicas.`);
+
+          // Ahora sí procesamos las válidas
+          for (const item of listadoValidoRss) {
+            if (iaDetenida) break; 
 
             const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
             const categoriaOrganismo = item.categories?.[1] || fuente.ambito;
@@ -748,27 +791,21 @@ async function extraerBoletines() {
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 🛡️ PARCHE CANARIAS (BOC): Sus enlaces RSS llevan a un 404. Reconstruimos desde el GUID.
             if (fuente.nombre === "BOC" && item.guid && item.guid.includes("BOC-A-")) {
                 const partesGuid = item.guid.split("-"); 
                 if (partesGuid.length === 5) {
-                    const anio = partesGuid[2];
-                    const boletinNum = partesGuid[3];
-                    const docNum = partesGuid[4];
-                    
-                    item.link = `https://www.gobiernodecanarias.org/boc/${anio}/${boletinNum}/${docNum}.html`;
-                    enlacePdfRss = `https://sede.gobiernodecanarias.org/boc/boc-a-${anio}-${boletinNum}-${docNum}.pdf`.toLowerCase();
-                    console.log(`   🔧 BOC Canarias: URL arreglada internamente -> ${item.link}`);
+                    item.link = `https://www.gobiernodecanarias.org/boc/${partesGuid[2]}/${partesGuid[3]}/${partesGuid[4]}.html`;
+                    enlacePdfRss = `https://sede.gobiernodecanarias.org/boc/boc-a-${partesGuid[2]}-${partesGuid[3]}-${partesGuid[4]}.pdf`.toLowerCase();
                 }
             }
 
-            // 🛡️ PARCHE ARAGÓN (BOA): Sus enlaces RSS vienen rotos (relativos)
             if (fuente.nombre === "BOA" && item.link && item.link.startsWith('/cgi-bin')) {
                 item.link = "https://www.boa.aragon.es" + item.link;
-                console.log(`   🔧 BOA Aragón: URL arreglada internamente -> ${item.link}`);
             }
 
-            console.log(`\n📄 Extrayendo interior de: ${tituloFinal.substring(0,60)}...`);
+            // 🪵 LOG MEJORADO: Extrayendo + Link en multilínea elegante
+            console.log(`\n📄 Extrayendo interior de: ${item.tituloLimpioParaLog.substring(0,70)}...\n   🔗 ${item.link}`);
+            
             let textoParaIA = null;
             let pdfExtraidoNativo = null;
 
@@ -777,7 +814,7 @@ async function extraerBoletines() {
               textoParaIA = nativo.texto;
               pdfExtraidoNativo = nativo.pdf;
             } else if (item.link.toLowerCase().includes('pdf')) {
-              textoParaIA = item.title + " - " + (item.contentSnippet || item.content || "");
+              textoParaIA = item.tituloLimpioParaLog + " - " + (item.contentSnippet || item.content || "");
             } else {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
@@ -786,31 +823,17 @@ async function extraerBoletines() {
             if (textoParaIA && textoParaIA.length > 4500) textoParaIA = textoParaIA.substring(0, 4500) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
-              title: tituloFinal, link: item.link, guid: item.guid, 
+              title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, 
               pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2000); // ⚡ VELOCIDAD X4 CON OPENAI
+            await esperar(2000); 
           }
         } 
         
         else if (fuente.tipo === "html_directo") {
-          const hoy = new Date();
-          const yyyy = hoy.getFullYear();
-          const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-          const dd = String(hoy.getDate()).padStart(2, '0');
-          
-          let urlFinal = fuente.url
-            .replace(/{YYYYMMDD}/g, `${yyyy}${mm}${dd}`)
-            .replace(/{DD\/MM\/YYYY}/g, `${dd}/${mm}/${yyyy}`)
-            .replace(/{YYYY}-{MM}-{DD}/g, `${yyyy}-${mm}-${dd}`)
-            .replace(/{YYYY}/g, yyyy)
-            .replace(/{MM}/g, mm)
-            .replace(/{DD}/g, dd);
+          let urlFinal = urlFinalLog; // Ya la calculamos arriba para la cabecera
 
-          console.log(`🌐 URL objetivo generada: ${urlFinal}`); 
-
-          // 🛡️ NUEVO: INTERCEPTOR RSS -> HTML (Para el BOIB)
           if (fuente.rssToHtml) {
               console.log(`   🔗 Extrayendo URL real del último boletín desde su RSS puente...`);
               try {
@@ -831,14 +854,11 @@ async function extraerBoletines() {
               }
           }
 
-          console.log(`🌐 URL objetivo generada: ${urlFinal}`);
-
           let markdownWeb = null;
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
-          } else if (fuente.nombre === "BOPA") {
-              // 🚀 ATAJO BOPA: Descargar la portada directo por CodeTabs
+          } else if (fuente.nombre === "BOPA" || fuente.nombre === "BON") {
               const nativo = await obtenerTextoNativo(urlFinal, true);
               markdownWeb = nativo.texto;
           } else {
@@ -851,24 +871,22 @@ async function extraerBoletines() {
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
           
-          // 🛡️ ESCUDO ANTI-ALUCINACIONES: Eliminamos URLs duplicadas exactas
           const listado = listadoBruto.filter((item, index, self) =>
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
-          if (listado.length > 0) console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
+          // 🪵 LOG MEJORADO: Siempre muestra la cantidad (aunque sea 0)
+          console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
 
           for (const item of listado) {
             if (iaDetenida) break; 
             const t = item.titulo.toLowerCase();
             
-            // 🛑 NUEVO: Usamos nuestra función de Regex avanzada
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30 || esTramiteBasura(item.titulo)) {
                 console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...`);
                 continue;
             }
 
-            // 🛡️ EL ESCUDO ANTI-404: Ignorar anclas internas
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
@@ -880,7 +898,6 @@ async function extraerBoletines() {
             try {
                 if (!enlaceFinal.startsWith('http')) {
                     const urlBaseObj = new URL(fuente.url);
-                    
                     if (enlaceFinal.startsWith('/')) {
                         enlaceFinal = urlBaseObj.origin + enlaceFinal;
                     } else {
@@ -896,23 +913,23 @@ async function extraerBoletines() {
             if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
 
             await gestionarDepartamento(item.departamento);
-            console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,60)}...`);
+            
+            // 🪵 LOG MEJORADO: Extrayendo + Link en multilínea elegante
+            console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,70)}...\n   🔗 ${enlaceFinal}`);
             
             let textoInterior = null;
             let pdfExtraidoNativo = null; 
             
-            // 🛡️ ESCUDO ANTI-PDF y RUTAS RÁPIDAS
             if (enlaceFinal.toLowerCase().includes('.pdf')) {
                 console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (fuente.nombre === "BOPA") {
-                 // 🚀 ATAJO BOPA: Bajar el interior directo por CodeTabs
+            } else if (fuente.nombre === "BOPA" || fuente.nombre === "BON") {
                  const nativo = await obtenerTextoNativo(enlaceFinal, true);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
-                 const nativo = await obtenerTextoNativo(enlaceFinal, false);
+                 const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else {
@@ -920,7 +937,6 @@ async function extraerBoletines() {
             }
 
             if (!textoInterior) continue;
-
             if (textoInterior.length > 4500) textoInterior = textoInterior.substring(0, 4500) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
@@ -928,7 +944,7 @@ async function extraerBoletines() {
               pdf_extraido: pdfExtraidoNativo, section: `Boletín ${fuente.nombre}`, department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy);
             
-            await esperar(2000); // ⚡ VELOCIDAD X4 CON OPENAI
+            await esperar(2000); 
           }
         }
       } catch (err) {
