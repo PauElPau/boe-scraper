@@ -30,22 +30,22 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-//   { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-//   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-//   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-//   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-//   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-//   { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
-//   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
-//   { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
-//   { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
+  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
+  { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
   { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
-//  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
-//  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
-//  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
- //  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
-//   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
+  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
 //  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
 //  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do?boton=siguiente", ambito: "Cantabria" },
@@ -225,6 +225,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     4. Devuelve la URL EXACTA que acompaña a cada resolución específica.
     5. MUY IMPORTANTE: Ignora los enlaces que sean anclas internas de la misma página (que contengan "#" o "sumari"). Busca el enlace real al documento individual o al PDF.
     6. DEDUCCIÓN DEL DEPARTAMENTO: Si la resolución está debajo del nombre de un municipio (ejemplo: debajo de "ELX/ELCHE"), el departamento DEBE SER "Ayuntamiento de [Nombre del Municipio]".
+    7. 🚫 REGLA DE EXCLUSIÓN TERRITORIAL: IGNORA por completo cualquier enlace que esté clasificado bajo el encabezado "Otras comunidades autónomas", "Otras administraciones" o equivalentes. Solo queremos extraer lo propio de este boletín, no el eco de otras regiones.
     
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
@@ -277,8 +278,9 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   
   - provincia: 🌍 REGLA UNIVERSAL GEOGRÁFICA: 
       1. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES utilizar tu conocimiento geográfico para deducir la provincia EXACTA a la que pertenece ese municipio.
-      2. ¡NUNCA asumas por defecto la provincia de la capital de la Comunidad Autónoma! 
-      3. No te dejes engañar por el nombre del boletín ni por falsos parecidos fonéticos. Triangula la ubicación real.
+      2. 🛑 CUIDADO CON LOS HOMÓNIMOS: Si un pueblo tiene un nombre similar a otro en otra región (ej: "L'Alcúdia" en Valencia vs "Alcúdia" en Baleares), utiliza el "DEPARTAMENTO/ORGANISMO DE ORIGEN" y la "SECCIÓN DEL BOLETÍN" para resolver el desempate lógicamente.
+      3. ¡NUNCA asumas por defecto la provincia de la capital de la Comunidad Autónoma! 
+      4. No te dejes engañar por el nombre del boletín ni por falsos parecidos fonéticos. Triangula la ubicación real.
       
   - titulacion: Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
@@ -328,7 +330,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
               tasa: { type: ["number", "null"] },
               boletin_origen_nombre: { type: ["string", "null"] },
               boletin_origen_fecha: { type: ["string", "null"] },
-              referencia_boe_original: { type: ["string", "null"] },
+              referencia_boe_original: { 
+                type: ["string", "null"],
+                description: "Debe ser estrictamente un código BOE oficial empezando por BOE-A- (Ej: BOE-A-2023-1234). Si no tiene este formato exacto, devuelve null."
+              },
               organismo: { type: ["string", "null"] },
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
@@ -416,7 +421,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
   // 🥇 PRIORIDAD 1: Cruce seguro e infalible por Referencia BOE
-  if (analisisIA.referencia_boe_original) {
+  // 🛡️ ESCUDO: Solo comprobamos el BOE si tiene más de 10 caracteres (Evitamos que cruce con "BOE" a secas)
+  if (analisisIA.referencia_boe_original && analisisIA.referencia_boe_original.length > 10) {
     const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
       .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
     
@@ -953,10 +959,12 @@ async function extraerBoletines() {
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
             } else if (fuente.nombre === "BOPA" || fuente.nombre === "BON") {
+                 // Atajo CodeTabs para los que tienen cortafuegos duros
                  const nativo = await obtenerTextoNativo(enlaceFinal, true);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
-            } else if (["BOA", "BOCYL", "DOCM"].includes(fuente.nombre)) {
+            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
+                 // 🚀 AÑADIDO DOGV AL CARRIL RÁPIDO NATIVO
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
@@ -989,14 +997,14 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-       // alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-      //  alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-      //  await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+        alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+        alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+        await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
-  //  await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+    await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
