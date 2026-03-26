@@ -258,14 +258,22 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
   - sistema: Deduce si es Oposición, Concurso-oposición o Concurso.
   - profesiones: Nombres limpios de los puestos.
-  - provincia: 🌍 IMPORTANTE: Si el texto menciona un municipio, UTILIZA TU CONOCIMIENTO GEOGRÁFICO para deducir la provincia exacta.
+  
+  - organismo: 🏢 REGLA UNIVERSAL DE ORGANISMO FINAL: 
+      Identifica la entidad LOCAL o FINAL que realmente ofrece el puesto (ej: 'Ayuntamiento de Torrevieja', 'Universidad de León', 'Hospital Clínico'). 
+      ¡NUNCA uses el nombre genérico de la Comunidad Autónoma (ej: 'Generalitat Valenciana', 'Junta de Andalucía') a menos que la plaza sea para sus propios servicios centrales!
+  
+  - provincia: 🌍 REGLA UNIVERSAL GEOGRÁFICA: 
+      1. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES utilizar tu conocimiento geográfico para deducir la provincia EXACTA a la que pertenece ese municipio.
+      2. ¡NUNCA asumas por defecto la provincia de la capital de la Comunidad Autónoma! 
+      3. No te dejes engañar por el nombre del boletín ni por falsos parecidos fonéticos. Triangula la ubicación real.
+      
   - titulacion: Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
   - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
   - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo o nombre (ej: 'BOE', 'BOP Córdoba').
   - boletin_origen_fecha: Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'.
   - referencia_boe_original: Código BOE original (BOE-A-YYYY-XXXX).
-  - organismo: Nombre exacto del ayuntamiento, diputación u organismo.
   - meta_description: Descripción corta (máx 150 caracteres) directa al grano, ideal para SEO.
   - enlace_pdf: URL directa al documento oficial PDF.
   `;
@@ -275,10 +283,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       model: "gpt-4o-mini",
       temperature: 0.1, // Balance para permitir creatividad en la descripción extendida
       messages: [
-        { role: "system", content: "Extrae los datos estructurados siguiendo estrictamente el esquema y las reglas proporcionadas." },
+        { role: "system", content: "Extrae los datos estructurados siguiendo estrictamente el esquema y las reglas universales proporcionadas." },
         { role: "user", content: prompt }
       ],
-      // 🛡️ EL CANDADO DE TITANIO: Obliga a la IA a devolver la estructura exacta y sin inventar valores
+      // 🛡️ EL CANDADO DE TITANIO
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -455,10 +463,17 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
+// 🪵 MEJORA ESTÉTICA: Sufijo predecible y bonito
   let suffix = new Date().getTime().toString().slice(-6); 
   if (itemData.guid) {
       const guidLimpio = itemData.guid.replace(/\W/g, ''); 
-      if (guidLimpio.length > 6) suffix = guidLimpio.slice(-6); 
+      // Solo usamos el final del guid si tiene números (para evitar que ponga trozos de palabras como 'urlada')
+      if (guidLimpio.length > 6 && /\d/.test(guidLimpio)) {
+          suffix = guidLimpio.slice(-6);
+      } else {
+          // Si no tiene números, usamos un hash rápido o el timestamp
+          suffix = Array.from(guidLimpio).reduce((s, c) => Math.imul(31, s) + c.charCodeAt(0) | 0, 0).toString().replace('-','').slice(0,6).padStart(6, '0');
+      }
   }
   const slugFinal = `${slugBase}-${suffix}`;
 
@@ -962,14 +977,14 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-        alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-        alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-        await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+       // alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+      //  alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+      //  await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
-    await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+  //  await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
