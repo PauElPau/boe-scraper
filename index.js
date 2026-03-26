@@ -384,7 +384,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
-  if (!analisisIA.profesion && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") return;
+  
+  if (!profesionPrincipal && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
+      console.log(`   ⏭️ Descartado: La IA determinó que es un trámite genérico sin plazas ni profesiones.`);
+      return;
+  }
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
   let parentSlug = null;
@@ -709,7 +713,6 @@ async function extraerBoletines() {
     for (const fuente of FUENTES_BOLETINES) {
       if (iaDetenida) break; 
       
-      // 🪵 LOG MEJORADO: Construimos la URL si es HTML antes de imprimir la cabecera
       let urlFinalLog = fuente.url;
       if (fuente.tipo === "html_directo") {
           const hoy = new Date();
@@ -740,7 +743,6 @@ async function extraerBoletines() {
           const xmlDecodificado = decoder.decode(buffer);
           const feed = await parser.parseString(xmlDecodificado); 
 
-          // 🪵 MEJORA: Filtramos la basura PRIMERO para poder contar las válidas
           const listadoValidoRss = [];
           
           for (const item of feed.items.reverse()) {
@@ -770,18 +772,17 @@ async function extraerBoletines() {
             }
 
             if (esTramiteBasura(tituloFinal)) {
-                console.log(`   🧹 Barrido por el Topo (Regex): ${tituloFinal.substring(0,60)}...`);
+                console.log(`   🧹 Barrido por el Topo (Regex): ${tituloFinal.substring(0,60)}...\n      🔗 ${item.link}`);
                 continue;
             }
             
-            item.tituloLimpioParaLog = tituloFinal; // Lo guardamos para el log
+            item.tituloLimpioParaLog = tituloFinal; 
             listadoValidoRss.push(item);
           }
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           console.log(`✅ Encontradas ${listadoValidoRss.length} posibles convocatorias únicas.`);
 
-          // Ahora sí procesamos las válidas
           for (const item of listadoValidoRss) {
             if (iaDetenida) break; 
 
@@ -803,7 +804,6 @@ async function extraerBoletines() {
                 item.link = "https://www.boa.aragon.es" + item.link;
             }
 
-            // 🪵 LOG MEJORADO: Extrayendo + Link en multilínea elegante
             console.log(`\n📄 Extrayendo interior de: ${item.tituloLimpioParaLog.substring(0,70)}...\n   🔗 ${item.link}`);
             
             let textoParaIA = null;
@@ -819,8 +819,9 @@ async function extraerBoletines() {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
             
+            // 🚀 AMPLIADO PARA GPT-4o-mini: Permitimos textos interiores de hasta 25.000 caracteres
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
-            if (textoParaIA && textoParaIA.length > 4500) textoParaIA = textoParaIA.substring(0, 4500) + "... [Texto cortado]";
+            if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
               title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, 
@@ -832,7 +833,7 @@ async function extraerBoletines() {
         } 
         
         else if (fuente.tipo === "html_directo") {
-          let urlFinal = urlFinalLog; // Ya la calculamos arriba para la cabecera
+          let urlFinal = urlFinalLog; 
 
           if (fuente.rssToHtml) {
               console.log(`   🔗 Extrayendo URL real del último boletín desde su RSS puente...`);
@@ -866,7 +867,8 @@ async function extraerBoletines() {
           }
           if (!markdownWeb) continue;
 
-          if (markdownWeb.length > 12000) markdownWeb = markdownWeb.substring(0, 12000); 
+          // 🚀 AMPLIADO PARA GPT-4o-mini: Permitimos sumaros inmensos (hasta 80.000 caracteres)
+          if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
@@ -875,7 +877,7 @@ async function extraerBoletines() {
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
-          // 🪵 LOG MEJORADO: Siempre muestra la cantidad (aunque sea 0)
+          // 🪵 LOG RESTAURADO: Mostrar siempre el conteo
           console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
 
           for (const item of listado) {
@@ -883,7 +885,7 @@ async function extraerBoletines() {
             const t = item.titulo.toLowerCase();
             
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || item.titulo.length < 30 || esTramiteBasura(item.titulo)) {
-                console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...`);
+                console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...\n      🔗 ${item.enlace}`);
                 continue;
             }
 
@@ -914,7 +916,6 @@ async function extraerBoletines() {
 
             await gestionarDepartamento(item.departamento);
             
-            // 🪵 LOG MEJORADO: Extrayendo + Link en multilínea elegante
             console.log(`\n📄 Extrayendo interior de: ${item.titulo.substring(0,70)}...\n   🔗 ${enlaceFinal}`);
             
             let textoInterior = null;
@@ -937,7 +938,9 @@ async function extraerBoletines() {
             }
 
             if (!textoInterior) continue;
-            if (textoInterior.length > 4500) textoInterior = textoInterior.substring(0, 4500) + "... [Texto cortado]";
+            
+            // 🚀 AMPLIADO PARA GPT-4o-mini: Hasta 25.000 caracteres de bases
+            if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, link: enlaceFinal, guid: enlaceFinal, 
