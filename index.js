@@ -97,19 +97,27 @@ async function gestionarDepartamento(nombre) {
 // 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let html = "";
+  let exito = false;
   
+  // 1. Intento CodeTabs (Si está forzado o como primera opción rápida)
   if (forzarCodeTabs) {
     console.log(`   🚀 Atajo activado: Saltando barreras y yendo directo al Plan D (CodeTabs)...`);
     try {
       const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
       const resProxy = await fetch(proxyUrl);
-      if (!resProxy.ok) throw new Error("Proxy CodeTabs denegado");
-      html = await resProxy.text();
+      if (resProxy.ok) {
+          html = await resProxy.text();
+          exito = true;
+      } else {
+          console.log(`   ⚠️ CodeTabs falló (Status ${resProxy.status}). Cayendo a cascada secundaria...`);
+      }
     } catch (e) {
-      console.error(`   ❌ Imposible acceder a la web con CodeTabs directo: ${url}`);
-      return { texto: null, pdf: null }; 
+      console.log(`   ⚠️ Error de red en CodeTabs. Cayendo a cascada secundaria...`);
     }
-  } else {
+  }
+
+  // 2. Cascada Secundaria (Si no era CodeTabs o si CodeTabs falló)
+  if (!exito) {
     try {
       const respuesta = await fetch(url, {
           headers: { 
@@ -128,15 +136,21 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
         if (!resProxy.ok) throw new Error("Proxy denegado");
         html = await resProxy.text();
       } catch (e2) {
-        console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
-        try {
-          const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-          const resProxy2 = await fetch(proxyUrl2);
-          if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
-          html = await resProxy2.text();
-        } catch (e3) {
-          console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
-          return { texto: null, pdf: null }; 
+        // Último intento con CodeTabs (por si no lo habíamos forzado antes)
+        if (!forzarCodeTabs) {
+            console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
+            try {
+              const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+              const resProxy2 = await fetch(proxyUrl2);
+              if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
+              html = await resProxy2.text();
+            } catch (e3) {
+              console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
+              return { texto: null, pdf: null }; 
+            }
+        } else {
+            console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
+            return { texto: null, pdf: null };
         }
       }
     }
@@ -392,19 +406,24 @@ function limpiarPalabraParaFuzzy(palabra) {
 }
 
 // --- 6. LÓGICA DE BASE DE DATOS ---
-async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy) {
-  if (!textoParaIA || textoParaIA.length < 50) return;
+async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convocatoriasInsertadasHoy, statsFuente) {
+  if (!textoParaIA || textoParaIA.length < 50) {
+      statsFuente.errores++;
+      return;
+  }
 
   const textoLower = textoParaIA.toLowerCase();
   if (textoLower.includes("error 404") || textoLower.includes("página no encontrada") || textoLower.includes("page not found")) {
       console.log(`   ⏭️ Ignorado: La web de destino devolvió un Error 404.`);
+      statsFuente.descartadas_404++;
       return;
   }
 
-  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA);
+  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section);
 
   if (analisisIA.tipo === "IGNORAR" || (analisisIA.resumen && analisisIA.resumen.toLowerCase().includes("convenio"))) {
       console.log(`   ⏭️ Ignorado: La IA detectó que es un convenio o trámite no relevante.`);
+      statsFuente.descartadas_ia++;
       return;
   }
 
@@ -412,6 +431,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   
   if (!profesionPrincipal && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
       console.log(`   ⏭️ Descartado: La IA determinó que es un trámite genérico sin plazas ni profesiones.`);
+      statsFuente.descartadas_ia++;
       return;
   }
 
@@ -420,8 +440,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
-  // 🥇 PRIORIDAD 1: Cruce seguro e infalible por Referencia BOE
-  // 🛡️ ESCUDO: Solo comprobamos el BOE si tiene más de 10 caracteres (Evitamos que cruce con "BOE" a secas)
+  // 🥇 PRIORIDAD 1: Cruce seguro por BOE
   if (analisisIA.referencia_boe_original && analisisIA.referencia_boe_original.length > 10) {
     const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
       .like('link_boe', `%${analisisIA.referencia_boe_original}%`).single();
@@ -463,8 +482,10 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
         if (esTramite) {
           console.log(`   🔗 Trámite detectado por Fuzzy Matching (50%). Enlazando al padre: ${plazaExistente.slug}...`);
           parentSlug = plazaExistente.slug;
+          statsFuente.enlazadas++; // Sumamos a estadísticas (se guardará después)
         } else {
           console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
+          statsFuente.duplicados++; // Sumamos a duplicados y cancelamos
           if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
               await supabase.from("convocatorias").update({ 
                   link_boe: itemData.link, publication_date: new Date().toISOString().split('T')[0] 
@@ -481,15 +502,13 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
-// 🪵 MEJORA ESTÉTICA: Sufijo predecible y bonito
   let suffix = new Date().getTime().toString().slice(-6); 
   if (itemData.guid) {
       const guidLimpio = itemData.guid.replace(/\W/g, ''); 
-      // Solo usamos el final del guid si tiene números (para evitar que ponga trozos de palabras como 'urlada')
-      if (guidLimpio.length > 6 && /\d/.test(guidLimpio)) {
-          suffix = guidLimpio.slice(-6);
+      const finalGuid = guidLimpio.slice(-6);
+      if ((finalGuid.match(/\d/g) || []).length >= 3) {
+          suffix = finalGuid;
       } else {
-          // Si no tiene números, usamos un hash rápido o el timestamp
           suffix = Array.from(guidLimpio).reduce((s, c) => Math.imul(31, s) + c.charCodeAt(0) | 0, 0).toString().replace('-','').slice(0,6).padStart(6, '0');
       }
   }
@@ -500,7 +519,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   if (webDefinitiva.toLowerCase().includes('.pdf') || webDefinitiva.toLowerCase().includes('descargararchivo')) {
       pdfDefinitivo = webDefinitiva;
-      webDefinitiva = fuente.url; 
+      webDefinitiva = itemData.link_boletin || fuente.url; 
   } 
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
 
@@ -545,10 +564,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   
   if (error) {
     console.error(`❌ Error BD:`, error.message);
+    statsFuente.errores++;
   } else {
     await gestionarDepartamento(departamentoFinal);
-    // 🪵 LOG MEJORADO: Añadidos Slug y Link
     console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal} | Slug: ${slugFinal} | 🔗 ${webDefinitiva}`);
+    statsFuente.guardadas++; // Sumamos como guardada final
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
 }
@@ -720,31 +740,60 @@ async function enviarAlertaTelegram(nuevasConvocatorias) {
   } catch (err) { }
 }
 
-async function enviarReporteAdmin(insertadas, alertasEmail, alertasFavs, errores, minutos) {
+async function enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, erroresGlobales, minutos) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID; 
   if (!token || !adminChatId) return;
 
-  const texto = `🐾 *Reporte del Topo Jefe* 🐾\n\n⛏️ *${insertadas}* Plazas desenterradas.\n📨 *${alertasEmail}* Avisos de rastros enviados.\n🔔 *${alertasFavs}* Alertas de plazas vigiladas.\n⚠️ *${errores}* Túneles cortados (Errores web).\n⏱️ *Tiempo de excavación:* ${minutos} minutos.`;
+  let texto = `🐾 *Reporte del Topo Jefe* 🐾\n⏱️ *Tiempo de excavación:* ${minutos} min\n\n`;
+
+  let totalGuardadas = 0;
+
+  for (const [boletin, stats] of Object.entries(reporteStats)) {
+    // Si no encontró nada y no hubo errores, no lo ponemos para no ensuciar el mensaje
+    if (stats.encontradas === 0 && stats.errores === 0) continue;
+    
+    totalGuardadas += stats.guardadas;
+
+    texto += `📰 *${boletin}* (Encontradas: ${stats.encontradas})\n`;
+    texto += `  ✅ Guardadas: ${stats.guardadas}\n`;
+    if (stats.enlazadas > 0) texto += `  🔗 (De las cuales ${stats.enlazadas} vinculadas a un padre)\n`;
+    if (stats.duplicados > 0) texto += `  🔄 Duplicados evitados: ${stats.duplicados}\n`;
+    if (stats.descartadas_ia > 0) texto += `  🗑️ Descartadas (Basura/Genérico): ${stats.descartadas_ia}\n`;
+    if (stats.descartadas_404 > 0) texto += `  ⚠️ Enlaces rotos (404): ${stats.descartadas_404}\n`;
+    if (stats.errores > 0) texto += `  ❌ Errores: ${stats.errores}\n`;
+    texto += `\n`;
+  }
+
+  texto += `📊 *RESUMEN GLOBAL*\n`;
+  texto += `⛏️ Total nuevas guardadas: ${totalGuardadas}\n`;
+  texto += `📨 Avisos de rastros (Email): ${alertasEmail}\n`;
+  texto += `🔔 Alertas de vigiladas (Email): ${alertasFavs}\n`;
+  texto += `💥 Errores web globales: ${erroresGlobales}\n`;
 
   try {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ chat_id: adminChatId, text: texto, parse_mode: 'Markdown' })
     });
-  } catch (err) { }
+  } catch (err) { console.error("Error enviando Telegram Admin", err); }
 }
 
 // --- 8. BUCLE PRINCIPAL ---
 async function extraerBoletines() {
   const startTime = Date.now(); 
   let totalErrores = 0; 
+  const reporteStats = {};
 
   try {
     const convocatoriasInsertadasHoy = [];
 
     for (const fuente of FUENTES_BOLETINES) {
       if (iaDetenida) break; 
+
+      // 👈 NUEVO: Inicializamos las estadísticas de este boletín
+      const statsFuente = { encontradas: 0, guardadas: 0, descartadas_ia: 0, descartadas_404: 0, duplicados: 0, enlazadas: 0, errores: 0 };
+      reporteStats[fuente.nombre] = statsFuente;
       
       let urlFinalLog = fuente.url;
       if (fuente.tipo === "html_directo") {
@@ -768,7 +817,21 @@ async function extraerBoletines() {
       
       try {
         if (fuente.tipo === "rss") {
-          const resRss = await fetch(fuente.url, { headers: { "User-Agent": "Mozilla/5.0" } });
+          let resRss;
+          let fetchIntentos = 3;
+          while (fetchIntentos > 0) {
+              try {
+                  resRss = await fetch(fuente.url, { headers: { "User-Agent": "Mozilla/5.0" } });
+                  if (resRss.ok) break;
+                  throw new Error(`Status ${resRss.status}`);
+              } catch (e) {
+                  fetchIntentos--;
+                  if (fetchIntentos === 0) throw new Error(`Fetch RSS falló tras 3 intentos: ${e.message}`);
+                  console.log(`   ⚠️ Micro-corte al descargar RSS de ${fuente.nombre}. Reintentando en 3s...`);
+                  await esperar(3000);
+              }
+          }
+
           const buffer = await resRss.arrayBuffer();
           let decoder = new TextDecoder("utf-8"); 
           const preview = new TextDecoder("utf-8").decode(buffer.slice(0, 250));
@@ -816,6 +879,8 @@ async function extraerBoletines() {
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           console.log(`✅ Encontradas ${listadoValidoRss.length} posibles convocatorias únicas.`);
 
+          statsFuente.encontradas = listadoValidoRss.length; // 👈 NUEVO: Guardamos cuántas encontró
+
           for (const item of listadoValidoRss) {
             if (iaDetenida) break; 
 
@@ -842,7 +907,8 @@ async function extraerBoletines() {
             let textoParaIA = null;
             let pdfExtraidoNativo = null;
 
-            if (["BOE", "DOG", "BOCM", "BOJA"].includes(fuente.nombre)) {
+            // 🚀 AÑADIDOS TODOS LOS RSS AL CARRIL RÁPIDO NATIVO
+            if (["BOE", "BOJA", "BOPV", "BORM", "DOE", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
               textoParaIA = nativo.texto;
               pdfExtraidoNativo = nativo.pdf;
@@ -856,10 +922,11 @@ async function extraerBoletines() {
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
             if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
+           // 👈 NUEVO: Añadimos statsFuente y link_boletin como parámetros
             await procesarYGuardarConvocatoria({ 
-              title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, 
+              title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, link_boletin: urlFinalLog,
               pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo 
-            }, textoParaIA, fuente, convocatoriasInsertadasHoy);
+            }, textoParaIA, fuente, convocatoriasInsertadasHoy, statsFuente);
             
             await esperar(6000);
           }
@@ -892,7 +959,8 @@ async function extraerBoletines() {
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
-          } else if (fuente.nombre === "BOPA" || fuente.nombre === "BON") {
+          // 🚀 METEMOS DOCM Y BOCYL AL ATAJO CODETABS PARA LA PORTADA
+          } else if (["BOPA", "BON", "DOCM", "BOCYL"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(urlFinal, true);
               markdownWeb = nativo.texto;
           } else {
@@ -912,6 +980,7 @@ async function extraerBoletines() {
 
           // 🪵 LOG RESTAURADO: Mostrar siempre el conteo
           console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
+          statsFuente.encontradas = listado.length; // 👈 NUEVO: Guardamos cuántas encontró
 
           for (const item of listado) {
             if (iaDetenida) break; 
@@ -978,15 +1047,16 @@ async function extraerBoletines() {
             if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
             await procesarYGuardarConvocatoria({ 
-              title: item.titulo, link: enlaceFinal, guid: enlaceFinal, 
+              title: item.titulo, link: enlaceFinal, guid: enlaceFinal, link_boletin: urlFinal,
               pdf_extraido: pdfExtraidoNativo, section: `Boletín ${fuente.nombre}`, department: item.departamento 
-            }, textoInterior, fuente, convocatoriasInsertadasHoy);
+            }, textoInterior, fuente, convocatoriasInsertadasHoy, statsFuente);
             
             await esperar(6000);
           }
         }
       } catch (err) {
         console.error(`❌ Error procesando ${fuente.nombre}:`, err.message);
+        statsFuente.errores++; // 👈 NUEVO
         totalErrores++;
       }
     }
@@ -1004,7 +1074,8 @@ async function extraerBoletines() {
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
-    await enviarReporteAdmin(convocatoriasInsertadasHoy.length, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+    // 👈 NUEVO: Pasamos el objeto detallado a Telegram en vez del número simple
+    await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
