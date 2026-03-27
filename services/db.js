@@ -159,13 +159,12 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       }
   }
 
-  // BOPA (Asturias) y BOIB (Baleares): Como sus URLs HTML dinámicas son inestables, 
-  // forzamos a que el enlace web sea también el PDF directo.
-  if ((fuente.nombre === "BOPA" || fuente.nombre === "BOIB") && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
+  // BOIB (Baleares): Forzamos a que el enlace web sea también el PDF directo
+  if (fuente.nombre === "BOIB" && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
       webDefinitiva = pdfDefinitivo;
   }
 
-  // Fallback de seguridad
+  // Fallback de seguridad (BON y demás aplicarán aquí y tendrán links idénticos si no hay PDF extraído)
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
   // ----------------------------------------------------------

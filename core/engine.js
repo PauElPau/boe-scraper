@@ -127,9 +127,12 @@ async function extraerBoletines() {
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 1. BOJA (Andalucía) y BOPV (País Vasco): Interceptar la URL HTML y deducir el PDF
-            if (fuente.nombre === "BOPV" && item.link && item.link.endsWith('.shtml')) {
-                enlacePdfRss = item.link.replace('.shtml', '.pdf');
+            // 1. BOPV (País Vasco): Reemplazar extensión y el subdominio 'y22' por 'web01'
+            if (fuente.nombre === "BOPV" && item.link) {
+                item.link = item.link.replace('/y22-bopv/', '/web01-bopv/');
+                if (item.link.endsWith('.shtml')) {
+                    enlacePdfRss = item.link.replace('.shtml', '.pdf');
+                }
             }
             if (fuente.nombre === "BOJA" && item.link && item.link.endsWith('.html')) {
                 // A BOJA no le podemos adivinar el PDF exacto sin descargar la web
@@ -149,10 +152,26 @@ async function extraerBoletines() {
                 enlacePdfRss = item.link.replace('CMD=VERDOC', 'CMD=VERPDF');
             }
 
-            // 4. BORM (Murcia): Conservar la URL del PDF del RSS para ambos campos
+            // 4. BORM (Murcia): Magia para extraer el nº de boletín del título e ID del guid
             if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
-                item.link = item.guid; // Forzamos que el link_boe sea el PDF funcional
-                enlacePdfRss = item.guid;
+                const idMatch = item.guid.match(/\/anuncio\/(\d+)\/pdf/);
+                const numMatch = item.title.match(/^\s*(\d+)/); // Busca números al inicio del título
+                
+                if (idMatch && numMatch) {
+                    const idDoc = idMatch[1];
+                    const numDoc = numMatch[1];
+                    
+                    const dateObj = new Date(item.isoDate || item.pubDate || new Date());
+                    const yyyy = dateObj.getFullYear();
+                    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const dd = String(dateObj.getDate()).padStart(2, '0');
+                    
+                    item.link = `https://www.borm.es/#/home/anuncio/${dd}-${mm}-${yyyy}/${numDoc}`;
+                    enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyy}/numero/${numDoc}/pdf?id=${idDoc}`;
+                } else {
+                    item.link = item.guid;
+                    enlacePdfRss = item.guid;
+                }
             }
             // --------------------------------------------------
 
@@ -258,29 +277,34 @@ async function extraerBoletines() {
                 }
             }
 
-            // 🛠️ INTERCEPTOR DOCM Y BOCYL: Transformar PDF a HTML
-            if (fuente.nombre === "DOCM" && enlaceLimpio.includes('descargarArchivo.do') && enlaceLimpio.includes('/pdf/')) {
-                item.htmlGenerado = enlaceLimpio.replace('descargarArchivo.do', 'verArchivoHtml.do').replace('/pdf/', '/html/').replace('.pdf', '.html');
+            // 🛠️ INTERCEPTOR DOCM (Castilla-La Mancha): Limpiar el punto /./ y generar HTML
+            if (fuente.nombre === "DOCM") {
+                let pdfLimpio = enlaceLimpio.replace('/./', '/docm/'); // Limpia el error nativo de su web
+                item.pdfGenerado = pdfLimpio;
+                if (pdfLimpio.includes('descargarArchivo.do') && pdfLimpio.includes('/pdf/')) {
+                    item.htmlGenerado = pdfLimpio.replace('descargarArchivo.do', 'verArchivoHtml.do')
+                                                 .replace('/pdf/', '/html/')
+                                                 .replace('.pdf', '.html');
+                }
             }
+            // 🛠️ INTERCEPTOR BOCYL (Castilla y León): Tres reemplazos en la cadena
             if (fuente.nombre === "BOCYL" && enlaceLimpio.includes('/pdf/')) {
-                item.htmlGenerado = enlaceLimpio.replace('/pdf/', '/html/').replace('.pdf', '.do');
+                item.htmlGenerado = enlaceLimpio.replace('/boletines/', '/html/')
+                                                .replace('/pdf/', '/html/')
+                                                .replace('.pdf', '.do');
             }
 
-            // 🛠️ INTERCEPTOR BON (Navarra): Transformar HTML a PDF
-            if (fuente.nombre === "BON" && enlaceLimpio.includes('/texto/')) {
-                item.pdfGenerado = enlaceLimpio.replace('/texto/', '/pdf/');
-            }
-
-            // 🛠️ INTERCEPTOR BOPA (ASTURIAS): Destripamos la URL fea y construimos el enlace directo al PDF
+            // 🛠️ INTERCEPTOR BOPA (ASTURIAS): Mantenemos el HTML "feo" y extraemos el PDF limpio
             if (fuente.nombre === "BOPA" && enlaceLimpio.includes('dispositionText') && enlaceLimpio.includes('dispositionDate')) {
                 const matchId = enlaceLimpio.match(/dispositionText=([^&]+)/);
                 const matchDate = enlaceLimpio.match(/dispositionDate=([^&]+)/);
                 if (matchId && matchDate) {
                     const idDoc = matchId[1];
-                    const decodedDate = decodeURIComponent(matchDate[1]); // Convierte 27%2F03%2F2026 a 27/03/2026
+                    const decodedDate = decodeURIComponent(matchDate[1]); 
                     const partesFecha = decodedDate.split('/'); // [DD, MM, YYYY]
                     if (partesFecha.length === 3) {
-                        enlaceLimpio = `https://sede.asturias.es/bopa/${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}/${idDoc}.pdf`;
+                        // Solo asignamos el PDF, el enlaceLimpio sigue intacto como HTML feo
+                        item.pdfGenerado = `https://sede.asturias.es/bopa/${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}/${idDoc}.pdf`;
                     }
                 }
             }

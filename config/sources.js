@@ -44,11 +44,11 @@ const FUENTES_BOLETINES = [
   
   //HTML: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.html -> OK
   //PDF: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.pdf -> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+ // { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   
    //HTML: OK
    //PDF: OK
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  //{ nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
   
   //HTML: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERDOC&BASE=BOLE&SEC=BUSQUEDA_AVANZADA&DOCN=007957047   --> OK
   //PDF: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VEROBJ&MLKOB=1441581670303&type=pdf  --> MAL: FORMAR A PARTIR DE HTML
@@ -60,7 +60,7 @@ const FUENTES_BOLETINES = [
 
   //HTML: https://sede.gva.es/es/detall-ocupacio-publica?id_emp=110893&id_info=info_basica --> OK
   //PDF: https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=110893  --> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+  //{ nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
   
   // como pdf tenemos: https://docm.jccm.es/./descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm
   //HTML: https://docm.jccm.es/docm/verArchivoHtml.do?ruta=2026/03/27/html/2026_2193.html&tipo=rutaDocm --> MAL: se puede formar a partir de lo que tenemos?
