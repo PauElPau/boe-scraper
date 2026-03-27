@@ -1057,7 +1057,7 @@ async function extraerBoletines() {
                  const nativo = await obtenerTextoNativo(enlaceFinal, true); // CodeTabs
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
-            } else if (["BOA", "BOCYL", "DOCM", "DOGV", "BOC_CANTABRIA"].includes(fuente.nombre)) {
+            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                  // 🟢 CANTABRIA SE QUEDA AQUÍ (Nativo tradicional)
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
