@@ -47,11 +47,13 @@ const FUENTES_BOLETINES = [
  // { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
  // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
-  { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta" },
-  { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla" },
-  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
-  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" },
-  { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" },
+ { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" }
+
+  // 🛑 BOLETINES EN "CUARENTENA" (Requieren Scraping de 2 Fases, RSS privados o bypass avanzado)
+  // { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta" },
+  // { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla" },
+  // { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
+  // { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/inici/resultats/index.html?orderBy=3&page=1&typeSearch=1&advanced=true&current=true&title=true&numResultsByPage=50&publicationDateInitial={DD/MM/YYYY}&thematicDescriptor=D4090&thematicDescriptor=DE1738", ambito: "Cataluña" }
 ];
 
 const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -956,12 +958,14 @@ async function extraerBoletines() {
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
-          // 🚀 METEMOS CEUTA, MELILLA y CANTABRIA AL ATAJO (Son HTML estático/simple)
-          } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "BOC_CANTABRIA"].includes(fuente.nombre)) {
-              const nativo = await obtenerTextoNativo(urlFinal, true);
+          } else if (["BOPA", "BON", "DOCM", "BOCYL"].includes(fuente.nombre)) {
+              const nativo = await obtenerTextoNativo(urlFinal, true); // CodeTabs
+              markdownWeb = nativo.texto;
+          } else if (fuente.nombre === "BOC_CANTABRIA") {
+              // 🟢 CANTABRIA AL NATIVO PURO (Sin proxies, para respetar sus cookies .do)
+              const nativo = await obtenerTextoNativo(urlFinal, false); 
               markdownWeb = nativo.texto;
           } else {
-              // 🧠 DOGV, DOGC (Cataluña) y BOR (La Rioja) caen aquí para usar Cloudflare y ejecutar JS
               markdownWeb = await obtenerTextoUniversal(urlFinal);
           }
           if (!markdownWeb) continue;
@@ -1049,18 +1053,16 @@ async function extraerBoletines() {
                 console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            // 🚀 BOCCE, BOME y BOC_CANTABRIA usan el atajo seguro
-            } else if (["BOCCE", "BOME", "BOC_CANTABRIA"].includes(fuente.nombre)) {
-                 const nativo = await obtenerTextoNativo(enlaceFinal, true);
+            } else if (["BOPA", "BON"].includes(fuente.nombre)) {
+                 const nativo = await obtenerTextoNativo(enlaceFinal, true); // CodeTabs
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
-            // 🚀 Estos siguen en el Carril Rápido Nativo
-            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
+            } else if (["BOA", "BOCYL", "DOCM", "DOGV", "BOC_CANTABRIA"].includes(fuente.nombre)) {
+                 // 🟢 CANTABRIA SE QUEDA AQUÍ (Nativo tradicional)
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else {
-                 // 🧠 BOPA, BON, DOGC y BOR caen aquí: Usan Cloudflare para atravesar muros y ejecutar JS
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
 
