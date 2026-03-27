@@ -958,14 +958,12 @@ async function extraerBoletines() {
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
-          } else if (["BOPA", "BON", "DOCM", "BOCYL"].includes(fuente.nombre)) {
-              const nativo = await obtenerTextoNativo(urlFinal, true); // CodeTabs
-              markdownWeb = nativo.texto;
-          } else if (fuente.nombre === "BOC_CANTABRIA") {
-              // 🟢 CANTABRIA AL NATIVO PURO (Sin proxies, para respetar sus cookies .do)
-              const nativo = await obtenerTextoNativo(urlFinal, false); 
+          // 🛑 FÍJATE AQUÍ: Ya NO está "BOC_CANTABRIA" en esta lista
+          } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+              const nativo = await obtenerTextoNativo(urlFinal, true);
               markdownWeb = nativo.texto;
           } else {
+              // 🧠 DOGV, DOGC, BOR y BOC_CANTABRIA caen aquí por descarte (Cloudflare)
               markdownWeb = await obtenerTextoUniversal(urlFinal);
           }
           if (!markdownWeb) continue;
@@ -1058,7 +1056,6 @@ async function extraerBoletines() {
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
-                 // 🟢 CANTABRIA SE QUEDA AQUÍ (Nativo tradicional)
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
