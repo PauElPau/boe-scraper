@@ -30,22 +30,25 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s52.xml", ambito: "Andalucía" },
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+ // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
+ // { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  //{ nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  //{ nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+ // { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
-  { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
-  { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
+ // { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
+ // { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
   { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
   { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
-  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+ // { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+ // { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
+
+  //{ nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/component/jdownloads/viewcategory/1971-marzo?Itemid=534", ambito: "Ceuta" },
+  //{ nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla" },
 
 //  { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
 //  { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do?boton=siguiente", ambito: "Cantabria" },
@@ -240,7 +243,8 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     5. MUY IMPORTANTE: Ignora los enlaces que sean anclas internas de la misma página (que contengan "#" o "sumari"). Busca el enlace real al documento individual o al PDF.
     6. DEDUCCIÓN DEL DEPARTAMENTO: Si la resolución está debajo del nombre de un municipio (ejemplo: debajo de "ELX/ELCHE"), el departamento DEBE SER "Ayuntamiento de [Nombre del Municipio]".
     7. 🚫 REGLA DE EXCLUSIÓN TERRITORIAL: IGNORA por completo cualquier enlace que esté clasificado bajo el encabezado "Otras comunidades autónomas", "Otras administraciones" o equivalentes. Solo queremos extraer lo propio de este boletín, no el eco de otras regiones.
-    
+    8. ⚠️ TÍTULO COMPLETO: En el campo "titulo" DEBES copiar TODO el texto de la resolución. ¡PROHIBIDO RESUMIR O RECORTAR CON "..."! Es vital que el título contenga la categoría profesional exacta que suele ir al final.
+
     Devuelve ÚNICAMENTE un JSON con esta estructura:
     { "convocatorias": [ { "titulo": "...", "enlace": "...", "departamento": "..." } ] }
     Si no hay nada relevante, devuelve { "convocatorias": [] }.
@@ -274,6 +278,9 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   const prompt = `
   Eres un experto en extraer datos del empleo público. Analiza el texto de esta web.
   TÍTULO: ${titulo}
+  DEPARTAMENTO/ORGANISMO DE ORIGEN: ${departamento || 'No especificado'}
+  SECCIÓN DEL BOLETÍN: ${seccion || 'No especificada'}
+  COMUNIDAD/CIUDAD AUTÓNOMA: ${ambitoAutonomico}
   TEXTO WEB: ${textoInterior}
   
   ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN:
@@ -291,10 +298,9 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
       ¡NUNCA uses el nombre genérico de la Comunidad Autónoma (ej: 'Generalitat Valenciana', 'Junta de Andalucía') a menos que la plaza sea para sus propios servicios centrales!
   
   - provincia: 🌍 REGLA UNIVERSAL GEOGRÁFICA: 
-      1. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES utilizar tu conocimiento geográfico para deducir la provincia EXACTA a la que pertenece ese municipio.
-      2. 🛑 CUIDADO CON LOS HOMÓNIMOS: Si un pueblo tiene un nombre similar a otro en otra región (ej: "L'Alcúdia" en Valencia vs "Alcúdia" en Baleares), utiliza el "DEPARTAMENTO/ORGANISMO DE ORIGEN" y la "SECCIÓN DEL BOLETÍN" para resolver el desempate lógicamente.
-      3. ¡NUNCA asumas por defecto la provincia de la capital de la Comunidad Autónoma! 
-      4. No te dejes engañar por el nombre del boletín ni por falsos parecidos fonéticos. Triangula la ubicación real.
+      1. ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región (ej: No elijas Castellón si estás en Castilla y León).
+      2. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES utilizar tu conocimiento geográfico para deducir la provincia EXACTA a la que pertenece ese municipio dentro de ${ambitoAutonomico}.
+      3. 🛑 CUIDADO CON LOS HOMÓNIMOS: Utiliza la "COMUNIDAD/CIUDAD AUTÓNOMA" para desempatar si un pueblo se llama igual en dos sitios.
       
   - titulacion: Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
@@ -419,7 +425,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       return;
   }
 
-  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section);
+  const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section, fuente.ambito);
 
   if (analisisIA.tipo === "IGNORAR" || (analisisIA.resumen && analisisIA.resumen.toLowerCase().includes("convenio"))) {
       console.log(`   ⏭️ Ignorado: La IA detectó que es un convenio o trámite no relevante.`);
@@ -845,8 +851,9 @@ async function extraerBoletines() {
             if (item.pubDate || item.isoDate) {
                 const itemDate = new Date(item.isoDate || item.pubDate);
                 const hoy = new Date();
-                const opcionesFecha = { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' };
-                if (itemDate.toLocaleDateString('es-ES', opcionesFecha) !== hoy.toLocaleDateString('es-ES', opcionesFecha)) {
+                // 🛡️ FECHAS INFALIBLES: Usamos formato ISO 'YYYY-MM-DD' estricto en huso horario de Madrid
+                const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+                if (formatter.format(itemDate) !== formatter.format(hoy)) {
                     continue; 
                 }
             }
@@ -863,8 +870,8 @@ async function extraerBoletines() {
 
             let tituloFinal = item.title;
             if (fuente.nombre === "BOCM" && contenidoItem) {
-                tituloFinal = contenidoItem.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').trim(); 
-                if (tituloFinal.length > 200) tituloFinal = tituloFinal.substring(0, 200) + "..."; 
+                // 🚀 ARREGLADO: Ya no cortamos a 200 caracteres para no borrar la profesión
+                tituloFinal = contenidoItem.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim(); 
             }
 
             if (esTramiteBasura(tituloFinal)) {
@@ -992,6 +999,14 @@ async function extraerBoletines() {
             }
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+
+            // 🛠️ INTERCEPTOR DOGV: Reconstruimos la URL perfecta extrayendo solo el ID
+            if (fuente.nombre === "DOGV" && (enlaceLimpio.includes('id_emp') || enlaceLimpio.includes('id%5Femp'))) {
+                const matchId = enlaceLimpio.match(/id(?:_|%5F)emp=(\d+)/i);
+                if (matchId && matchId[1]) {
+                    enlaceLimpio = `https://sede.gva.es/detall-ocupacio-publica?id_emp=${matchId[1]}`;
+                }
+            }
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
                 console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
@@ -1001,15 +1016,17 @@ async function extraerBoletines() {
             let enlaceFinal = enlaceLimpio;
             try {
                 if (!enlaceFinal.startsWith('http')) {
-                    const urlBaseObj = new URL(fuente.url);
+                    // Usamos urlFinal (sin llaves {}) para que no falle el parseo
+                    const urlBaseObj = new URL(urlFinal); 
                     if (enlaceFinal.startsWith('/')) {
                         enlaceFinal = urlBaseObj.origin + enlaceFinal;
                     } else {
-                        enlaceFinal = new URL(enlaceLimpio, fuente.url).href;
+                        // Forzamos a que cuelgue del dominio principal para evitar URLs Frankenstein
+                        enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
                     }
                 }
             } catch (e) {
-               console.log(`⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
+               console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
                totalErrores++; 
                continue;
             }
@@ -1027,17 +1044,17 @@ async function extraerBoletines() {
                 console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (fuente.nombre === "BOPA" || fuente.nombre === "BON") {
-                 // Atajo CodeTabs para los que tienen cortafuegos duros
+            // 🚀 BOCCE y BOME siguen usando CodeTabs. BOPA y BON vuelven a Cloudflare.
+            } else if (["BOCCE", "BOME"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal, true);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
-                 // 🚀 AÑADIDO DOGV AL CARRIL RÁPIDO NATIVO
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else {
+                 // Aquí caerán Asturias (BOPA) y Navarra (BON) para usar Cloudflare de forma segura
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
 
@@ -1067,15 +1084,15 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-        alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-        alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-        await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+      //  alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+      //  alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+      //  await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
     // 👈 NUEVO: Pasamos el objeto detallado a Telegram en vez del número simple
-    await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+    //await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
