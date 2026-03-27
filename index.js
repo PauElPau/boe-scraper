@@ -274,7 +274,7 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
   }
 }
 
-async function analizarConvocatoriaIA(titulo, textoInterior) {
+async function analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico) {
   const prompt = `
   Eres un experto en extraer datos del empleo público. Analiza el texto de esta web.
   TÍTULO: ${titulo}
@@ -295,19 +295,18 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   
   - organismo: 🏢 REGLA UNIVERSAL DE ORGANISMO FINAL: 
       Identifica la entidad LOCAL o FINAL que realmente ofrece el puesto (ej: 'Ayuntamiento de Torrevieja', 'Universidad de León', 'Hospital Clínico'). 
-      ¡NUNCA uses el nombre genérico de la Comunidad Autónoma (ej: 'Generalitat Valenciana', 'Junta de Andalucía') a menos que la plaza sea para sus propios servicios centrales!
+      ¡NUNCA uses el nombre genérico de la Comunidad Autónoma a menos que la plaza sea para sus propios servicios centrales! Si el texto no te da pistas claras, déjalo en null, NO te inventes ministerios ni copies los ejemplos del prompt.
   
   - provincia: 🌍 REGLA UNIVERSAL GEOGRÁFICA: 
       1. ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región (ej: No elijas Castellón si estás en Castilla y León).
-      2. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES utilizar tu conocimiento geográfico para deducir la provincia EXACTA a la que pertenece ese municipio dentro de ${ambitoAutonomico}.
-      3. 🛑 CUIDADO CON LOS HOMÓNIMOS: Utiliza la "COMUNIDAD/CIUDAD AUTÓNOMA" para desempatar si un pueblo se llama igual en dos sitios.
+      2. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES deducir la provincia EXACTA a la que pertenece ese municipio.
+      3. 🛑 CUIDADO CON LOS HOMÓNIMOS: Si un pueblo tiene un nombre similar a otro en otra región, utiliza el "DEPARTAMENTO/ORGANISMO DE ORIGEN" para desempatar lógicamente.
       
-  - titulacion: Busca la titulación mínima exigida (ej: 'E.S.O.', 'Bachillerato', 'Grado en Derecho'). Sé conciso.
+  - titulacion: Busca la titulación mínima exigida. Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
   - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
-  - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo o nombre (ej: 'BOE', 'BOP Córdoba').
+  - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo (ej: 'BOE', 'BOP Córdoba').
   - boletin_origen_fecha: Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'.
-  - referencia_boe_original: Código BOE original (BOE-A-YYYY-XXXX).
   - meta_description: Descripción corta (máx 150 caracteres) directa al grano, ideal para SEO.
   - enlace_pdf: URL directa al documento oficial PDF.
   `;
@@ -315,12 +314,11 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
-      temperature: 0.1, // Balance para permitir creatividad en la descripción extendida
+      temperature: 0.1,
       messages: [
         { role: "system", content: "Extrae los datos estructurados siguiendo estrictamente el esquema y las reglas universales proporcionadas." },
         { role: "user", content: prompt }
       ],
-      // 🛡️ EL CANDADO DE TITANIO
       response_format: {
         type: "json_schema",
         json_schema: {
@@ -329,10 +327,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
           schema: {
             type: "object",
             properties: {
-              tipo: { 
-                type: "string", 
-                enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR'] 
-              },
+              tipo: { type: "string", enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR'] },
               plazas: { type: ["integer", "null"] },
               resumen: { type: "string" },
               descripcion_extendida: { type: "string" },
@@ -341,24 +336,18 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
               grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
               sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-oposición', 'Concurso', null] },
               profesiones: { type: "array", items: { type: "string" } },
-              provincia: { 
-                type: "string", 
-                enum: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal'] 
-              },
+              provincia: { type: ["string", "null"], enum: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal', null] },
               titulacion: { type: ["string", "null"] },
               enlace_inscripcion: { type: ["string", "null"] },
               tasa: { type: ["number", "null"] },
               boletin_origen_nombre: { type: ["string", "null"] },
               boletin_origen_fecha: { type: ["string", "null"] },
-              referencia_boe_original: { 
-                type: ["string", "null"],
-                description: "Debe ser estrictamente un código BOE oficial empezando por BOE-A- (Ej: BOE-A-2023-1234). Si no tiene este formato exacto, devuelve null."
-              },
+              referencia_boe_original: { type: ["string", "null"], description: "Debe ser estrictamente un código BOE oficial empezando por BOE-A- (Ej: BOE-A-2023-1234). Si no tiene este formato exacto, devuelve null." },
               organismo: { type: ["string", "null"] },
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-            required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
+            required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
@@ -367,8 +356,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior) {
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     if (error.status === 429) {
-      await esperar(3000);
-      return analizarConvocatoriaIA(titulo, textoInterior);
+      console.warn(`   ⏳ Límite de IA (429). Esperando 5s para reintentar...`);
+      await esperar(5000);
+      // 🚀 EL ERROR ESTABA AQUÍ: Se nos olvidó pasarle las variables de vuelta al reintento
+      return analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico);
     }
     console.error("❌ Error en analizarConvocatoriaIA:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
