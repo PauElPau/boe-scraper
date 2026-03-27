@@ -1,0 +1,93 @@
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
+  if (!plazoNumero || !plazoTipo || !fechaPublicacion) return null;
+  const fechaBase = new Date(fechaPublicacion);
+  fechaBase.setDate(fechaBase.getDate() + 1);
+  let fechaCierre = new Date(fechaBase);
+  const tipo = plazoTipo.toLowerCase();
+  try {
+    if (tipo.includes('hábil') || tipo.includes('habil')) {
+      let diasSumados = 0;
+      fechaCierre.setDate(fechaCierre.getDate() - 1); 
+      while (diasSumados < plazoNumero) {
+        fechaCierre.setDate(fechaCierre.getDate() + 1);
+        const diaSemana = fechaCierre.getDay();
+        if (diaSemana !== 0 && diaSemana !== 6) diasSumados++;
+      }
+    } 
+    else if (tipo.includes('natural') || tipo.includes('día') || tipo.includes('dia')) {
+      fechaCierre.setDate(fechaCierre.getDate() + plazoNumero - 1);
+    } 
+    else if (tipo.includes('mes')) {
+      fechaCierre.setMonth(fechaCierre.getMonth() + plazoNumero);
+      fechaCierre.setDate(fechaCierre.getDate() - 1); 
+    } 
+    else return null;
+    return fechaCierre.toISOString().split('T')[0];
+  } catch (error) { return null; }
+}
+
+// 🧹 Helper para formatear profesiones a Title Case (Primera Letra Mayúscula)
+function capitalizarProfesion(str) {
+    if (!str) return str;
+    const palabrasMenores = ['y', 'e', 'o', 'u', 'de', 'del', 'al', 'en', 'por', 'para', 'con', 'sin', 'a', 'las', 'los', 'la', 'el', 'un', 'una'];
+    return str.toLowerCase().split(/\s+/).map((word, index) => {
+        // Mantenemos en minúscula las palabras menores, salvo que sean la primera palabra
+        if (index > 0 && palabrasMenores.includes(word)) {
+            return word;
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
+}
+
+function limpiarCodificacion(texto) {
+  if (!texto) return texto;
+  let limpio = texto.replace(/\\u([\dA-Fa-f]{4})/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)));
+  return limpio.replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").trim();
+}
+
+// 🛡️ ESCUDO PRE-FILTRADO: Detecta basura administrativa por el título
+function esTramiteBasura(titulo) {
+  if (!titulo) return false;
+  const t = titulo.toLowerCase();
+
+  const esCese = t.includes('cese') || t.includes('jubilación') || t.includes('jubilacion') || t.includes('renuncia');
+  const accionTribunal = t.includes('nombramiento') || t.includes('designación') || t.includes('composición') || t.includes('modificación');
+  const esTribunal = t.includes('tribunal') || t.includes('comisión de selección') || t.includes('comisión de valoración') || t.includes('órgano de selección');
+  const esNombramientoTribunal = accionTribunal && esTribunal;
+  const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvencion') || t.includes('licitación') || t.includes('adjudicación de contrato') || t.includes('impacto ambiental') || t.includes('ley ') || t.includes('decreto ');
+
+  return esCese || esNombramientoTribunal || esRuido;
+}
+
+// 🧠 NEUTRALIZADOR DE PALABRAS (Stemmer para Fuzzy Matching)
+function limpiarPalabraParaFuzzy(palabra) {
+  // 1. Quitar acentos, puntuación y pasar a minúsculas
+  let p = palabra.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, "").toLowerCase();
+  
+  // 2. Quitar sufijos de género típicos (/a, (a))
+  p = p.replace(/\/a$/, '').replace(/\(a\)$/, '');
+  
+  // 3. Quitar plurales básicos ('s' o 'es') si la palabra es larga
+  if (p.length > 4 && p.endsWith('s')) p = p.slice(0, -1);
+  if (p.length > 4 && p.endsWith('e')) p = p.slice(0, -1); 
+  
+  // 4. Normalizar abreviaturas clásicas de la Administración
+  if (p === 'adm' || p.startsWith('admin')) return 'admin';
+  if (p === 'gen' || p.startsWith('gener')) return 'gener';
+  if (p.startsWith('tecnic')) return 'tecnic';
+  if (p.startsWith('auxil')) return 'auxil';
+  if (p.startsWith('ayud')) return 'ayud';
+  
+  return p;
+}
+
+module.exports = {
+  esperar,
+  calcularFechaCierre,
+  capitalizarProfesion,
+  limpiarCodificacion,
+  esTramiteBasura,
+  limpiarPalabraParaFuzzy
+};
