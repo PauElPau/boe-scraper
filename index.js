@@ -30,21 +30,89 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+ // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  
+  //HTML: https://www.juntadeandalucia.es/boja/2026/60/18.html -> OK
+  //PDF: MAL: REVISAR PORQUE ALGUNOS LOS ESTAMOS COGIENDO BIEN Y OTROS NO
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
+  
+  //HTML: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.shtml -> OK
+  //PDF: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.pdf -> MAL: FORMAR A PARTIR DE HTML
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  
+  // BORM TENEMOS:
+  /* <item>
+<title>
+<![CDATA[ 1335 Bases reguladoras y convocatoria para la provisión, mediante movilidad, de una plaza de Agente de la Policía Local y las que vaquen durante el procedimiento. (15 página/s - 342.85KB) ]]>
+</title>
+<link>
+<![CDATA[ https://www.borm.es/services/anuncio/842017/pdf ]]>
+</link>
+<description>
+<![CDATA[ Los Alcázares ]]>
+</description>
+<pubDate>
+<![CDATA[ Fri, 27 Mar 2026 00:00:00 +0100 ]]>
+</pubDate>
+<guid isPermaLink="true">
+<![CDATA[ https://www.borm.es/services/anuncio/842017/pdf ]]>
+</guid>
+<category>
+<![CDATA[ IV. Administración Local ]]>
+</category>
+<category>
+<![CDATA[ Los Alcázares ]]>
+</category>
+</item>
+*/
+  //HTML: https://www.borm.es/#/home/anuncio/27-03-2026/1335 -> MAL: se puede formar a partir de lo que tenemos?
+  //PDF: https://www.borm.es/services/anuncio/ano/2026/numero/1335/pdf?id=842017 -> MAL: se puede formar a partir de lo que tenemos?
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  
+  //HTML: https://doe.juntaex.es/otrosFormatos/html.php?xml=2026050032&anio=2026&doe=600o   --> MAL: FORMAR A PARTIR DE HTML
+  //PDF: https://doe.juntaex.es/pdfs/doe/2026/600o/26050032.pdf --> OK
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  
+  //HTML: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.html -> OK
+  //PDF: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.pdf -> MAL: FORMAR A PARTIR DE HTML
   { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  
+   //HTML: OK
+   //PDF: OK
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  
+  //HTML: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERDOC&BASE=BOLE&SEC=BUSQUEDA_AVANZADA&DOCN=007957047   --> OK
+  //PDF: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VEROBJ&MLKOB=1441581670303&type=pdf  --> MAL: FORMAR A PARTIR DE HTML
   { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
+  
+   //HTML: OK
+   //PDF: OK
   { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
+  //HTML: https://sede.gva.es/es/detall-ocupacio-publica?id_emp=110893&id_info=info_basica --> OK
+  //PDF: https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=110893  --> MAL: FORMAR A PARTIR DE HTML
   { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+  
+  // como pdf tenemos: https://docm.jccm.es/./descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm
+  //HTML: https://docm.jccm.es/docm/verArchivoHtml.do?ruta=2026/03/27/html/2026_2193.html&tipo=rutaDocm --> MAL: se puede formar a partir de lo que tenemos?
+  //PDF: https://docm.jccm.es/docm/descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm  --> MAL: se puede formar a partir de lo que tenemos?
   { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
+  
+  //HTML: https://bocyl.jcyl.es/html/2026/03/27/html/BOCYL-D-27032026-60-4.do   --> MAL: SUSTITUIR pdf POR html
+  //PDF: https://bocyl.jcyl.es/boletines/2026/03/27/pdf/BOCYL-D-27032026-60-4.pdf --> OK
   { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+  
+  //TENEMOS: https://www.caib.es/eboibfront/es/2026/12250
+  //HTML: https://www.caib.es/eboibfront/eli/es-ib/l/2026/03/24/1/dof/spa/html   --> MAL: se puede formar a partir de lo que tenemos?
+  //PDF: https://www.caib.es/eboibfront/eli/es-ib/l/2026/03/24/1/dof/spa/pdf   -->  MAL: se puede formar a partir de lo que tenemos?
   { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+  
+  //HTML: https://miprincipado.asturias.es/bopa/disposiciones?p_p_id=pa_sede_bopa_web_portlet_SedeBopaDispositionWeb&p_p_lifecycle=0&_pa_sede_bopa_web_portlet_SedeBopaDispositionWeb_mvcRenderCommandName=%2Fdisposition%2Fdetail&p_r_p_dispositionText=2026-02233&p_r_p_dispositionReference=2026-02233&p_r_p_dispositionDate=27%2F03%2F2026   --> MAL: SE PUEDE FORMAR A PARTIR DEL CODIGO
+  //PDF: https://miprincipado.asturias.es/bopa/2026/03/27/2026-02233.pdf --> OK
   { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
+  
+  //HTML: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39   --> OK
+  //PDF: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39 --> MAL: NO HAY PDF, PONER LO MISMO QUE EN HTML
   { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
   // 🛑 BOLETINES EN "CUARENTENA" (Requieren Scraping de 2 Fases, RSS privados o bypass avanzado)
@@ -533,33 +601,41 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
   const slugFinal = `${slugBase}-${suffix}`;
 
-  // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (HTML vs PDF) ---
-  let webDefinitiva = itemData.link;
-  let pdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
-
-  // Interceptor Navarra (BON): Si tenemos el HTML, el PDF es predecible
-  if (fuente.nombre === "BON" && webDefinitiva.includes('/texto/')) {
-      pdfDefinitivo = webDefinitiva.replace('/texto/', '/pdf/');
-  }
-
-  // Interceptor Galicia (DOG): Si el HTML acaba en .html, el PDF acaba en .pdf
-  if (fuente.nombre === "DOG" && webDefinitiva.endsWith('.html') && !pdfDefinitivo) {
-      pdfDefinitivo = webDefinitiva.replace('.html', '.pdf');
-  }
-
-  // Si la web principal es en realidad el PDF directo (DOCM, BOCYL, DOE, BORM...)
-  if (webDefinitiva.toLowerCase().includes('.pdf') || webDefinitiva.toLowerCase().includes('descargararchivo')) {
-      pdfDefinitivo = webDefinitiva;
-      // Para link_boe usamos la portada limpia de hoy (itemData.link_boletin) 
-      // Si la portada tiene llaves {YYYY}, preferimos usar el PDF para ambas para no guardar URLs rotas
-      if (itemData.link_boletin && !itemData.link_boletin.includes('{')) {
-          webDefinitiva = itemData.link_boletin;
-      } else {
-          webDefinitiva = pdfDefinitivo; 
-      }
-  } 
   
+  // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (link_boe y guid) ---
+  
+  // 1. Asignamos el HTML principal (link_boe)
+  let webDefinitiva = itemData.htmlGenerado || itemData.link;
+  
+  // 2. Asignamos el PDF principal (guid)
+  let pdfDefinitivo = itemData.pdfGenerado || analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
+
+  // 3. REGLAS DE SEGURIDAD Y LIMPIEZA
+  
+  // Si la web definitiva sigue teniendo llaves (plantillas rotas), usamos la portada del boletín
+  if (webDefinitiva.includes('{')) {
+      webDefinitiva = itemData.link_boletin;
+  }
+
+  // DOE (Extremadura): Reconstruir HTML desde el PDF (si lo tenemos)
+  if (fuente.nombre === "DOE" && pdfDefinitivo && pdfDefinitivo.includes('.pdf') && webDefinitiva.includes('rss.php')) {
+      const matchDoe = pdfDefinitivo.match(/\/doe\/\d{4}\/([^/]+)\/(\d+)\.pdf/);
+      if (matchDoe && matchDoe.length === 3) {
+          const anio = new Date().getFullYear();
+          webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=${matchDoe[2]}&anio=${anio}&doe=${matchDoe[1]}`;
+      }
+  }
+
+  // BOPA (Asturias) y BOIB (Baleares): Como sus URLs HTML dinámicas son inestables, 
+  // forzamos a que el enlace web sea también el PDF directo.
+  if ((fuente.nombre === "BOPA" || fuente.nombre === "BOIB") && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
+      webDefinitiva = pdfDefinitivo;
+  }
+
+  // Fallback de seguridad
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
+  if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
+  // ----------------------------------------------------------
 
   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
   const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo);
@@ -930,27 +1006,32 @@ async function extraerBoletines() {
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 1. Canarias (BOC): Reconstrucción desde el GUID
-            if (fuente.nombre === "BOC" && item.guid && item.guid.includes("BOC-A-")) {
-                const partesGuid = item.guid.split("-"); 
-                if (partesGuid.length === 5) {
-                    item.link = `https://www.gobiernodecanarias.org/boc/${partesGuid[2]}/${partesGuid[3]}/${partesGuid[4]}.html`;
-                    enlacePdfRss = `https://sede.gobiernodecanarias.org/boc/boc-a-${partesGuid[2]}-${partesGuid[3]}-${partesGuid[4]}.pdf`.toLowerCase();
-                }
+            // 1. BOJA (Andalucía) y BOPV (País Vasco): Interceptar la URL HTML y deducir el PDF
+            if (fuente.nombre === "BOPV" && item.link && item.link.endsWith('.shtml')) {
+                enlacePdfRss = item.link.replace('.shtml', '.pdf');
+            }
+            if (fuente.nombre === "BOJA" && item.link && item.link.endsWith('.html')) {
+                // A BOJA no le podemos adivinar el PDF exacto sin descargar la web
+                // Lo dejamos nulo para que la IA (o el fallback posterior) lo extraiga si puede,
+                // o que simplemente guarde el HTML en el campo GUID para no guardar rutas relativas rotas.
+                enlacePdfRss = null; 
             }
 
-            // 2. Aragón (BOA): El PDF usa el mismo DOCN pero cambiando BRSCGI por VERPDF
+            // 2. DOG (Galicia): Transformación directa de HTML a PDF
+            if (fuente.nombre === "DOG" && item.link && item.link.endsWith('.html')) {
+                enlacePdfRss = item.link.replace('.html', '.pdf');
+            }
+
+            // 3. BOA (Aragón): Cambiar VERDOC por VERPDF
             if (fuente.nombre === "BOA" && item.link && item.link.includes('DOCN=')) {
                 if (item.link.startsWith('/cgi-bin')) item.link = "https://www.boa.aragon.es" + item.link;
                 enlacePdfRss = item.link.replace('CMD=VERDOC', 'CMD=VERPDF');
             }
 
-            // 3. Andalucía (BOJA) y País Vasco (BOPV): Convertir PDF relativo a absoluto
-            if (enlacePdfRss && !enlacePdfRss.startsWith('http')) {
-                if (fuente.nombre === "BOJA" || fuente.nombre === "BOPV") {
-                    const urlBase = item.link.substring(0, item.link.lastIndexOf('/') + 1);
-                    enlacePdfRss = urlBase + enlacePdfRss;
-                }
+            // 4. BORM (Murcia): Conservar la URL del PDF del RSS para ambos campos
+            if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
+                item.link = item.guid; // Forzamos que el link_boe sea el PDF funcional
+                enlacePdfRss = item.guid;
             }
             // --------------------------------------------------
 
@@ -1046,12 +1127,27 @@ async function extraerBoletines() {
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
-            // 🛠️ INTERCEPTOR DOGV: Reconstruimos la URL perfecta extrayendo solo el ID
+            // 🛠️ INTERCEPTOR DOGV: Reconstruimos la URL larga con el ID
             if (fuente.nombre === "DOGV" && (enlaceLimpio.includes('id_emp') || enlaceLimpio.includes('id%5Femp'))) {
                 const matchId = enlaceLimpio.match(/id(?:_|%5F)emp=(\d+)/i);
                 if (matchId && matchId[1]) {
+                    // Creamos la URL del PDF dinámicamente según la estructura de Liferay
+                    item.pdfGenerado = `https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=${matchId[1]}`;
                     enlaceLimpio = `https://sede.gva.es/detall-ocupacio-publica?id_emp=${matchId[1]}`;
                 }
+            }
+
+            // 🛠️ INTERCEPTOR DOCM Y BOCYL: Transformar PDF a HTML
+            if (fuente.nombre === "DOCM" && enlaceLimpio.includes('descargarArchivo.do') && enlaceLimpio.includes('/pdf/')) {
+                item.htmlGenerado = enlaceLimpio.replace('descargarArchivo.do', 'verArchivoHtml.do').replace('/pdf/', '/html/').replace('.pdf', '.html');
+            }
+            if (fuente.nombre === "BOCYL" && enlaceLimpio.includes('/pdf/')) {
+                item.htmlGenerado = enlaceLimpio.replace('/pdf/', '/html/').replace('.pdf', '.do');
+            }
+
+            // 🛠️ INTERCEPTOR BON (Navarra): Transformar HTML a PDF
+            if (fuente.nombre === "BON" && enlaceLimpio.includes('/texto/')) {
+                item.pdfGenerado = enlaceLimpio.replace('/texto/', '/pdf/');
             }
 
             // 🛠️ INTERCEPTOR BOPA (ASTURIAS): Destripamos la URL fea y construimos el enlace directo al PDF
