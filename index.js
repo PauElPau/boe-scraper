@@ -30,26 +30,25 @@ const parser = new Parser({
 
 // --- 2. CONFIGURACIÓN DE BOLETINES ---
 const FUENTES_BOLETINES = [
- // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
- // { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
- // { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
-  //{ nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
-  //{ nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
- // { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
- // { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
- // { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
- // { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
+  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
+  { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
- // { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
- // { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
- // { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
- // { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
- // { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
- // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
-
- { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" }
+  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
+  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
+  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
   // 🛑 BOLETINES EN "CUARENTENA" (Requieren Scraping de 2 Fases, RSS privados o bypass avanzado)
+  // { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" }
   // { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta" },
   // { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla" },
   // { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja" },
@@ -84,6 +83,19 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo) {
     else return null;
     return fechaCierre.toISOString().split('T')[0];
   } catch (error) { return null; }
+}
+
+// 🧹 Helper para formatear profesiones a Title Case (Primera Letra Mayúscula)
+function capitalizarProfesion(str) {
+    if (!str) return str;
+    const palabrasMenores = ['y', 'e', 'o', 'u', 'de', 'del', 'al', 'en', 'por', 'para', 'con', 'sin', 'a', 'las', 'los', 'la', 'el', 'un', 'una'];
+    return str.toLowerCase().split(/\s+/).map((word, index) => {
+        // Mantenemos en minúscula las palabras menores, salvo que sean la primera palabra
+        if (index > 0 && palabrasMenores.includes(word)) {
+            return word;
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
 }
 
 function limpiarCodificacion(texto) {
@@ -303,6 +315,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
       2. Si has detectado que el organismo es un Ayuntamiento, Cabildo, Universidad o entidad local, DEBES deducir la provincia EXACTA a la que pertenece ese municipio.
       3. 🛑 CUIDADO CON LOS HOMÓNIMOS: Si un pueblo tiene un nombre similar a otro en otra región, utiliza el "DEPARTAMENTO/ORGANISMO DE ORIGEN" para desempatar lógicamente.
       4. 🛡️ REGLA DE SALVAGUARDA UNIPROVINCIAL: Si no consigues averiguar el municipio exacto, pero la comunidad autónoma es uniprovincial (ej: Murcia, Asturias, Cantabria, Navarra, La Rioja, Madrid), el valor de la provincia DEBE SER el de esa región, JAMÁS pongas "Estatal".
+      5. ⚠️ ALERTA DE ALUCINACIÓN: PROHIBIDO confundir "Castilla-La Mancha" o "Castilla y León" con la provincia de "Castellón".
       
   - titulacion: Busca la titulación mínima exigida. Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
@@ -426,7 +439,14 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       return;
   }
 
-  const profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
+  // Y la SUSTITUYES por este bloque:
+  let profesionPrincipal = (analisisIA.profesiones && analisisIA.profesiones.length > 0) ? analisisIA.profesiones[0] : null;
+  
+  // 🚀 APLICAMOS EL FORMATO 'TITLE CASE' A LAS PROFESIONES
+  profesionPrincipal = capitalizarProfesion(profesionPrincipal);
+  if (analisisIA.profesiones) {
+      analisisIA.profesiones = analisisIA.profesiones.map(capitalizarProfesion);
+  }
   
   if (!profesionPrincipal && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
       console.log(`   ⏭️ Descartado: La IA determinó que es un trámite genérico sin plazas ni profesiones.`);
@@ -513,13 +533,32 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
   const slugFinal = `${slugBase}-${suffix}`;
 
+  // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (HTML vs PDF) ---
   let webDefinitiva = itemData.link;
   let pdfDefinitivo = analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
 
+  // Interceptor Navarra (BON): Si tenemos el HTML, el PDF es predecible
+  if (fuente.nombre === "BON" && webDefinitiva.includes('/texto/')) {
+      pdfDefinitivo = webDefinitiva.replace('/texto/', '/pdf/');
+  }
+
+  // Interceptor Galicia (DOG): Si el HTML acaba en .html, el PDF acaba en .pdf
+  if (fuente.nombre === "DOG" && webDefinitiva.endsWith('.html') && !pdfDefinitivo) {
+      pdfDefinitivo = webDefinitiva.replace('.html', '.pdf');
+  }
+
+  // Si la web principal es en realidad el PDF directo (DOCM, BOCYL, DOE, BORM...)
   if (webDefinitiva.toLowerCase().includes('.pdf') || webDefinitiva.toLowerCase().includes('descargararchivo')) {
       pdfDefinitivo = webDefinitiva;
-      webDefinitiva = itemData.link_boletin || fuente.url; 
+      // Para link_boe usamos la portada limpia de hoy (itemData.link_boletin) 
+      // Si la portada tiene llaves {YYYY}, preferimos usar el PDF para ambas para no guardar URLs rotas
+      if (itemData.link_boletin && !itemData.link_boletin.includes('{')) {
+          webDefinitiva = itemData.link_boletin;
+      } else {
+          webDefinitiva = pdfDefinitivo; 
+      }
   } 
+  
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
 
   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
@@ -887,9 +926,11 @@ async function extraerBoletines() {
             const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
             const categoriaOrganismo = item.categories?.[1] || fuente.ambito;
 
+            // --- 🛠️ EXTRACCIÓN Y LIMPIEZA DE PDFS PARA RSS ---
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
+            // 1. Canarias (BOC): Reconstrucción desde el GUID
             if (fuente.nombre === "BOC" && item.guid && item.guid.includes("BOC-A-")) {
                 const partesGuid = item.guid.split("-"); 
                 if (partesGuid.length === 5) {
@@ -898,9 +939,20 @@ async function extraerBoletines() {
                 }
             }
 
-            if (fuente.nombre === "BOA" && item.link && item.link.startsWith('/cgi-bin')) {
-                item.link = "https://www.boa.aragon.es" + item.link;
+            // 2. Aragón (BOA): El PDF usa el mismo DOCN pero cambiando BRSCGI por VERPDF
+            if (fuente.nombre === "BOA" && item.link && item.link.includes('DOCN=')) {
+                if (item.link.startsWith('/cgi-bin')) item.link = "https://www.boa.aragon.es" + item.link;
+                enlacePdfRss = item.link.replace('CMD=VERDOC', 'CMD=VERPDF');
             }
+
+            // 3. Andalucía (BOJA) y País Vasco (BOPV): Convertir PDF relativo a absoluto
+            if (enlacePdfRss && !enlacePdfRss.startsWith('http')) {
+                if (fuente.nombre === "BOJA" || fuente.nombre === "BOPV") {
+                    const urlBase = item.link.substring(0, item.link.lastIndexOf('/') + 1);
+                    enlacePdfRss = urlBase + enlacePdfRss;
+                }
+            }
+            // --------------------------------------------------
 
             console.log(`\n📄 Extrayendo interior de: ${item.tituloLimpioParaLog.substring(0,70)}...\n   🔗 ${item.link}`);
             
