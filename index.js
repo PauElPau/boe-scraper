@@ -347,7 +347,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-            required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "meta_description", "enlace_pdf"],
+           required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
