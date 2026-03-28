@@ -71,10 +71,8 @@ const FUENTES_BOLETINES = [
   //PDF: https://bocyl.jcyl.es/boletines/2026/03/27/pdf/BOCYL-D-27032026-60-4.pdf --> OK
   { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
   
-  //TENEMOS: https://www.caib.es/eboibfront/es/2026/12250
-  //HTML: https://www.caib.es/eboibfront/eli/es-ib/l/2026/03/24/1/dof/spa/html   --> MAL: se puede formar a partir de lo que tenemos?
-  //PDF: https://www.caib.es/eboibfront/eli/es-ib/l/2026/03/24/1/dof/spa/pdf   -->  MAL: se puede formar a partir de lo que tenemos?
-  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", rssToHtml: true }, 
+  // BOIB (Baleares): Extraemos el enlace del día de hoy desde su RSS y le añadimos la sección
+  { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", boibRssToHtml: true },
   
   //HTML: https://miprincipado.asturias.es/bopa/disposiciones?p_p_id=pa_sede_bopa_web_portlet_SedeBopaDispositionWeb&p_p_lifecycle=0&_pa_sede_bopa_web_portlet_SedeBopaDispositionWeb_mvcRenderCommandName=%2Fdisposition%2Fdetail&p_r_p_dispositionText=2026-02233&p_r_p_dispositionReference=2026-02233&p_r_p_dispositionDate=27%2F03%2F2026   --> MAL: SE PUEDE FORMAR A PARTIR DEL CODIGO
   //PDF: https://miprincipado.asturias.es/bopa/2026/03/27/2026-02233.pdf --> OK
