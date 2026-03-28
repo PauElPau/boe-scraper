@@ -25,6 +25,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       statsFuente.errores++;
       return;
   }
+  // 🚀 PARCHE BOJA: Limpiar la cadena conflictiva
+  textoParaIA = textoParaIA.replace(/\[Descargar PDF\]/gi, '').trim();
 
   const textoLower = textoParaIA.toLowerCase();
   if (textoLower.includes("error 404") || textoLower.includes("página no encontrada") || textoLower.includes("page not found")) {

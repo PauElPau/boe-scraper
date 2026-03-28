@@ -127,11 +127,12 @@ async function extraerBoletines() {
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 1. BOPV (País Vasco): Reemplazar extensión y el subdominio 'y22' por 'web01'
+            // 1. BOPV (País Vasco): Asegurar ruta completa absoluta
             if (fuente.nombre === "BOPV" && item.link) {
                 item.link = item.link.replace('/y22-bopv/', '/web01-bopv/');
                 if (item.link.endsWith('.shtml')) {
-                    enlacePdfRss = item.link.replace('.shtml', '.pdf');
+                    // Forzamos la asignación ignorando cualquier ruta relativa basura del enclosure
+                    enlacePdfRss = item.link.replace('.shtml', '.pdf'); 
                 }
             }
             if (fuente.nombre === "BOJA" && item.link && item.link.endsWith('.html')) {
@@ -155,22 +156,20 @@ async function extraerBoletines() {
             // 4. BORM (Murcia): Magia para extraer el nº de boletín del título e ID del guid
             if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
                 const idMatch = item.guid.match(/\/anuncio\/(\d+)\/pdf/);
-                const numMatch = item.title.match(/^\s*(\d+)/); // Busca números al inicio del título
+                const numMatch = item.title.match(/^\s*(\d+)/);
                 
                 if (idMatch && numMatch) {
                     const idDoc = idMatch[1];
                     const numDoc = numMatch[1];
                     
-                    const dateObj = new Date(item.isoDate || item.pubDate || new Date());
-                    const yyyy = dateObj.getFullYear();
-                    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                    const dd = String(dateObj.getDate()).padStart(2, '0');
+                    // 🚀 PARCHE BORM: Usar siempre la fecha actual para la ruta
+                    const hoyBorm = new Date();
+                    const yyyyBorm = hoyBorm.getFullYear();
+                    const mmBorm = String(hoyBorm.getMonth() + 1).padStart(2, '0');
+                    const ddBorm = String(hoyBorm.getDate()).padStart(2, '0');
                     
-                    item.link = `https://www.borm.es/#/home/anuncio/${dd}-${mm}-${yyyy}/${numDoc}`;
-                    enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyy}/numero/${numDoc}/pdf?id=${idDoc}`;
-                } else {
-                    item.link = item.guid;
-                    enlacePdfRss = item.guid;
+                    item.link = `https://www.borm.es/#/home/anuncio/${ddBorm}-${mmBorm}-${yyyyBorm}/${numDoc}`;
+                    enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyyBorm}/numero/${numDoc}/pdf?id=${idDoc}`;
                 }
             }
             // --------------------------------------------------
@@ -277,24 +276,30 @@ async function extraerBoletines() {
                 }
             }
 
-            // 🛠️ INTERCEPTOR DOCM (Castilla-La Mancha): Limpiar el punto /./ y generar HTML
+            // 🛠️ INTERCEPTOR DOCM (Castilla-La Mancha)
             if (fuente.nombre === "DOCM") {
-                let pdfLimpio = enlaceLimpio.replace('/./', '/docm/'); // Limpia el error nativo de su web
+                // Elimina el '/./' y deja el PDF limpio
+                let pdfLimpio = enlaceLimpio.replace('/./', '/'); 
                 item.pdfGenerado = pdfLimpio;
                 if (pdfLimpio.includes('descargarArchivo.do') && pdfLimpio.includes('/pdf/')) {
-                    item.htmlGenerado = pdfLimpio.replace('descargarArchivo.do', 'verArchivoHtml.do')
+                    // Genera el HTML inyectando 'docm/' y cambiando pdf por html
+                    item.htmlGenerado = pdfLimpio.replace('descargarArchivo.do', 'docm/verArchivoHtml.do')
                                                  .replace('/pdf/', '/html/')
                                                  .replace('.pdf', '.html');
                 }
             }
-            // 🛠️ INTERCEPTOR BOCYL (Castilla y León): Tres reemplazos en la cadena
+
+            // 🛠️ INTERCEPTOR BOCYL (Castilla y León)
             if (fuente.nombre === "BOCYL" && enlaceLimpio.includes('/pdf/')) {
+                // El enlace que capturamos es el PDF, lo guardamos
+                item.pdfGenerado = enlaceLimpio; 
+                // Generamos el HTML cambiando 'boletines' por 'html', y '.pdf' por '.do'
                 item.htmlGenerado = enlaceLimpio.replace('/boletines/', '/html/')
                                                 .replace('/pdf/', '/html/')
                                                 .replace('.pdf', '.do');
             }
 
-            // 🛠️ INTERCEPTOR BOPA (ASTURIAS): Mantenemos el HTML "feo" y extraemos el PDF limpio
+            // 🛠️ INTERCEPTOR BOPA (ASTURIAS)
             if (fuente.nombre === "BOPA" && enlaceLimpio.includes('dispositionText') && enlaceLimpio.includes('dispositionDate')) {
                 const matchId = enlaceLimpio.match(/dispositionText=([^&]+)/);
                 const matchDate = enlaceLimpio.match(/dispositionDate=([^&]+)/);
@@ -303,8 +308,10 @@ async function extraerBoletines() {
                     const decodedDate = decodeURIComponent(matchDate[1]); 
                     const partesFecha = decodedDate.split('/'); // [DD, MM, YYYY]
                     if (partesFecha.length === 3) {
-                        // Solo asignamos el PDF, el enlaceLimpio sigue intacto como HTML feo
-                        item.pdfGenerado = `https://sede.asturias.es/bopa/${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}/${idDoc}.pdf`;
+                        // PDF Limpio
+                        item.pdfGenerado = `https://miprincipado.asturias.es/bopa/${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}/${idDoc}.pdf`;
+                        // HTML Feo reconstruido matemáticamente
+                        item.htmlGenerado = `https://miprincipado.asturias.es/bopa/disposiciones?p_p_id=pa_sede_bopa_web_portlet_SedeBopaDispositionWeb&p_p_lifecycle=0&_pa_sede_bopa_web_portlet_SedeBopaDispositionWeb_mvcRenderCommandName=%2Fdisposition%2Fdetail&p_r_p_dispositionText=${idDoc}&p_r_p_dispositionReference=${idDoc}&p_r_p_dispositionDate=${partesFecha[0]}%2F${partesFecha[1]}%2F${partesFecha[2]}`;
                     }
                 }
             }
