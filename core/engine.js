@@ -215,7 +215,6 @@ async function extraerBoletines() {
                   const xmlRss = await resRss.text();
                   const feed = await parser.parseString(xmlRss);
                   
-                  // Buscar el ítem cuya fecha coincide con HOY
                   const hoyFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
                   
                   const itemDeHoy = feed.items.find(item => {
@@ -226,21 +225,21 @@ async function extraerBoletines() {
                   });
 
                   if (itemDeHoy && itemDeHoy.link) {
-                      // Construimos la URL inyectando la sección específica
+                      // 🚀 AQUÍ ESTÁ LA MAGIA: Concatenar la sección exacta
                       urlFinal = itemDeHoy.link + "/seccion-ii-autoridades-y-personal/473"; 
                       console.log(`   ✅ Boletín BOIB de hoy localizado: ${urlFinal}`);
                   } else {
                       console.log(`   ⏭️ No hay boletín BOIB publicado con fecha de hoy (${hoyFormat}).`);
-                      continue; // Saltamos este boletín hoy
+                      continue; 
                   }
               } catch (e) {
                   console.error(`   ❌ Error leyendo el RSS puente del BOIB: ${e.message}`);
                   totalErrores++;
                   continue;
               }
-          }
-
-          if (fuente.rssToHtml) {
+          } 
+          // Mantenemos el antiguo por si alguna otra fuente futura lo necesita
+          else if (fuente.rssToHtml) {
               console.log(`   🔗 Extrayendo URL real del último boletín desde su RSS puente...`);
               try {
                   const resRss = await fetch(urlFinal);
