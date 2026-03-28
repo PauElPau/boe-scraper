@@ -3,44 +3,17 @@ const FUENTES_BOLETINES = [
   
   //HTML: https://www.juntadeandalucia.es/boja/2026/60/18.html -> OK
   //PDF: MAL: REVISAR PORQUE ALGUNOS LOS ESTAMOS COGIENDO BIEN Y OTROS NO
-  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
+ // { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
   
   //HTML: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.shtml -> OK
   //PDF: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.pdf -> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+ // { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   
-  // BORM TENEMOS:
-  /* <item>
-<title>
-<![CDATA[ 1335 Bases reguladoras y convocatoria para la provisión, mediante movilidad, de una plaza de Agente de la Policía Local y las que vaquen durante el procedimiento. (15 página/s - 342.85KB) ]]>
-</title>
-<link>
-<![CDATA[ https://www.borm.es/services/anuncio/842017/pdf ]]>
-</link>
-<description>
-<![CDATA[ Los Alcázares ]]>
-</description>
-<pubDate>
-<![CDATA[ Fri, 27 Mar 2026 00:00:00 +0100 ]]>
-</pubDate>
-<guid isPermaLink="true">
-<![CDATA[ https://www.borm.es/services/anuncio/842017/pdf ]]>
-</guid>
-<category>
-<![CDATA[ IV. Administración Local ]]>
-</category>
-<category>
-<![CDATA[ Los Alcázares ]]>
-</category>
-</item>
-*/
-  //HTML: https://www.borm.es/#/home/anuncio/27-03-2026/1335 -> MAL: se puede formar a partir de lo que tenemos?
-  //PDF: https://www.borm.es/services/anuncio/ano/2026/numero/1335/pdf?id=842017 -> MAL: se puede formar a partir de lo que tenemos?
-  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
+//  { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   
   //HTML: https://doe.juntaex.es/otrosFormatos/html.php?xml=2026050032&anio=2026&doe=600o   --> MAL: FORMAR A PARTIR DE HTML
   //PDF: https://doe.juntaex.es/pdfs/doe/2026/600o/26050032.pdf --> OK
-  { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
+ // { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
   
   //HTML: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.html -> OK
   //PDF: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.pdf -> MAL: FORMAR A PARTIR DE HTML
@@ -52,11 +25,11 @@ const FUENTES_BOLETINES = [
   
   //HTML: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERDOC&BASE=BOLE&SEC=BUSQUEDA_AVANZADA&DOCN=007957047   --> OK
   //PDF: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VEROBJ&MLKOB=1441581670303&type=pdf  --> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
+ // { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
   
    //HTML: OK
    //PDF: OK
-  { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
+ // { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
   //HTML: https://sede.gva.es/es/detall-ocupacio-publica?id_emp=110893&id_info=info_basica --> OK
   //PDF: https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=110893  --> MAL: FORMAR A PARTIR DE HTML
@@ -65,22 +38,22 @@ const FUENTES_BOLETINES = [
   // como pdf tenemos: https://docm.jccm.es/./descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm
   //HTML: https://docm.jccm.es/docm/verArchivoHtml.do?ruta=2026/03/27/html/2026_2193.html&tipo=rutaDocm --> MAL: se puede formar a partir de lo que tenemos?
   //PDF: https://docm.jccm.es/docm/descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm  --> MAL: se puede formar a partir de lo que tenemos?
-  { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
+ // { nombre: "DOCM", tipo: "html_directo", url: "https://docm.jccm.es/docm/cambiarBoletin.do?fecha={YYYYMMDD}", ambito: "Castilla-La Mancha" },   
   
   //HTML: https://bocyl.jcyl.es/html/2026/03/27/html/BOCYL-D-27032026-60-4.do   --> MAL: SUSTITUIR pdf POR html
   //PDF: https://bocyl.jcyl.es/boletines/2026/03/27/pdf/BOCYL-D-27032026-60-4.pdf --> OK
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+ // { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
   
   // BOIB (Baleares): Extraemos el enlace del día de hoy desde su RSS y le añadimos la sección
   { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", boibRssToHtml: true },
   
   //HTML: https://miprincipado.asturias.es/bopa/disposiciones?p_p_id=pa_sede_bopa_web_portlet_SedeBopaDispositionWeb&p_p_lifecycle=0&_pa_sede_bopa_web_portlet_SedeBopaDispositionWeb_mvcRenderCommandName=%2Fdisposition%2Fdetail&p_r_p_dispositionText=2026-02233&p_r_p_dispositionReference=2026-02233&p_r_p_dispositionDate=27%2F03%2F2026   --> MAL: SE PUEDE FORMAR A PARTIR DEL CODIGO
   //PDF: https://miprincipado.asturias.es/bopa/2026/03/27/2026-02233.pdf --> OK
-  { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
+ // { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
   
   //HTML: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39   --> OK
   //PDF: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39 --> MAL: NO HAY PDF, PONER LO MISMO QUE EN HTML
-  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
+ // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
   // 🛑 BOLETINES EN "CUARENTENA" (Requieren Scraping de 2 Fases, RSS privados o bypass avanzado)
   // { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" }
