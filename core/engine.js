@@ -298,6 +298,41 @@ async function extraerBoletines() {
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
+            // 🛠️ INTERCEPTOR BOIB (Baleares): Arreglar la ruta relativa y generar HTML/PDF
+            if (fuente.nombre === "BOIB") {
+                // 1. Limpiamos la ruta relativa monstruosa si se ha concatenado mal
+                // A veces la IA devuelve "/eboibfront/pdf/es/..." o "https://.../473/eboibfront/pdf/..."
+                let rutaSucia = enlaceLimpio;
+                if (rutaSucia.includes('/eboibfront/pdf/')) {
+                    const matchPdf = rutaSucia.match(/\/eboibfront\/pdf\/.+/);
+                    if (matchPdf) {
+                        // Construimos el PDF real absoluto
+                        item.pdfGenerado = "https://www.caib.es" + matchPdf[0];
+                        // Construimos el HTML real cambiando /pdf/ por /html/
+                        item.htmlGenerado = item.pdfGenerado.replace('/eboibfront/pdf/', '/eboibfront/html/');
+                        // Le decimos al código que use el HTML como enlace web para la BD
+                        enlaceLimpio = item.htmlGenerado;
+                    }
+                } 
+                // En caso de que la IA extraiga el enlace HTML en vez del PDF
+                else if (rutaSucia.includes('/eboibfront/html/')) {
+                    const matchHtml = rutaSucia.match(/\/eboibfront\/html\/.+/);
+                    if (matchHtml) {
+                        item.htmlGenerado = "https://www.caib.es" + matchHtml[0];
+                        item.pdfGenerado = item.htmlGenerado.replace('/eboibfront/html/', '/eboibfront/pdf/');
+                        enlaceLimpio = item.htmlGenerado;
+                    }
+                }
+                // En caso de que la IA extraiga el enlace "bonito" con el número largo
+                // (ej: https://www.caib.es/eboibfront/es/2026/12251/713647/bases-del-concurso...)
+                else if (rutaSucia.match(/\/es\/\d{4}\/\d+\/\d+\//)) {
+                    // Si nos da este enlace, lo usamos como HTML, 
+                    // pero no podemos adivinar el PDF exacto (lo dejamos null para que lo busque el PDF nativo)
+                    item.htmlGenerado = rutaSucia.startsWith('http') ? rutaSucia : "https://www.caib.es" + rutaSucia;
+                    enlaceLimpio = item.htmlGenerado;
+                }
+            }
+
             // 🛠️ INTERCEPTOR DOGV: Reconstruimos la URL larga con el ID
             if (fuente.nombre === "DOGV" && (enlaceLimpio.includes('id_emp') || enlaceLimpio.includes('id%5Femp'))) {
                 const matchId = enlaceLimpio.match(/id(?:_|%5F)emp=(\d+)/i);

@@ -161,10 +161,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       }
   }
 
-  // BOIB (Baleares): Forzamos a que el enlace web sea también el PDF directo
-  if (fuente.nombre === "BOIB" && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
-      webDefinitiva = pdfDefinitivo;
-  }
 
   // Fallback de seguridad (BON y demás aplicarán aquí y tendrán links idénticos si no hay PDF extraído)
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
