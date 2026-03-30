@@ -72,7 +72,8 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
       if (!href) return;
       
       // Guardamos el PDF directo si lo hay (Escudo Anti-PDF)
-      if (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc')) {
+      // 🚀 AÑADIDO 'type=pdf' PARA CAZAR EL CÓDIGO MLKOB DEL BOA
+      if (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc') || href.toLowerCase().includes('type=pdf')) {
           if (!pdfLink) {
               try { pdfLink = new URL(href, url).href; } catch(e){}
           }
