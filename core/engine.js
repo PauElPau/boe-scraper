@@ -146,7 +146,7 @@ async function extraerBoletines() {
                 enlacePdfRss = null; 
             }
 
-            // 4. BORM (Murcia): Generar con la fecha exacta de publicación
+            // 4. BORM (Murcia): Generar con la fecha exacta de hoy
             if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
                 const idMatch = item.guid.match(/\/anuncio\/(\d+)\/pdf/);
                 const numMatch = item.title.match(/^\s*(\d+)/);
@@ -154,11 +154,12 @@ async function extraerBoletines() {
                 if (idMatch && numMatch) {
                     const idDoc = idMatch[1];
                     const numDoc = numMatch[1];
-                    // 🚀 OBLIGAMOS a usar la fecha oficial del boletín, no la del servidor
-                    const dateObj = new Date(item.isoDate || item.pubDate);
-                    const yyyyBorm = dateObj.getFullYear();
-                    const mmBorm = String(dateObj.getMonth() + 1).padStart(2, '0');
-                    const ddBorm = String(dateObj.getDate()).padStart(2, '0');
+                    
+                    // 🚀 PARCHE BORM: Usar la fecha del día en curso, ignorando pubDate
+                    const hoyBorm = new Date();
+                    const yyyyBorm = hoyBorm.getFullYear();
+                    const mmBorm = String(hoyBorm.getMonth() + 1).padStart(2, '0');
+                    const ddBorm = String(hoyBorm.getDate()).padStart(2, '0');
                     
                     item.link = `https://www.borm.es/#/home/anuncio/${ddBorm}-${mmBorm}-${yyyyBorm}/${numDoc}`;
                     enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyyBorm}/numero/${numDoc}/pdf?id=${idDoc}`;
@@ -317,14 +318,16 @@ async function extraerBoletines() {
 
             // 🛠️ INTERCEPTOR DOCM (Castilla-La Mancha)
             if (fuente.nombre === "DOCM") {
-                // Elimina el '/./' y deja el PDF limpio
-                let pdfLimpio = enlaceLimpio.replace('/./', '/'); 
-                item.pdfGenerado = pdfLimpio;
-                if (pdfLimpio.includes('descargarArchivo.do') && pdfLimpio.includes('/pdf/')) {
-                    // Genera el HTML inyectando 'docm/' y cambiando pdf por html
-                    item.htmlGenerado = pdfLimpio.replace('descargarArchivo.do', 'docm/verArchivoHtml.do')
-                                                 .replace('/pdf/', '/html/')
-                                                 .replace('.pdf', '.html');
+                // Limpiamos todo rastro de dominio, barras iniciales o puntos
+                let pathLimpio = enlaceLimpio.replace('https://docm.jccm.es', '').replace(/^\/+/, '').replace(/^\.\//, '').replace(/^docm\//, '');
+                
+                // pathLimpio ahora es siempre: "descargarArchivo.do?ruta=..."
+                item.pdfGenerado = "https://docm.jccm.es/docm/" + pathLimpio;
+                
+                if (pathLimpio.includes('descargarArchivo.do') && pathLimpio.includes('/pdf/')) {
+                    item.htmlGenerado = "https://docm.jccm.es/docm/" + pathLimpio.replace('descargarArchivo.do', 'verArchivoHtml.do')
+                                                                                 .replace('/pdf/', '/html/')
+                                                                                 .replace('.pdf', '.html');
                 }
             }
 
