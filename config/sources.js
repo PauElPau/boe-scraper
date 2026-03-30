@@ -5,9 +5,7 @@ const FUENTES_BOLETINES = [
   //PDF: MAL: REVISAR PORQUE ALGUNOS LOS ESTAMOS COGIENDO BIEN Y OTROS NO
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
   
-  //HTML: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.shtml -> OK
-  //PDF: https://www.euskadi.eus/web01-bopv/es/bopv2/datos/2026/03/2601340a.pdf -> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
+ // { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   
@@ -15,9 +13,8 @@ const FUENTES_BOLETINES = [
   //PDF: https://doe.juntaex.es/pdfs/doe/2026/600o/26050032.pdf --> OK
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
   
-  //HTML: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.html -> OK
-  //PDF: https://www.xunta.gal/dog/Publicados/2026/20260327/AnuncioG0597-200326-0003_es.pdf -> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
+
+ // { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   
 
   //{ nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
