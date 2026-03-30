@@ -153,12 +153,14 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       webDefinitiva = itemData.link_boletin;
   }
 
-  // DOE (Extremadura): Reconstruir HTML desde el PDF (si lo tenemos)
-  if (fuente.nombre === "DOE" && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
-      const matchDoe = pdfDefinitivo.match(/\/doe\/(\d{4})\/([^/]+)\/(\d+)\.pdf/);
+  // DOE (Extremadura): Reconstruir HTML desde el PDF (esté donde esté el enlace)
+  let enlaceBaseDoe = pdfDefinitivo || webDefinitiva || "";
+  if (fuente.nombre === "DOE" && enlaceBaseDoe.includes('.pdf')) {
+      const matchDoe = enlaceBaseDoe.match(/\/doe\/(\d{4})\/([^/]+)\/(\d+)\.pdf/i);
       if (matchDoe && matchDoe.length === 4) {
-          // 🚀 PARCHE DOE: Añadimos '20' delante del ID del PDF para formar el parámetro XML correcto
+          // 🚀 Formamos el HTML matemáticamente y aseguramos que el PDF se quede en el guid
           webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=20${matchDoe[3]}&anio=${matchDoe[1]}&doe=${matchDoe[2]}`;
+          pdfDefinitivo = enlaceBaseDoe; 
       }
   }
 
