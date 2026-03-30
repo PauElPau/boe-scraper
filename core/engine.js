@@ -298,38 +298,18 @@ async function extraerBoletines() {
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
-            // 🛠️ INTERCEPTOR BOIB (Baleares): Arreglar la ruta relativa y generar HTML/PDF
+            // 🛠️ INTERCEPTOR BOIB (Baleares): Limpiar la ruta relativa sin inventar relaciones matemáticas
             if (fuente.nombre === "BOIB") {
-                // 1. Limpiamos la ruta relativa monstruosa si se ha concatenado mal
-                // A veces la IA devuelve "/eboibfront/pdf/es/..." o "https://.../473/eboibfront/pdf/..."
                 let rutaSucia = enlaceLimpio;
-                if (rutaSucia.includes('/eboibfront/pdf/')) {
-                    const matchPdf = rutaSucia.match(/\/eboibfront\/pdf\/.+/);
-                    if (matchPdf) {
-                        // Construimos el PDF real absoluto
-                        item.pdfGenerado = "https://www.caib.es" + matchPdf[0];
-                        // Construimos el HTML real cambiando /pdf/ por /html/
-                        item.htmlGenerado = item.pdfGenerado.replace('/eboibfront/pdf/', '/eboibfront/html/');
-                        // Le decimos al código que use el HTML como enlace web para la BD
-                        enlaceLimpio = item.htmlGenerado;
+                if (rutaSucia.includes('/eboibfront/')) {
+                    const matchRuta = rutaSucia.match(/\/eboibfront\/.+/);
+                    if (matchRuta) {
+                        // Prevenimos la URL monstruosa haciendo la ruta absoluta desde el dominio principal
+                        enlaceLimpio = "https://www.caib.es" + matchRuta[0];
+                        // Borramos cualquier pdfGenerado/htmlGenerado para no forzar errores
+                        item.pdfGenerado = null; 
+                        item.htmlGenerado = null;
                     }
-                } 
-                // En caso de que la IA extraiga el enlace HTML en vez del PDF
-                else if (rutaSucia.includes('/eboibfront/html/')) {
-                    const matchHtml = rutaSucia.match(/\/eboibfront\/html\/.+/);
-                    if (matchHtml) {
-                        item.htmlGenerado = "https://www.caib.es" + matchHtml[0];
-                        item.pdfGenerado = item.htmlGenerado.replace('/eboibfront/html/', '/eboibfront/pdf/');
-                        enlaceLimpio = item.htmlGenerado;
-                    }
-                }
-                // En caso de que la IA extraiga el enlace "bonito" con el número largo
-                // (ej: https://www.caib.es/eboibfront/es/2026/12251/713647/bases-del-concurso...)
-                else if (rutaSucia.match(/\/es\/\d{4}\/\d+\/\d+\//)) {
-                    // Si nos da este enlace, lo usamos como HTML, 
-                    // pero no podemos adivinar el PDF exacto (lo dejamos null para que lo busque el PDF nativo)
-                    item.htmlGenerado = rutaSucia.startsWith('http') ? rutaSucia : "https://www.caib.es" + rutaSucia;
-                    enlaceLimpio = item.htmlGenerado;
                 }
             }
 
@@ -457,15 +437,15 @@ async function extraerBoletines() {
     let alertasFavs = 0;
 
     if (convocatoriasInsertadasHoy.length > 0) {
-      //  alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
-      //  alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
-      //  await enviarAlertaTelegram(convocatoriasInsertadasHoy);
+        alertasEmail = await enviarAlertasPorEmail(convocatoriasInsertadasHoy) || 0;
+        alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
+        await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
     // 👈 NUEVO: Pasamos el objeto detallado a Telegram en vez del número simple
-    //await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
+    await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
     console.error("🔥 Error crítico general:", error);
