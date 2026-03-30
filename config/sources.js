@@ -28,7 +28,7 @@ const FUENTES_BOLETINES = [
   
   //HTML: https://bocyl.jcyl.es/html/2026/03/27/html/BOCYL-D-27032026-60-4.do   --> MAL: SUSTITUIR pdf POR html
   //PDF: https://bocyl.jcyl.es/boletines/2026/03/27/pdf/BOCYL-D-27032026-60-4.pdf --> OK
-  { nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
+  //{ nombre: "BOCYL", tipo: "html_directo", url: "https://bocyl.jcyl.es/boletin.do?fechaBoletin={DD/MM/YYYY}#I.B._AUTORIDADES_Y_PERSONAL", ambito: "Castilla y León" },
   
   // BOIB (Baleares): Extraemos el enlace del día de hoy desde su RSS y le añadimos la sección
   { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", boibRssToHtml: true },
