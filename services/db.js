@@ -37,6 +37,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section, fuente.ambito);
 
+ 
   if (analisisIA.tipo === "IGNORAR" || (analisisIA.resumen && analisisIA.resumen.toLowerCase().includes("convenio"))) {
       console.log(`   ⏭️ Ignorado: La IA detectó que es un convenio o trámite no relevante.`);
       statsFuente.descartadas_ia++;
@@ -154,10 +155,10 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   // DOE (Extremadura): Reconstruir HTML desde el PDF (si lo tenemos)
   if (fuente.nombre === "DOE" && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
-      // Capturamos el año (grupo 1), el código DOE (grupo 2) y el ID (grupo 3)
       const matchDoe = pdfDefinitivo.match(/\/doe\/(\d{4})\/([^/]+)\/(\d+)\.pdf/);
       if (matchDoe && matchDoe.length === 4) {
-          webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=${matchDoe[3]}&anio=${matchDoe[1]}&doe=${matchDoe[2]}`;
+          // 🚀 PARCHE DOE: Añadimos '20' delante del ID del PDF para formar el parámetro XML correcto
+          webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=20${matchDoe[3]}&anio=${matchDoe[1]}&doe=${matchDoe[2]}`;
       }
   }
 
@@ -167,6 +168,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       if (matchPdf) {
           pdfDefinitivo = "https://www.caib.es" + matchPdf[0];
       }
+  }
+
+  // BON (Navarra): Forzamos a que el enlace PDF (guid) sea exactamente igual al HTML (link_boe)
+  if (fuente.nombre === "BON") {
+      pdfDefinitivo = webDefinitiva;
   }
 
 
