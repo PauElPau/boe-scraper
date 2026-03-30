@@ -161,6 +161,14 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       }
   }
 
+  // BOIB (Baleares): Si la IA secundaria encontró el PDF dentro de la página, aseguramos que sea absoluto
+  if (fuente.nombre === "BOIB" && pdfDefinitivo && pdfDefinitivo.includes('/eboibfront/pdf/')) {
+      const matchPdf = pdfDefinitivo.match(/\/eboibfront\/pdf\/.+/);
+      if (matchPdf) {
+          pdfDefinitivo = "https://www.caib.es" + matchPdf[0];
+      }
+  }
+
 
   // Fallback de seguridad (BON y demás aplicarán aquí y tendrán links idénticos si no hay PDF extraído)
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
