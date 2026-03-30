@@ -153,11 +153,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   // DOE (Extremadura): Reconstruir HTML desde el PDF (si lo tenemos)
-  if (fuente.nombre === "DOE" && pdfDefinitivo && pdfDefinitivo.includes('.pdf') && webDefinitiva.includes('rss.php')) {
-      const matchDoe = pdfDefinitivo.match(/\/doe\/\d{4}\/([^/]+)\/(\d+)\.pdf/);
-      if (matchDoe && matchDoe.length === 3) {
-          const anio = new Date().getFullYear();
-          webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=${matchDoe[2]}&anio=${anio}&doe=${matchDoe[1]}`;
+  if (fuente.nombre === "DOE" && pdfDefinitivo && pdfDefinitivo.includes('.pdf')) {
+      // Capturamos el año (grupo 1), el código DOE (grupo 2) y el ID (grupo 3)
+      const matchDoe = pdfDefinitivo.match(/\/doe\/(\d{4})\/([^/]+)\/(\d+)\.pdf/);
+      if (matchDoe && matchDoe.length === 4) {
+          webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=${matchDoe[3]}&anio=${matchDoe[1]}&doe=${matchDoe[2]}`;
       }
   }
 

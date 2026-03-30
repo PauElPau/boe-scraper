@@ -90,6 +90,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
       3. 🛑 CUIDADO CON LOS HOMÓNIMOS: Si un pueblo tiene un nombre similar a otro en otra región, utiliza el "DEPARTAMENTO/ORGANISMO DE ORIGEN" para desempatar lógicamente.
       4. 🛡️ REGLA DE SALVAGUARDA UNIPROVINCIAL: Si no consigues averiguar el municipio exacto, pero la comunidad autónoma es uniprovincial (ej: Murcia, Asturias, Cantabria, Navarra, La Rioja, Madrid), el valor de la provincia DEBE SER el de esa región, JAMÁS pongas "Estatal".
       5. ⚠️ ALERTA DE ALUCINACIÓN: PROHIBIDO confundir "Castilla-La Mancha" o "Castilla y León" con la provincia de "Castellón".
+      6. ⚠️ ALERTA DE ALUCINACIÓN (CASTELLÓN): PROHIBIDO usar la provincia "Castellón" a menos que la comunidad autónoma sea explícitamente "Comunidad Valenciana". Si la comunidad es "Castilla-La Mancha" o "Castilla y León" y la plaza es regional, la provincia DEBE SER el de esa región.
       
   - titulacion: Busca la titulación mínima exigida. Sé conciso.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
