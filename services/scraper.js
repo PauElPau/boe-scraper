@@ -65,6 +65,14 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
 
   const $ = cheerio.load(html);
   let pdfLink = null;
+
+  // 🚀 PARCHE BOA (Aragón): Cazar el PDF MLKOB directamente del código fuente
+  if (url.includes('boa.aragon.es')) {
+      const matchMlkob = html.match(/CMD=VEROBJ[^"']*(?:MLKOB=\d+)[^"']*type=pdf/i);
+      if (matchMlkob) {
+          pdfLink = `https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?${matchMlkob[0].replace(/&amp;/g, '&')}`;
+      }
+  }
   
   // 🧠 MAGIA AQUÍ: Convertimos los enlaces <a> en texto Markdown para que la IA los vea
   $('a').each((i, el) => {
