@@ -1,5 +1,5 @@
 const FUENTES_BOLETINES = [
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
+ // { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   
   //HTML: https://www.juntadeandalucia.es/boja/2026/60/18.html -> OK
   //PDF: MAL: REVISAR PORQUE ALGUNOS LOS ESTAMOS COGIENDO BIEN Y OTROS NO
@@ -20,18 +20,18 @@ const FUENTES_BOLETINES = [
   { nombre: "DOG", tipo: "rss", url: "https://www.xunta.gal/diario-oficial-galicia/rss/Sumario_es.rss", ambito: "Galicia" },
   
 
-  { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
+  //{ nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
   
   //HTML: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VERDOC&BASE=BOLE&SEC=BUSQUEDA_AVANZADA&DOCN=007957047   --> OK
   //PDF: https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=VEROBJ&MLKOB=1441581670303&type=pdf  --> MAL: FORMAR A PARTIR DE HTML
   { nombre: "BOA", tipo: "rss", url: "https://www.boa.aragon.es/cgi-bin/EBOA/BRSCGI?CMD=RSSLST&DOCS=1-200&BASE=BOLE&SEC=BOARSS&SEPARADOR=&PUBL-C=lafechaxx", ambito: "Aragón" },
   
   
-  { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
+ // { nombre: "BOC", tipo: "rss", url: "https://www.gobiernodecanarias.org/boc/feeds/capitulo/autoridades_personal_oposiciones.rss", ambito: "Canarias" },  
 
   //HTML: https://sede.gva.es/es/detall-ocupacio-publica?id_emp=110893&id_info=info_basica --> OK
   //PDF: https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=110893  --> MAL: FORMAR A PARTIR DE HTML
-  { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
+ // { nombre: "DOGV", tipo: "html_directo", url: "https://sede.gva.es/es/novetats-ocupacio-publica?fecha={DD}%2F{MM}%2F{YYYY}", ambito: "Comunidad Valenciana" },
   
   // como pdf tenemos: https://docm.jccm.es/./descargarArchivo.do?ruta=2026/03/27/pdf/2026_2193.pdf&tipo=rutaDocm
   //HTML: https://docm.jccm.es/docm/verArchivoHtml.do?ruta=2026/03/27/html/2026_2193.html&tipo=rutaDocm --> MAL: se puede formar a partir de lo que tenemos?
@@ -51,7 +51,7 @@ const FUENTES_BOLETINES = [
   
   //HTML: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39   --> OK
   //PDF: https://bon.navarra.es/es/anuncio/-/texto/2026/62/39 --> MAL: NO HAY PDF, PONER LO MISMO QUE EN HTML
-  { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
+ // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
 
   // 🛑 BOLETINES EN "CUARENTENA" (Requieren Scraping de 2 Fases, RSS privados o bypass avanzado)
   // { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria" }
