@@ -143,11 +143,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   let webDefinitiva = itemData.htmlGenerado || itemData.link;
   
   // 2. Asignamos el PDF principal (guid)
-  let pdfDefinitivo = itemData.pdfGenerado || analisisIA.enlace_pdf || itemData.pdf_rss || itemData.pdf_extraido;
+  // 🚨 ORDEN CRÍTICO: El código estricto prevalece. La IA es la última opción.
+  let pdfDefinitivo = itemData.pdfGenerado || itemData.pdf_rss || itemData.pdf_extraido || analisisIA.enlace_pdf;
+
 
   // 3. REGLAS DE SEGURIDAD Y LIMPIEZA
-  
-  // Si la web definitiva sigue teniendo llaves (plantillas rotas), usamos la portada del boletín
   if (webDefinitiva.includes('{')) {
       webDefinitiva = itemData.link_boletin;
   }
