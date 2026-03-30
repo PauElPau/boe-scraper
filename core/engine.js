@@ -127,33 +127,26 @@ async function extraerBoletines() {
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 1. BOPV (País Vasco): Asegurar ruta completa absoluta
+            // 1. BOPV (País Vasco): Reemplazar extensión
             if (fuente.nombre === "BOPV" && item.link) {
                 item.link = item.link.replace('/y22-bopv/', '/web01-bopv/');
                 if (item.link.endsWith('.shtml')) {
-                    // Forzamos la asignación ignorando cualquier ruta relativa basura del enclosure
-                    enlacePdfRss = item.link.replace('.shtml', '.pdf'); 
+                    enlacePdfRss = item.link.replace('.shtml', '.pdf');
                 }
             }
-            if (fuente.nombre === "BOJA" && item.link && item.link.endsWith('.html')) {
-                // A BOJA no le podemos adivinar el PDF exacto sin descargar la web
-                // Lo dejamos nulo para que la IA (o el fallback posterior) lo extraiga si puede,
-                // o que simplemente guarde el HTML en el campo GUID para no guardar rutas relativas rotas.
-                enlacePdfRss = null; 
-            }
 
-            // 2. DOG (Galicia): Transformación directa de HTML a PDF
+            // 2. DOG (Galicia): Transformación directa
             if (fuente.nombre === "DOG" && item.link && item.link.endsWith('.html')) {
                 enlacePdfRss = item.link.replace('.html', '.pdf');
             }
 
-            // 3. BOA (Aragón): Cambiar VERDOC por VERPDF
+            // 3. BOA (Aragón): Obligamos a nulo para que el Extractor Nativo (MLKOB) haga el trabajo
             if (fuente.nombre === "BOA" && item.link && item.link.includes('DOCN=')) {
                 if (item.link.startsWith('/cgi-bin')) item.link = "https://www.boa.aragon.es" + item.link;
-                enlacePdfRss = item.link.replace('CMD=VERDOC', 'CMD=VERPDF');
+                enlacePdfRss = null; 
             }
 
-            // 4. BORM (Murcia): Magia para extraer el nº de boletín del título e ID del guid
+            // 4. BORM (Murcia): Generar con la fecha exacta de publicación
             if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
                 const idMatch = item.guid.match(/\/anuncio\/(\d+)\/pdf/);
                 const numMatch = item.title.match(/^\s*(\d+)/);
@@ -161,12 +154,11 @@ async function extraerBoletines() {
                 if (idMatch && numMatch) {
                     const idDoc = idMatch[1];
                     const numDoc = numMatch[1];
-                    
-                    // 🚀 PARCHE BORM: Usar siempre la fecha actual para la ruta
-                    const hoyBorm = new Date();
-                    const yyyyBorm = hoyBorm.getFullYear();
-                    const mmBorm = String(hoyBorm.getMonth() + 1).padStart(2, '0');
-                    const ddBorm = String(hoyBorm.getDate()).padStart(2, '0');
+                    // 🚀 OBLIGAMOS a usar la fecha oficial del boletín, no la del servidor
+                    const dateObj = new Date(item.isoDate || item.pubDate);
+                    const yyyyBorm = dateObj.getFullYear();
+                    const mmBorm = String(dateObj.getMonth() + 1).padStart(2, '0');
+                    const ddBorm = String(dateObj.getDate()).padStart(2, '0');
                     
                     item.link = `https://www.borm.es/#/home/anuncio/${ddBorm}-${mmBorm}-${yyyyBorm}/${numDoc}`;
                     enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyyBorm}/numero/${numDoc}/pdf?id=${idDoc}`;
@@ -416,9 +408,17 @@ async function extraerBoletines() {
             // 🚀 AMPLIADO PARA GPT-4o-mini: Hasta 25.000 caracteres de bases
             if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
+            // 🚨 ESTA ES LA LLAMADA QUE TIENES QUE SUSTITUIR:
             await procesarYGuardarConvocatoria({ 
-              title: item.titulo, link: enlaceFinal, guid: enlaceFinal, link_boletin: urlFinal,
-              pdf_extraido: pdfExtraidoNativo, section: `Boletín ${fuente.nombre}`, department: item.departamento 
+              title: item.titulo, 
+              link: enlaceFinal, 
+              guid: enlaceFinal, 
+              link_boletin: urlFinal,
+              pdf_extraido: pdfExtraidoNativo, 
+              htmlGenerado: item.htmlGenerado, // 🚀 AHORA SÍ PASA A LA BD (DOCM, BOCYL, BOPA)
+              pdfGenerado: item.pdfGenerado,   // 🚀 AHORA SÍ PASA A LA BD (DOCM, BOCYL, BOPA)
+              section: `Boletín ${fuente.nombre}`, 
+              department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy, statsFuente);
             
             await esperar(6000);
