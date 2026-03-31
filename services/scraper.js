@@ -143,7 +143,73 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
   }
 }
 
+// 🚀 NUEVO: Conexión directa a la API REST del DOGC (Cataluña)
+async function obtenerDOGCporAPI() {
+    console.log(`   🔌 Conectando directamente a la API REST del DOGC...`);
+    
+    const hoy = new Date();
+    const dd = String(hoy.getDate()).padStart(2, '0');
+    const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+    const yyyy = hoy.getFullYear();
+    const fechaFormat = `${dd}/${mm}/${yyyy}`;
+
+    // Replicamos el payload exacto que el usuario descubrió
+    const payload = {
+        "typeSearch": "1",
+        "value": "",
+        "title": true,
+        "current": true,
+        "range": [],
+        "issuingAuthority": [],
+        "publicationDateInitial": fechaFormat,
+        "publicationDateFinal": "",
+        "dispositionDateInitial": "",
+        "dispositionDateFinal": "",
+        "sectionDOGC": [],
+        "thematicDescriptor": ["D4090", "DE1738"], // Filtro oficial: "Oposiciones" y "Personal"
+        "organizationDescriptor": [],
+        "geographicDescriptor": [],
+        "aranese": "",
+        "expandSearchFullText": "",
+        "noCurrent": "",
+        "orderBy": "3",
+        "page": 1,
+        "numResultsByPage": 50, // Ponemos 50 para asegurarnos de que entran todas las del día
+        "advanced": true,
+        "language": "es",
+        "subject": []
+    };
+
+    try {
+        const response = await fetch("https://portaldogc.gencat.cat/eadop-rest/api/dogc/searchDOGC", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) throw new Error(`Status ${response.status}`);
+        const data = await response.json();
+        
+        if (data && data.resultSearch && data.resultSearch.length > 0) {
+            return data.resultSearch.map(item => ({
+                titulo: item.title,
+                // Construimos la URL HTML pública usando el idDocument
+                enlace: `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${item.idDocument}`,
+                pdf: item.linkDownloadPDF
+            }));
+        }
+        return [];
+    } catch (e) {
+        console.error(`   ❌ Error llamando a la API del DOGC: ${e.message}`);
+        return null;
+    }
+}
+
 module.exports = {
   obtenerTextoNativo,
-  obtenerTextoUniversal
+  obtenerTextoUniversal,
+  obtenerDOGCporAPI
 };
