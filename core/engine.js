@@ -295,12 +295,13 @@ async function extraerBoletines() {
             if (fuente.nombre === "BOIB") {
                 let rutaSucia = enlaceLimpio;
                 if (rutaSucia.includes('/eboibfront/')) {
+                    // Extraemos solo la parte útil de la ruta (descartamos basura anterior concatenada)
                     const matchRuta = rutaSucia.match(/\/eboibfront\/.+/);
                     if (matchRuta) {
-                        // Prevenimos la URL monstruosa haciendo la ruta absoluta desde el dominio principal
+                        // Construimos la URL absoluta perfecta, conectándola a la raíz del dominio
                         enlaceLimpio = "https://www.caib.es" + matchRuta[0];
-                        // Borramos cualquier pdfGenerado/htmlGenerado para no forzar errores
-                        item.pdfGenerado = null; 
+                        // Anulamos cualquier variable generada previa para que el flujo normal se encargue
+                        item.pdfGenerado = null;
                         item.htmlGenerado = null;
                     }
                 }
@@ -394,10 +395,14 @@ async function extraerBoletines() {
                 console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (["BOPA", "BON"].includes(fuente.nombre)) {
-                 const nativo = await obtenerTextoNativo(enlaceFinal, true); // CodeTabs
-                 textoInterior = nativo.texto;
-                 pdfExtraidoNativo = nativo.pdf;
+            } else if (fuente.nombre === "BON") {
+                // Navarra sigue usando CodeTabs
+                const nativo = await obtenerTextoNativo(enlaceFinal, true); 
+                textoInterior = nativo.texto;
+                pdfExtraidoNativo = nativo.pdf;
+            } else if (fuente.nombre === "BOPA") {
+                // 🚀 BOPA tiene URLs muy complejas que rompen CodeTabs (Error 400). Usamos Cloudflare directamente.
+                textoInterior = await obtenerTextoUniversal(enlaceFinal);
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
