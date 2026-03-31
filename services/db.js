@@ -97,7 +97,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
              for (const palabra of palabrasClave) {
                  if (profPadreLimpia.includes(palabra)) coincidencias++;
              }
-             return (coincidencias / palabrasClave.length) >= 0.5;
+            // 🚀 Exigimos un 80% de coincidencia semántica para evitar agrupar especialidades médicas distintas
+            return (coincidencias / palabrasClave.length) >= 0.8;
           });
       }
 
