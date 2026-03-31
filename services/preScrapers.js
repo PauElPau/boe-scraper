@@ -25,10 +25,12 @@ async function fetchInvisible(url) {
 
 // 🎯 FASE PREVIA: Entra a las portadas "caja fuerte" y extrae la URL real del último boletín
 async function obtenerUrlDelDia(fuente) {
+    if (fuente.nombre === "DOGC") {
+        return "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_sumari_del_dogc/?seccio=2";
+    }
 
     console.log(`   🕵️‍♂️ Ejecutando Pre-Scraping Invisible en la portada de ${fuente.nombre}...`);
     
-    // Intentamos pasar como un humano. Si el firewall nos bloquea de todas formas, usamos los proxies.
     let htmlPortada = await fetchInvisible(fuente.url);
     if (!htmlPortada) {
         console.log(`   ⚠️ Fetch Invisible falló. Cayendo a proxies universales...`);
@@ -37,31 +39,31 @@ async function obtenerUrlDelDia(fuente) {
     
     if (!htmlPortada) return null;
 
-    // 2. Cantabria (BOC): Captura matemáticamente el último ID publicado
+    // 2. Cantabria (BOC): Busca solo el parámetro ID matemáticamente (inmune a proxies)
     if (fuente.nombre === "BOC_CANTABRIA") {
-        const match = htmlPortada.match(/verBoletin\.do\?idBoletin=\d+/);
-        return match ? `https://boc.cantabria.es/boces/${match[0]}` : null;
+        const match = htmlPortada.match(/idBoletin=(\d+)/);
+        return match ? `https://boc.cantabria.es/boces/verBoletin.do?idBoletin=${match[1]}` : null;
     }
 
-    // 3. La Rioja (BOR): Captura el último boletín subido a su portada
+    // 3. La Rioja (BOR): Busca solo el ID numérico del boletín (inmune a proxies)
     if (fuente.nombre === "BOR") {
-        const match = htmlPortada.match(/href="([^"]*bor-boletin\?id=[^"]+)"/);
-        return match ? `https://web.larioja.org${match[1]}` : null;
+        const match = htmlPortada.match(/bor-boletin\?id=(\d+)/);
+        return match ? `https://web.larioja.org/bor-boletin?id=${match[1]}` : null;
     }
 
-    // 4. Melilla (BOME): Atrapa directamente el último PDF del boletín
+    // 4. Melilla (BOME): Busca cualquier PDF que contenga la palabra BOME
     if (fuente.nombre === "BOME") {
-        const match = htmlPortada.match(/href="([^"]*BOME-B-\d{4}-\d+\.pdf)"/i); 
+        const match = htmlPortada.match(/([^"'>\s]*BOME[^"'>\s]*\.pdf)/i); 
         let link = match ? match[1] : null;
         if (link && !link.startsWith('http')) link = "https://bomemelilla.es/" + link.replace(/^\/+/, '');
         return link;
     }
 
-    // 5. Ceuta (BOCCE): Atrapa el último boletín oficial colgado en la tabla
+    // 5. Ceuta (BOCCE): Busca cualquier PDF que contenga la palabra BOCCE
     if (fuente.nombre === "BOCCE") {
-        const match = htmlPortada.match(/href="([^"]*ceuta\/bocce\/boletines-\d{4}\/[^"]+)"/i) || htmlPortada.match(/href="([^"]*\.pdf)"/i);
+        const match = htmlPortada.match(/([^"'>\s]*(?:bocce|BOCCE)[^"'>\s]*\.pdf)/i);
         let link = match ? match[1] : null;
-        if (link && !link.startsWith('http')) link = "https://www.ceuta.es" + (link.startsWith('/') ? '' : '/') + link;
+        if (link && !link.startsWith('http')) link = "https://www.ceuta.es/" + link.replace(/^\/+/, '');
         return link;
     }
 
