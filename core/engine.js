@@ -269,6 +269,11 @@ async function extraerBoletines() {
           // 🚀 AMPLIADO PARA GPT-4o-mini: Permitimos sumaros inmensos (hasta 80.000 caracteres)
           if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
 
+          // 🚀 PARCHE BOIB: Eliminamos los enlaces PDF del sumario para obligar a la IA a coger el HTML
+          if (fuente.nombre === "BOIB") {
+              markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
+          }
+
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           const listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
           
@@ -291,19 +296,17 @@ async function extraerBoletines() {
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
-            // 🛠️ INTERCEPTOR BOIB (Baleares): Limpiar la ruta relativa sin inventar relaciones matemáticas
+           // 🛠️ INTERCEPTOR BOIB (Baleares): Limpiar la ruta relativa y asignar el HTML
             if (fuente.nombre === "BOIB") {
-                let rutaSucia = enlaceLimpio;
-                if (rutaSucia.includes('/eboibfront/')) {
-                    // Extraemos solo la parte útil de la ruta (descartamos basura anterior concatenada)
-                    const matchRuta = rutaSucia.match(/\/eboibfront\/.+/);
-                    if (matchRuta) {
-                        // Construimos la URL absoluta perfecta, conectándola a la raíz del dominio
-                        enlaceLimpio = "https://www.caib.es" + matchRuta[0];
-                        // Anulamos cualquier variable generada previa para que el flujo normal se encargue
-                        item.pdfGenerado = null;
-                        item.htmlGenerado = null;
-                    }
+                // Buscamos la última vez que aparece 'eboibfront' en la URL monstruosa
+                let idx = enlaceLimpio.lastIndexOf('eboibfront');
+                if (idx !== -1) {
+                    // Reconstruimos la URL limpia cortando la basura inicial
+                    enlaceLimpio = "https://www.caib.es/" + enlaceLimpio.substring(idx);
+                    
+                    // Lo asignamos estrictamente como HTML. El PDF se extraerá al entrar a la web.
+                    item.htmlGenerado = enlaceLimpio;
+                    item.pdfGenerado = null; 
                 }
             }
 
