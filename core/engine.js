@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal } = require("../services/scraper");
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper");
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -275,7 +275,38 @@ async function extraerBoletines() {
           }
 
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
-          const listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
+          let listadoBruto = [];
+
+          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
+          if (fuente.nombre === "DOGC") {
+              const apiResults = await obtenerDOGCporAPI();
+              if (apiResults !== null) {
+                  listadoBruto = apiResults;
+              }
+          } 
+          // 🐢 CAMINO TRADICIONAL (HTML + IA) PARA EL RESTO
+          else {
+              let markdownWeb = null;
+              if (fuente.nombre === "BOA") {
+                  const res = await fetch(urlFinal);
+                  markdownWeb = await res.text();
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+                  const nativo = await obtenerTextoNativo(urlFinal, true);
+                  markdownWeb = nativo.texto;
+              } else {
+                  markdownWeb = await obtenerTextoUniversal(urlFinal);
+              }
+              if (!markdownWeb) continue;
+
+              if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
+
+              if (fuente.nombre === "BOIB") {
+                  markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
+              }
+
+              console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
+              listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
+          }
           
           const listado = listadoBruto.filter((item, index, self) =>
               index === self.findIndex((t) => t.enlace === item.enlace)
