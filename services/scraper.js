@@ -208,12 +208,9 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Bypass TLS Legacy + Texto Puro)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab + Sesión Java)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
-    
-    const https = require('https');
-    const crypto = require('crypto');
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -232,75 +229,73 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
 
-    // 🛡️ ARMA DEFINITIVA: Petición HTTPS pura permitiendo protocolos antiguos (TLS 1.0) y forzando texto sin comprimir
-    const fetchClandestino = (url) => new Promise((resolve) => {
-        const options = {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'application/xml, text/xml, */*; q=0.01',
-                'Accept-Language': 'es-ES,es;q=0.9',
-                // 🚀 PEDIMOS EXPRESAMENTE TEXTO PLANO PARA EVITAR CORRUPCIÓN DEL ZLIB
-                'Accept-Encoding': 'identity', 
-                'Connection': 'keep-alive'
-            },
-            // Aceptamos certificados caducados o mal configurados
-            rejectUnauthorized: false,
-            // Aceptamos cifrados antiguos (TLS 1.0, 1.1) que las versiones modernas de Node bloquean (causando el 'fetch failed')
-            secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
-            ciphers: 'ALL'
-        };
+    // 🕵️ PASO 1: Visitar la portada de incógnito para que el servidor nos dé una Cookie JSESSIONID
+    let cookieSesion = "JSESSIONID=CB2382103BD0C8C38EDC7EE540AEAF0C"; // Fallback calcado de tu captura
+    try {
+        console.log(`      🗝️ Pidiendo Cookie de visitante al servidor...`);
+        const resInit = await fetch("https://boc.cantabria.es/boces/boletines.do", {
+            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36" }
+        });
+        const setCookie = resInit.headers.get("set-cookie");
+        if (setCookie) {
+            cookieSesion = setCookie.split(";")[0]; // Extraemos el JSESSIONID real del día
+            console.log(`      ✅ Cookie conseguida: ${cookieSesion}`);
+        }
+    } catch(e) {}
 
-        https.get(url, options, (res) => {
-            const chunks = [];
-            
-            res.on('data', (chunk) => { 
-                chunks.push(chunk); // Guardamos los trozos de datos crudos
-            });
-            
-            res.on('end', () => {
-                // Juntamos todos los trozos y los convertimos a texto de forma segura
-                const buffer = Buffer.concat(chunks);
-                let text = buffer.toString('utf-8');
-                
-                // Si el servidor (por error) lo devolvió en ISO-8859-1, evitamos que rompa
-                if (text.includes('')) {
-                    text = buffer.toString('latin1');
-                }
-                
-                resolve({ ok: res.statusCode === 200, text: text, status: res.statusCode });
-            });
-            
-            res.on('error', (err) => resolve({ ok: false, text: null, error: err.message }));
-        }).on('error', (err) => resolve({ ok: false, text: null, error: err.message }));
-    });
-    
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
-            console.log(`      🚀 Lanzando conexión HTTPS Clandestina...`);
-            const respuesta = await fetchClandestino(xmlUrl);
-            
-            let xmlText = respuesta.text;
+            let xmlText = null;
 
-            if (!respuesta.ok && respuesta.status) {
-               console.log(`      ⚠️ El servidor respondió con Status HTTP: ${respuesta.status}`);
+            // 🕵️ PASO 2: Hacemos el Fetch copiando exactamente el Payload de tu imagen
+            try {
+                // Desactivamos temporalmente el chequeo TLS estricto de Node por si el certificado caduca
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; 
+                
+                const res = await fetch(xmlUrl, {
+                    headers: {
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+                        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                        "Cache-Control": "max-age=0",
+                        "Connection": "keep-alive",
+                        "Cookie": cookieSesion, // Pasamos la tarjeta de visitante
+                        "Host": "boc.cantabria.es",
+                        "Sec-Ch-Ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
+                        "Sec-Ch-Ua-Mobile": "?0",
+                        "Sec-Ch-Ua-Platform": '"Windows"',
+                        "Sec-Fetch-Dest": "document",
+                        "Sec-Fetch-Mode": "navigate",
+                        "Sec-Fetch-Site": "none",
+                        "Sec-Fetch-User": "?1",
+                        "Upgrade-Insecure-Requests": "1",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+                    }
+                });
+                
+                if (res.ok) {
+                    xmlText = await res.text();
+                } else {
+                    console.log(`      ⚠️ Status ${res.status}`);
+                }
+            } catch (err) {
+                console.log(`      ⚠️ Fallo de red: ${err.message}`);
+            } finally {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1"; // Restauramos la seguridad global
             }
 
-            // 🚀 ESCUDO DE 404: Si Cantabria devuelve su página HTML de error (ID no publicado aún)
-            if (xmlText && (xmlText.includes('<!DOCTYPE HTML>') || xmlText.includes('No hay documento'))) {
-                console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (Aún no publicado o festivo). Retrocediendo...`);
-                idEstimado -= 20;
-                intentos++;
-                continue;
-            }
-
-            // CHIVATO DE ERRORES REALES
+            // Validar si la respuesta es el XML que buscamos o si está vacío
             if (!xmlText || !xmlText.includes('</root>')) {
-                const preview = xmlText ? xmlText.substring(0, 200).replace(/\n/g, '') : 'TOTALMENTE VACÍO (NULL)';
-                console.log(`      ❌ Respuesta Inválida. Fragmento recibido: ${preview}`);
-                throw new Error("Bloqueo del WAF o archivo truncado.");
+                // Si el servidor nos devuelve la plantilla HTML es que el boletín aún no está subido
+                if (xmlText && xmlText.includes('<!DOCTYPE HTML>')) {
+                    console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (HTML de error detectado). Retrocediendo...`);
+                    idEstimado -= 20;
+                    intentos++;
+                    continue;
+                }
+                throw new Error("El archivo no se descargó o fue bloqueado.");
             }
             
             // EXTRACCIÓN Y LÓGICA DE FECHAS
@@ -349,7 +344,6 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
-                console.log(`   ⚠️ No se encontró la etiqueta de fecha.`);
                 idEstimado += 20;
             }
         } catch (e) {
