@@ -208,13 +208,9 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Conexión Directa Anti-WAF + Descompresión GZIP)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simple, Limpio y con Chivato)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
-    
-    // Importamos módulos nativos para saltar el Firewall y descomprimir los datos
-    const https = require('https');
-    const zlib = require('zlib');
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -232,61 +228,74 @@ async function obtenerCantabriaMatematico() {
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
-
-    // 🛡️ ARMA SECRETA: Fetch nativo con descompresión GZIP automática
-    const fetchAvanzado = (url) => new Promise((resolve) => {
-        https.get(url, {
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'application/xml, text/xml, */*; q=0.01',
-                'Accept-Encoding': 'gzip, deflate', // Pedimos compresión para parecer reales
-                'Connection': 'keep-alive'
-            },
-            rejectUnauthorized: false
-        }, (res) => {
-            // Descomprimimos en tiempo real si el servidor nos manda un archivo comprimido
-            let stream = res;
-            if (res.headers['content-encoding'] === 'gzip') {
-                stream = res.pipe(zlib.createGunzip());
-            } else if (res.headers['content-encoding'] === 'deflate') {
-                stream = res.pipe(zlib.createInflate());
-            }
-
-            let data = '';
-            stream.on('data', chunk => data += chunk);
-            stream.on('end', () => resolve(data));
-            stream.on('error', () => resolve(null));
-        }).on('error', () => resolve(null));
-    });
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
-            // Conectamos directamente usando nuestra arma secreta
-            let xmlText = await fetchAvanzado(xmlUrl);
+            let xmlText = null;
+            
+            // INTENTO 1: Fetch Nativo (Node.js lo descomprime y gestiona solo)
+            try {
+                const res = await fetch(xmlUrl, {
+                    headers: { 
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "application/xml, text/xml, */*; q=0.01"
+                    }
+                });
+                if (res.ok) {
+                    xmlText = await res.text();
+                } else {
+                    console.log(`      ⚠️ Fallo HTTP Directo: Status ${res.status}`);
+                }
+            } catch (err) {
+                console.log(`      ⚠️ Fallo de Red Directo: ${err.message}`);
+            }
 
-            // Si falla por cualquier motivo, tiramos de la API JSON de AllOrigins como salvavidas
+            // INTENTO 2: Proxy CodeTabs Puro
             if (!xmlText) {
-                console.log(`      ⚠️ Bloqueo detectado. Activando proxy secundario JSON...`);
+                console.log(`      🔄 Lanzando Proxy CodeTabs...`);
                 try {
-                    const proxyRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(xmlUrl)}`);
-                    const dataProxy = await proxyRes.json();
-                    if (dataProxy && dataProxy.contents) xmlText = dataProxy.contents;
+                    const resProxy = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${xmlUrl}`, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    if (resProxy.ok) xmlText = await resProxy.text();
                 } catch(e) {}
             }
 
-            // Desencriptar por si el proxy ensució el HTML
+            // INTENTO 3: Proxy AllOrigins JSON
+            if (!xmlText) {
+                console.log(`      🔄 Lanzando Proxy AllOrigins...`);
+                try {
+                    const resProxy2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(xmlUrl)}`);
+                    if (resProxy2.ok) {
+                        const json = await resProxy2.json();
+                        if (json && json.contents) xmlText = json.contents;
+                    }
+                } catch(e) {}
+            }
+
+            // LIMPIEZA DE PROXIES (Desencriptar los < > rotos)
             if (xmlText) {
                 xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
+            // 👁️ CHIVATO: Si no es un XML válido, imprimimos qué demonios estamos recibiendo
             if (!xmlText || !xmlText.includes('</root>')) {
-                console.log(`      ❌ Respuesta inválida o vacía.`);
-                throw new Error("Respuesta vacía o cortada.");
+                const preview = xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'TOTALMENTE VACÍO (NULL)';
+                console.log(`      ❌ Respuesta Inválida. Fragmento recibido: ${preview}`);
+                
+                // Si el servidor nos responde su mensaje de "ID inexistente", sabemos que nos hemos pasado al futuro
+                if (xmlText && xmlText.includes('No hay documento')) {
+                    console.log(`      ⏩ El ID no existe en el servidor. Retrocediendo...`);
+                    idEstimado -= 20;
+                    intentos++;
+                    continue;
+                }
+                
+                throw new Error("El archivo no pudo descargarse o fue bloqueado por un Captcha.");
             }
             
+            // EXTRACCIÓN Y LÓGICA DE FECHAS
             const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
             const fechaBoletin = matchFecha ? matchFecha[1] : null;
             
@@ -332,11 +341,11 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
-                console.log(`   ⚠️ No se encontró la etiqueta de fecha en el ID ${idEstimado}`);
+                console.log(`   ⚠️ No se encontró la etiqueta de fecha.`);
                 idEstimado += 20;
             }
         } catch (e) {
-            console.log(`   ⚠️ Error al analizar el ID ${idEstimado}: ${e.message}`);
+            console.log(`   ⚠️ Error: ${e.message}`);
             idEstimado -= 20; 
         }
         intentos++;
