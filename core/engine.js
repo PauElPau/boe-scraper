@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper"); 
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI, obtenerCantabriaMatematico } = require("../services/scraper");
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -248,7 +248,7 @@ async function extraerBoletines() {
 
           let listadoBruto = [];
 
-          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
+          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC) Y CANTABRIA (BOC)
           if (fuente.nombre === "DOGC") {
               const apiResults = await obtenerDOGCporAPI();
               if (apiResults && apiResults.length > 0) {
@@ -257,7 +257,16 @@ async function extraerBoletines() {
                   console.log(`   ⏭️ La API de Cataluña no devolvió convocatorias de empleo para hoy.`);
                   continue;
               }
-          } 
+          } else if (fuente.nombre === "BOC_CANTABRIA") {
+              // 🧮 Usamos tu fórmula matemática del +20
+              const mathResults = await obtenerCantabriaMatematico();
+              if (mathResults && mathResults.length > 0) {
+                  listadoBruto = mathResults;
+              } else {
+                  console.log(`   ⏭️ El Buscador Matemático de Cantabria no encontró convocatorias de empleo para hoy.`);
+                  continue;
+              }
+          }
           // 🐢 CAMINO TRADICIONAL PARA EL RESTO
           else {
               let markdownWeb = null;
@@ -357,8 +366,10 @@ async function extraerBoletines() {
                 item.pdfGenerado = item.pdf; 
                 item.htmlGenerado = enlaceLimpio;
             }
-            if (fuente.nombre === "BOC_CANTABRIA" && !enlaceLimpio.startsWith('http')) {
-                enlaceLimpio = "https://boc.cantabria.es/boces/" + enlaceLimpio.replace(/^\/+/, '');
+           // 🛠️ INTERCEPTOR CANTABRIA (BOC): Rutas Matemáticas
+            if (fuente.nombre === "BOC_CANTABRIA") {
+                item.pdfGenerado = item.pdf; 
+                item.htmlGenerado = enlaceLimpio; 
             }
             if (fuente.nombre === "BOR" && !enlaceLimpio.startsWith('http')) {
                 enlaceLimpio = "https://web.larioja.org" + enlaceLimpio;
