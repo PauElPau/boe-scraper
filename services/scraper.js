@@ -212,6 +212,9 @@ async function obtenerDOGCporAPI() {
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
     
+    // Importamos módulos nativos de Node.js para manipular la conexión de bajo nivel
+    const https = require('https');
+    
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
@@ -228,6 +231,23 @@ async function obtenerCantabriaMatematico() {
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
+
+    // 🛡️ FUNCIÓN DE CAMUFLAJE: Falsifica el saludo TLS de Node.js para que Cloudflare crea que somos Chrome
+    const fetchBypassWAF = (url) => new Promise((resolve) => {
+        https.get(url, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/xml, text/xml, */*; q=0.01',
+                'Accept-Language': 'es-ES,es;q=0.9',
+            },
+            ciphers: 'DEFAULT:@SECLEVEL=1', // Rebajamos la agresividad del cifrado para evitar firmas de bot
+            rejectUnauthorized: false
+        }, (res) => {
+            let data = '';
+            res.on('data', c => data += c);
+            res.on('end', () => resolve({ ok: res.statusCode === 200, text: data }));
+        }).on('error', () => resolve({ ok: false, text: null }));
+    });
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
@@ -236,40 +256,36 @@ async function obtenerCantabriaMatematico() {
         try {
             let xmlText = null;
             
-            // Intento 1: Fetch directo con camuflaje absoluto (Grado Militar)
-            try {
-                const res = await fetch(xmlUrl, {
-                    headers: { 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-                        "Accept-Encoding": "gzip, deflate, br",
-                        "Connection": "keep-alive",
-                        "Upgrade-Insecure-Requests": "1",
-                        "Sec-Fetch-Dest": "document",
-                        "Sec-Fetch-Mode": "navigate",
-                        "Sec-Fetch-Site": "none",
-                        "Sec-Fetch-User": "?1",
-                        "DNT": "1"
-                    }
-                });
-                if (res.ok) xmlText = await res.text();
-            } catch (err) {
-                console.log(`      ⚠️ Cortafuegos bloqueó la conexión directa. Activando red de proxies...`);
+            // Intento 1: Conexión nativa camuflada
+            const resDirecta = await fetchBypassWAF(xmlUrl);
+            if (resDirecta.ok && resDirecta.text) {
+                xmlText = resDirecta.text;
+            } else {
+                console.log(`      ⚠️ El Cortafuegos detectó la firma. Probando proxy CorsProxy.io...`);
+                // Intento 2: Usamos CorsProxy (Diseñado específicamente para saltar Cloudflare)
+                const proxyUrl = "https://corsproxy.io/?url=" + encodeURIComponent(xmlUrl);
+                try {
+                    const resProxy = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    if (resProxy.ok) xmlText = await resProxy.text();
+                } catch(e) {}
             }
 
-            // Intento 2: Si el cortafuegos corta la conexión, usamos la red de proxies
+            // Intento 3: Nuestro viejo confiable Universal (CodeTabs/AllOrigins)
             if (!xmlText) {
+                console.log(`      ⚠️ CorsProxy falló. Activando red Universal...`);
                 xmlText = await obtenerTextoUniversal(xmlUrl); 
             }
 
-            // 🚀 PARCHE CLAVE: Desencriptamos lo que los Proxies (CodeTabs) hayan roto
+            // Desencriptar por si CodeTabs lo corrompió
             if (xmlText) {
                 xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
             if (!xmlText || !xmlText.includes('</root>')) {
-                throw new Error("El archivo devuelto está vacío o no es un XML válido (no tiene etiqueta root)");
+                // Imprimimos qué nos está devolviendo el servidor realmente para depurar
+                const fragmento = xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'NULO';
+                console.log(`      ❌ Recibido: ${fragmento}...`);
+                throw new Error("No es un XML válido (Bloqueado por Captcha de Cloudflare)");
             }
             
             const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
@@ -317,7 +333,6 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
-                console.log(`   ⚠️ No se encontró la etiqueta de fecha en el ID ${idEstimado}`);
                 idEstimado += 20;
             }
         } catch (e) {
