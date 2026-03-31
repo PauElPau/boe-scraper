@@ -208,12 +208,9 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Basado en la regla de +20)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Corregido Compresión GZIP)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
-    
-    // Importamos módulos nativos de Node.js para manipular la conexión de bajo nivel
-    const https = require('https');
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -231,23 +228,6 @@ async function obtenerCantabriaMatematico() {
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
-
-    // 🛡️ FUNCIÓN DE CAMUFLAJE: Falsifica el saludo TLS de Node.js para que Cloudflare crea que somos Chrome
-    const fetchBypassWAF = (url) => new Promise((resolve) => {
-        https.get(url, {
-            headers: { 
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-                'Accept': 'application/xml, text/xml, */*; q=0.01',
-                'Accept-Language': 'es-ES,es;q=0.9',
-            },
-            ciphers: 'DEFAULT:@SECLEVEL=1', // Rebajamos la agresividad del cifrado para evitar firmas de bot
-            rejectUnauthorized: false
-        }, (res) => {
-            let data = '';
-            res.on('data', c => data += c);
-            res.on('end', () => resolve({ ok: res.statusCode === 200, text: data }));
-        }).on('error', () => resolve({ ok: false, text: null }));
-    });
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
@@ -256,36 +236,55 @@ async function obtenerCantabriaMatematico() {
         try {
             let xmlText = null;
             
-            // Intento 1: Conexión nativa camuflada
-            const resDirecta = await fetchBypassWAF(xmlUrl);
-            if (resDirecta.ok && resDirecta.text) {
-                xmlText = resDirecta.text;
-            } else {
-                console.log(`      ⚠️ El Cortafuegos detectó la firma. Probando proxy CorsProxy.io...`);
-                // Intento 2: Usamos CorsProxy (Diseñado específicamente para saltar Cloudflare)
-                const proxyUrl = "https://corsproxy.io/?url=" + encodeURIComponent(xmlUrl);
+            // Intento 1: Fetch directo pidiendo explícitamente TEXTO PLANO (identity) para que no lo comprima en ZIP
+            try {
+                const res = await fetch(xmlUrl, {
+                    headers: { 
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "application/xml, text/xml, */*; q=0.01",
+                        "Accept-Encoding": "identity" 
+                    }
+                });
+                if (res.ok) xmlText = await res.text();
+            } catch (err) {
+                console.log(`      ⚠️ Falló conexión directa. Usando AllOrigins RAW...`);
+            }
+
+            // Intento 2: Proxy AllOrigins en modo RAW (Especial para archivos grandes y XML)
+            if (!xmlText) {
                 try {
-                    const resProxy = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
-                    if (resProxy.ok) xmlText = await resProxy.text();
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
+                    const res = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    if (res.ok) xmlText = await res.text();
                 } catch(e) {}
             }
 
-            // Intento 3: Nuestro viejo confiable Universal (CodeTabs/AllOrigins)
+            // Intento 3: CorsProxy.io
             if (!xmlText) {
-                console.log(`      ⚠️ CorsProxy falló. Activando red Universal...`);
-                xmlText = await obtenerTextoUniversal(xmlUrl); 
+                console.log(`      ⚠️ Falló AllOrigins. Usando CorsProxy...`);
+                try {
+                    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(xmlUrl)}`;
+                    const res = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    if (res.ok) xmlText = await res.text();
+                } catch(e) {}
             }
 
-            // Desencriptar por si CodeTabs lo corrompió
+            // Desencriptamos si algún proxy ha alterado los símbolos HTML
             if (xmlText) {
                 xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
+            // 🚀 ESCUDO 1: Si el servidor nos responde oficialmente que el ID no existe
+            if (xmlText && xmlText.includes('No hay documento que mostrar')) {
+                console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (Aún no publicado o festivo). Retrocediendo...`);
+                idEstimado -= 20;
+                intentos++;
+                continue;
+            }
+
+            // 🚀 ESCUDO 2: Validar si es un XML real
             if (!xmlText || !xmlText.includes('</root>')) {
-                // Imprimimos qué nos está devolviendo el servidor realmente para depurar
-                const fragmento = xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'NULO';
-                console.log(`      ❌ Recibido: ${fragmento}...`);
-                throw new Error("No es un XML válido (Bloqueado por Captcha de Cloudflare)");
+                throw new Error("Respuesta vacía o cortada por el proxy.");
             }
             
             const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
@@ -333,6 +332,7 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
+                console.log(`   ⚠️ No se encontró la etiqueta de fecha en el ID ${idEstimado}`);
                 idEstimado += 20;
             }
         } catch (e) {
