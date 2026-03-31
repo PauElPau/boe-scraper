@@ -7,6 +7,7 @@ const { obtenerTextoNativo, obtenerTextoUniversal } = require("../services/scrap
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
+const { obtenerUrlDelDia } = require('../services/preScrapers'); 
 
 const parser = new Parser({
   headers: {
@@ -26,7 +27,7 @@ async function extraerBoletines() {
     for (const fuente of FUENTES_BOLETINES) {
       if (getIaDetenida()) break; 
 
-      // 👈 NUEVO: Inicializamos las estadísticas de este boletín
+      // Inicializamos las estadísticas de este boletín
       const statsFuente = { encontradas: 0, guardadas: 0, descartadas_ia: 0, descartadas_404: 0, duplicados: 0, enlazadas: 0, errores: 0 };
       reporteStats[fuente.nombre] = statsFuente;
       
@@ -99,7 +100,6 @@ async function extraerBoletines() {
 
             let tituloFinal = item.title;
             if (fuente.nombre === "BOCM" && contenidoItem) {
-                // 🚀 ARREGLADO: Ya no cortamos a 200 caracteres para no borrar la profesión
                 tituloFinal = contenidoItem.replace(/<[^>]*>?/gm, '').replace(/\n/g, ' ').replace(/\s+/g, ' ').trim(); 
             }
 
@@ -115,7 +115,7 @@ async function extraerBoletines() {
           console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           console.log(`✅ Encontradas ${listadoValidoRss.length} posibles convocatorias únicas.`);
 
-          statsFuente.encontradas = listadoValidoRss.length; // 👈 NUEVO: Guardamos cuántas encontró
+          statsFuente.encontradas = listadoValidoRss.length;
 
           for (const item of listadoValidoRss) {
             if (getIaDetenida()) break; 
@@ -155,7 +155,6 @@ async function extraerBoletines() {
                     const idDoc = idMatch[1];
                     const numDoc = numMatch[1];
                     
-                    // 🚀 PARCHE BORM: Usar la fecha del día en curso, ignorando pubDate
                     const hoyBorm = new Date();
                     const yyyyBorm = hoyBorm.getFullYear();
                     const mmBorm = String(hoyBorm.getMonth() + 1).padStart(2, '0');
@@ -165,14 +164,12 @@ async function extraerBoletines() {
                     enlacePdfRss = `https://www.borm.es/services/anuncio/ano/${yyyyBorm}/numero/${numDoc}/pdf?id=${idDoc}`;
                 }
             }
-            // --------------------------------------------------
 
             console.log(`\n📄 Extrayendo interior de: ${item.tituloLimpioParaLog.substring(0,70)}...\n   🔗 ${item.link}`);
             
             let textoParaIA = null;
             let pdfExtraidoNativo = null;
 
-            // 🚀 AÑADIDOS TODOS LOS RSS AL CARRIL RÁPIDO NATIVO
             if (["BOE", "BOJA", "BOPV", "BORM", "DOE", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
               textoParaIA = nativo.texto;
@@ -183,11 +180,9 @@ async function extraerBoletines() {
               textoParaIA = await obtenerTextoUniversal(item.link);
             }
             
-            // 🚀 AMPLIADO PARA GPT-4o-mini: Permitimos textos interiores de hasta 25.000 caracteres
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
             if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
-           // 👈 NUEVO: Añadimos statsFuente y link_boletin como parámetros
             await procesarYGuardarConvocatoria({ 
               title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, link_boletin: urlFinalLog,
               pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo 
@@ -199,6 +194,16 @@ async function extraerBoletines() {
         
         else if (fuente.tipo === "html_directo") {
           let urlFinal = urlFinalLog; 
+
+          // 🚀 NUEVO: INTERCEPCIÓN DE BOLETINES EN CUARENTENA (FASE PREVIA)
+          if (fuente.fase_previa) {
+              urlFinal = await obtenerUrlDelDia(fuente);
+              if (!urlFinal) {
+                  console.log(`   ⏭️ La portada de ${fuente.nombre} no contiene boletín para hoy.`);
+                  continue; // Saltamos limpio al siguiente boletín
+              }
+              console.log(`   🎯 URL real del día localizada: ${urlFinal}`);
+          }
 
           // 🛠️ INTERCEPTOR BOIB: Leer RSS, buscar el de hoy y construir URL de la sección
           if (fuente.boibRssToHtml) {
@@ -218,7 +223,6 @@ async function extraerBoletines() {
                   });
 
                   if (itemDeHoy && itemDeHoy.link) {
-                      // 🚀 AQUÍ ESTÁ LA MAGIA: Concatenar la sección exacta
                       urlFinal = itemDeHoy.link + "/seccion-ii-autoridades-y-personal/473"; 
                       console.log(`   ✅ Boletín BOIB de hoy localizado: ${urlFinal}`);
                   } else {
@@ -231,7 +235,6 @@ async function extraerBoletines() {
                   continue;
               }
           } 
-          // Mantenemos el antiguo por si alguna otra fuente futura lo necesita
           else if (fuente.rssToHtml) {
               console.log(`   🔗 Extrayendo URL real del último boletín desde su RSS puente...`);
               try {
@@ -256,7 +259,6 @@ async function extraerBoletines() {
           if (fuente.nombre === "BOA") {
               const res = await fetch(urlFinal);
               markdownWeb = await res.text();
-          // 🛑 FÍJATE AQUÍ: Ya NO está "BOC_CANTABRIA" en esta lista
           } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(urlFinal, true);
               markdownWeb = nativo.texto;
@@ -266,10 +268,8 @@ async function extraerBoletines() {
           }
           if (!markdownWeb) continue;
 
-          // 🚀 AMPLIADO PARA GPT-4o-mini: Permitimos sumaros inmensos (hasta 80.000 caracteres)
           if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
 
-          // 🚀 PARCHE BOIB: Eliminamos los enlaces PDF del sumario para obligar a la IA a coger el HTML
           if (fuente.nombre === "BOIB") {
               markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
           }
@@ -281,9 +281,8 @@ async function extraerBoletines() {
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
-          // 🪵 LOG RESTAURADO: Mostrar siempre el conteo
           console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
-          statsFuente.encontradas = listado.length; // 👈 NUEVO: Guardamos cuántas encontró
+          statsFuente.encontradas = listado.length;
 
           for (const item of listado) {
             if (getIaDetenida()) break; 
@@ -296,36 +295,25 @@ async function extraerBoletines() {
 
             let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
-           // 🛠️ INTERCEPTOR BOIB (Baleares): Limpiar la ruta relativa y asignar el HTML
             if (fuente.nombre === "BOIB") {
-                // Buscamos la última vez que aparece 'eboibfront' en la URL monstruosa
                 let idx = enlaceLimpio.lastIndexOf('eboibfront');
                 if (idx !== -1) {
-                    // Reconstruimos la URL limpia cortando la basura inicial
                     enlaceLimpio = "https://www.caib.es/" + enlaceLimpio.substring(idx);
-                    
-                    // Lo asignamos estrictamente como HTML. El PDF se extraerá al entrar a la web.
                     item.htmlGenerado = enlaceLimpio;
                     item.pdfGenerado = null; 
                 }
             }
 
-            // 🛠️ INTERCEPTOR DOGV: Reconstruimos la URL larga con el ID
             if (fuente.nombre === "DOGV" && (enlaceLimpio.includes('id_emp') || enlaceLimpio.includes('id%5Femp'))) {
                 const matchId = enlaceLimpio.match(/id(?:_|%5F)emp=(\d+)/i);
                 if (matchId && matchId[1]) {
-                    // Creamos la URL del PDF dinámicamente según la estructura de Liferay
                     item.pdfGenerado = `https://sede.gva.es/es/detall-ocupacio-publica?p_p_id=es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_accion=pdf&_es_gva_es_siac_portlet_SiacDetalleEmpleoPublicoNuevoGVA_codigo=${matchId[1]}`;
                     enlaceLimpio = `https://sede.gva.es/detall-ocupacio-publica?id_emp=${matchId[1]}`;
                 }
             }
 
-            // 🛠️ INTERCEPTOR DOCM (Castilla-La Mancha)
             if (fuente.nombre === "DOCM") {
-                // Limpiamos todo rastro de dominio, barras iniciales o puntos
                 let pathLimpio = enlaceLimpio.replace('https://docm.jccm.es', '').replace(/^\/+/, '').replace(/^\.\//, '').replace(/^docm\//, '');
-                
-                // pathLimpio ahora es siempre: "descargarArchivo.do?ruta=..."
                 item.pdfGenerado = "https://docm.jccm.es/docm/" + pathLimpio;
                 
                 if (pathLimpio.includes('descargarArchivo.do') && pathLimpio.includes('/pdf/')) {
@@ -335,31 +323,40 @@ async function extraerBoletines() {
                 }
             }
 
-            // 🛠️ INTERCEPTOR BOCYL (Castilla y León)
             if (fuente.nombre === "BOCYL" && enlaceLimpio.includes('/pdf/')) {
-                // El enlace que capturamos es el PDF, lo guardamos
                 item.pdfGenerado = enlaceLimpio; 
-                // Generamos el HTML cambiando 'boletines' por 'html', y '.pdf' por '.do'
                 item.htmlGenerado = enlaceLimpio.replace('/boletines/', '/html/')
                                                 .replace('/pdf/', '/html/')
                                                 .replace('.pdf', '.do');
             }
 
-            // 🛠️ INTERCEPTOR BOPA (ASTURIAS)
             if (fuente.nombre === "BOPA" && enlaceLimpio.includes('dispositionText') && enlaceLimpio.includes('dispositionDate')) {
                 const matchId = enlaceLimpio.match(/dispositionText=([^&]+)/);
                 const matchDate = enlaceLimpio.match(/dispositionDate=([^&]+)/);
                 if (matchId && matchDate) {
                     const idDoc = matchId[1];
                     const decodedDate = decodeURIComponent(matchDate[1]); 
-                    const partesFecha = decodedDate.split('/'); // [DD, MM, YYYY]
+                    const partesFecha = decodedDate.split('/'); 
                     if (partesFecha.length === 3) {
-                        // PDF Limpio
                         item.pdfGenerado = `https://miprincipado.asturias.es/bopa/${partesFecha[2]}/${partesFecha[1]}/${partesFecha[0]}/${idDoc}.pdf`;
-                        // HTML Feo reconstruido matemáticamente
                         item.htmlGenerado = `https://miprincipado.asturias.es/bopa/disposiciones?p_p_id=pa_sede_bopa_web_portlet_SedeBopaDispositionWeb&p_p_lifecycle=0&_pa_sede_bopa_web_portlet_SedeBopaDispositionWeb_mvcRenderCommandName=%2Fdisposition%2Fdetail&p_r_p_dispositionText=${idDoc}&p_r_p_dispositionReference=${idDoc}&p_r_p_dispositionDate=${partesFecha[0]}%2F${partesFecha[1]}%2F${partesFecha[2]}`;
                     }
                 }
+            }
+
+            // 🚀 NUEVO: INTERCEPTOR CATALUÑA (DOGC)
+            if (fuente.nombre === "DOGC" && !enlaceLimpio.startsWith('http')) {
+                enlaceLimpio = "https://dogc.gencat.cat" + enlaceLimpio;
+            }
+
+            // 🚀 NUEVO: INTERCEPTOR CANTABRIA (BOC)
+            if (fuente.nombre === "BOC_CANTABRIA" && !enlaceLimpio.startsWith('http')) {
+                enlaceLimpio = "https://boc.cantabria.es/boces/" + enlaceLimpio.replace(/^\/+/, '');
+            }
+
+            // 🚀 NUEVO: INTERCEPTOR LA RIOJA (BOR)
+            if (fuente.nombre === "BOR" && !enlaceLimpio.startsWith('http')) {
+                enlaceLimpio = "https://web.larioja.org" + enlaceLimpio;
             }
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
@@ -370,12 +367,10 @@ async function extraerBoletines() {
             let enlaceFinal = enlaceLimpio;
             try {
                 if (!enlaceFinal.startsWith('http')) {
-                    // Usamos urlFinal (sin llaves {}) para que no falle el parseo
                     const urlBaseObj = new URL(urlFinal); 
                     if (enlaceFinal.startsWith('/')) {
                         enlaceFinal = urlBaseObj.origin + enlaceFinal;
                     } else {
-                        // Forzamos a que cuelgue del dominio principal para evitar URLs Frankenstein
                         enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
                     }
                 }
@@ -399,35 +394,32 @@ async function extraerBoletines() {
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
             } else if (fuente.nombre === "BON") {
-                // Navarra sigue usando CodeTabs
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo.texto;
                 pdfExtraidoNativo = nativo.pdf;
             } else if (fuente.nombre === "BOPA") {
-                // 🚀 BOPA tiene URLs muy complejas que rompen CodeTabs (Error 400). Usamos Cloudflare directamente.
                 textoInterior = await obtenerTextoUniversal(enlaceFinal);
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal);
                  textoInterior = nativo.texto;
                  pdfExtraidoNativo = nativo.pdf;
             } else {
+                 // Aquí caerán nuestros 5 boletines nuevos usando Cloudflare de forma nativa
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
 
             if (!textoInterior) continue;
             
-            // 🚀 AMPLIADO PARA GPT-4o-mini: Hasta 25.000 caracteres de bases
             if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
-            // 🚨 ESTA ES LA LLAMADA QUE TIENES QUE SUSTITUIR:
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
               link: enlaceFinal, 
               guid: enlaceFinal, 
               link_boletin: urlFinal,
               pdf_extraido: pdfExtraidoNativo, 
-              htmlGenerado: item.htmlGenerado, // 🚀 AHORA SÍ PASA A LA BD (DOCM, BOCYL, BOPA)
-              pdfGenerado: item.pdfGenerado,   // 🚀 AHORA SÍ PASA A LA BD (DOCM, BOCYL, BOPA)
+              htmlGenerado: item.htmlGenerado, 
+              pdfGenerado: item.pdfGenerado,   
               section: `Boletín ${fuente.nombre}`, 
               department: item.departamento 
             }, textoInterior, fuente, convocatoriasInsertadasHoy, statsFuente);
@@ -437,7 +429,7 @@ async function extraerBoletines() {
         }
       } catch (err) {
         console.error(`❌ Error procesando ${fuente.nombre}:`, err.message);
-        statsFuente.errores++; // 👈 NUEVO
+        statsFuente.errores++; 
         totalErrores++;
       }
     }
@@ -455,7 +447,6 @@ async function extraerBoletines() {
     if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
 
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
-    // 👈 NUEVO: Pasamos el objeto detallado a Telegram en vez del número simple
     await enviarReporteAdmin(reporteStats, alertasEmail, alertasFavs, totalErrores, durationMinutes);
 
   } catch (error) {
