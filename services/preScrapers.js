@@ -41,12 +41,6 @@ async function obtenerUrlDelDia(fuente) {
     
     if (!htmlPortada) return null;
 
-    // 1. Cantabria (BOC): Buscamos el parámetro matemático
-    if (fuente.nombre === "BOC_CANTABRIA") {
-        const match = htmlPortada.match(/idBoletin=(\d+)/);
-        return match ? `https://boc.cantabria.es/boces/verBoletin.do?idBoletin=${match[1]}` : null;
-    }
-
     // 2. La Rioja (BOR): Buscamos el parámetro matemático
     if (fuente.nombre === "BOR") {
         const match = htmlPortada.match(/bor-boletin\?id=(\d+)/);

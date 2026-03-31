@@ -208,8 +208,109 @@ async function obtenerDOGCporAPI() {
     }
 }
 
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Basado en la regla de +20)
+async function obtenerCantabriaMatematico() {
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
+    
+    const hoy = new Date();
+    const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    
+    // 1. Calculamos los días hábiles aproximados desde tu fecha ancla
+    const fechaAncla = new Date('2026-03-31T00:00:00');
+    let diasHabiles = 0;
+    let fechaTemp = new Date(fechaAncla);
+    
+    while (fechaTemp < hoy) {
+        fechaTemp.setDate(fechaTemp.getDate() + 1);
+        const diaSemana = fechaTemp.getDay();
+        // Si no es sábado (6) ni domingo (0), sumamos un día hábil
+        if (diaSemana !== 0 && diaSemana !== 6) diasHabiles++;
+    }
+
+    // 2. Adivinamos el ID de hoy usando tu fórmula (+20 por día hábil)
+    let idEstimado = 44405 + (diasHabiles * 20);
+    
+    // 3. Bucle de calibración (por si ha habido festivos que rompan la regla exacta)
+    let intentos = 0;
+    let convocatorias = [];
+    
+    while (intentos < 5) { // Máximo 5 saltos para no hacer un bucle infinito
+        const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
+        try {
+            // Intentamos descargar el XML
+            const res = await fetch(xmlUrl, {
+                headers: { "User-Agent": "Mozilla/5.0" }
+            });
+            
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const xmlText = await res.text();
+            
+            // Comprobamos la fecha de publicación dentro del XML
+            const matchFecha = xmlText.match(/<fecha>([^<]+)<\/fecha>/);
+            const fechaBoletin = matchFecha ? matchFecha[1] : null;
+            
+            if (fechaBoletin === formatoHoy) {
+                console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
+                
+                // Extraemos las convocatorias del XML usando Expresiones Regulares
+                // En Cantabria, las plazas suelen estar en la sección "2. Autoridades y Personal" -> "Oposiciones y concursos"
+                // Extraemos los bloques de anuncios
+                const regexAnuncio = /<anuncio>([\s\S]*?)<\/anuncio>/g;
+                let match;
+                while ((match = regexAnuncio.exec(xmlText)) !== null) {
+                    const bloque = match[1];
+                    const tituloMatch = bloque.match(/<sumario>([\s\S]*?)<\/sumario>/);
+                    const pdfMatch = bloque.match(/<id_blob_pdf>(\d+)<\/id_blob_pdf>/);
+                    const idAnuncioMatch = bloque.match(/<numero_anuncio>([^<]+)<\/numero_anuncio>/);
+                    
+                    if (tituloMatch && pdfMatch && idAnuncioMatch) {
+                        const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+                        // Filtro básico de empleo (solo nos interesan las que suenen a plaza/empleo)
+                        const t = titulo.toLowerCase();
+                        if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
+                            t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
+                            t.includes('selectiv')) {
+                            
+                            convocatorias.push({
+                                titulo: titulo,
+                                enlace: `https://boc.cantabria.es/boces/verAnuncioAction.do?idAnuBlob=${idAnuncioMatch[1]}`,
+                                pdf: `https://boc.cantabria.es/boces/verAnuncioAction.do?idAnuBlob=${pdfMatch[1]}`
+                            });
+                        }
+                    }
+                }
+                return convocatorias; // Devolvemos la lista limpia
+                
+            } else if (fechaBoletin) {
+                // Convertimos la fecha del boletín a Date para saber si nos hemos pasado o nos quedamos cortos
+                const partes = fechaBoletin.split('/');
+                const dateBoletin = new Date(`${partes[2]}-${partes[1]}-${partes[0]}T00:00:00`);
+                
+                if (dateBoletin < hoy) {
+                    console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${fechaBoletin}. Avanzando +20...`);
+                    idEstimado += 20;
+                } else {
+                    console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${fechaBoletin}. Retrocediendo -20...`);
+                    idEstimado -= 20;
+                }
+            } else {
+                // Si no hay fecha, es un XML inválido, avanzamos
+                idEstimado += 20;
+            }
+        } catch (e) {
+            console.log(`   ⚠️ Error al tantear el ID ${idEstimado}: ${e.message}`);
+            idEstimado -= 20; // Si falla, solemos habernos pasado al futuro
+        }
+        intentos++;
+    }
+    
+    console.log("   ⏭️ No se pudo encontrar el boletín de hoy de Cantabria con la fórmula matemática.");
+    return null;
+}
+
 module.exports = {
   obtenerTextoNativo,
   obtenerTextoUniversal,
-  obtenerDOGCporAPI
+  obtenerDOGCporAPI,
+  obtenerCantabriaMatematico
 };
