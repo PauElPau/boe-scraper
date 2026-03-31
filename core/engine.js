@@ -366,11 +366,11 @@ async function extraerBoletines() {
                 item.pdfGenerado = item.pdf; 
                 item.htmlGenerado = enlaceLimpio;
             }
-           // 🛠️ INTERCEPTOR CANTABRIA (BOC): Rutas Matemáticas
+          /*  // 🛠️ INTERCEPTOR CANTABRIA (BOC): Rutas Matemáticas
             if (fuente.nombre === "BOC_CANTABRIA") {
                 item.pdfGenerado = item.pdf; 
                 item.htmlGenerado = enlaceLimpio; 
-            }
+            } */
             if (fuente.nombre === "BOR" && !enlaceLimpio.startsWith('http')) {
                 enlaceLimpio = "https://web.larioja.org" + enlaceLimpio;
             }
