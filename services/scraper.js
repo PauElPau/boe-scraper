@@ -255,32 +255,38 @@ async function obtenerCantabriaMatematico() {
 
             // Intento 2: Si el cortafuegos corta la conexión (fetch failed), usamos nuestra función universal anti-bloqueos
             if (!xmlText) {
-                // obtenerTextoUniversal probará con Cloudflare, CodeTabs, AllOrigins, etc.
                 xmlText = await obtenerTextoUniversal(xmlUrl); 
             }
 
-            if (!xmlText || !xmlText.includes('<fecha>')) {
-                throw new Error("El archivo devuelto está vacío o no es un XML");
+            if (!xmlText || !xmlText.includes('</root>')) {
+                throw new Error("El archivo devuelto está vacío o no es un XML válido (no tiene etiqueta root)");
             }
             
-            // Comprobamos la fecha de publicación dentro del XML
-            const matchFecha = xmlText.match(/<fecha>([^<]+)<\/fecha>/);
+            // 🚀 PARCHE: Cazamos la fecha que viene DENTRO del atributo: <Fecha fecha="31/03/2026">
+            const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
             const fechaBoletin = matchFecha ? matchFecha[1] : null;
             
             if (fechaBoletin === formatoHoy) {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
-                // Extraemos las convocatorias del XML usando Expresiones Regulares
-                const regexAnuncio = /<anuncio>([\s\S]*?)<\/anuncio>/g;
-                let match;
-                while ((match = regexAnuncio.exec(xmlText)) !== null) {
-                    const bloque = match[1];
-                    const tituloMatch = bloque.match(/<sumario>([\s\S]*?)<\/sumario>/);
-                    const pdfMatch = bloque.match(/<id_blob_pdf>(\d+)<\/id_blob_pdf>/);
-                    const idAnuncioMatch = bloque.match(/<numero_anuncio>([^<]+)<\/numero_anuncio>/);
+                // Buscamos dentro de la Sección 2.2 (Cursos, Oposiciones y Concursos)
+                // Usamos un regex para coger solo los títulos (sumarios) y los enlaces PDF (id_blob_pdf)
+                const regexOposiciones = /<titulo>([^<]+)<\/titulo>[\s\S]*?<id_blob_pdf>(\d+)<\/id_blob_pdf>|<titulo_text>([^<]+)<\/titulo_text>[\s\S]*?<numeroExp>[^<]*<\/numeroExp>[\s\S]*?<num_exp\s+url="([^"]+)"/ig;
+                
+                // Para ser más eficientes, buscaremos la etiqueta <disposicion ...> entera
+                const regexDisposicion = /<disposicion\s+fechaDis="[^"]+"[^>]*>([\s\S]*?)<\/disposicion>/g;
+                let matchDisp;
+                
+                while ((matchDisp = regexDisposicion.exec(xmlText)) !== null) {
+                    const bloque = matchDisp[1];
+                    const tituloMatch = bloque.match(/<titulo_text>([^<]+)<\/titulo_text>/);
+                    const enlaceMatch = bloque.match(/<num_exp\s+url="([^"]+)">/);
                     
-                    if (tituloMatch && pdfMatch && idAnuncioMatch) {
+                    // Cantabria a veces pone los PDFs como "Anexos" y no tienen enlace principal
+                    // En ese caso usamos el num_exp_url que es el HTML de la disposición
+                    if (tituloMatch && enlaceMatch) {
                         const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+                        const htmlDisposicion = enlaceMatch[1].replace(/&amp;/g, '&');
                         
                         // Filtro básico de empleo
                         const t = titulo.toLowerCase();
@@ -290,8 +296,9 @@ async function obtenerCantabriaMatematico() {
                             
                             convocatorias.push({
                                 titulo: titulo,
-                                enlace: `https://boc.cantabria.es/boces/verAnuncioAction.do?idAnuBlob=${idAnuncioMatch[1]}`,
-                                pdf: `https://boc.cantabria.es/boces/verAnuncioAction.do?idAnuBlob=${pdfMatch[1]}`
+                                enlace: htmlDisposicion, 
+                                // Si no hay un PDF directo fácil de cazar, le pasamos el HTML como PDF para que caiga al modo texto universal
+                                pdf: htmlDisposicion
                             });
                         }
                     }
@@ -310,11 +317,12 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
+                console.log(`   ⚠️ No se encontró la etiqueta de fecha en el ID ${idEstimado}`);
                 idEstimado += 20;
             }
         } catch (e) {
             console.log(`   ⚠️ Error al analizar el ID ${idEstimado}: ${e.message}`);
-            idEstimado -= 20; // Si el proxy falla o no es un XML válido, retrocedemos
+            idEstimado -= 20; 
         }
         intentos++;
     }
