@@ -208,9 +208,13 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Corregido Compresión GZIP)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Conexión Directa Anti-WAF + Descompresión GZIP)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
+    
+    // Importamos módulos nativos para saltar el Firewall y descomprimir los datos
+    const https = require('https');
+    const zlib = require('zlib');
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -228,63 +232,59 @@ async function obtenerCantabriaMatematico() {
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
+
+    // 🛡️ ARMA SECRETA: Fetch nativo con descompresión GZIP automática
+    const fetchAvanzado = (url) => new Promise((resolve) => {
+        https.get(url, {
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/xml, text/xml, */*; q=0.01',
+                'Accept-Encoding': 'gzip, deflate', // Pedimos compresión para parecer reales
+                'Connection': 'keep-alive'
+            },
+            rejectUnauthorized: false
+        }, (res) => {
+            // Descomprimimos en tiempo real si el servidor nos manda un archivo comprimido
+            let stream = res;
+            if (res.headers['content-encoding'] === 'gzip') {
+                stream = res.pipe(zlib.createGunzip());
+            } else if (res.headers['content-encoding'] === 'deflate') {
+                stream = res.pipe(zlib.createInflate());
+            }
+
+            let data = '';
+            stream.on('data', chunk => data += chunk);
+            stream.on('end', () => resolve(data));
+            stream.on('error', () => resolve(null));
+        }).on('error', () => resolve(null));
+    });
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
-            let xmlText = null;
-            
-            // Intento 1: Fetch directo pidiendo explícitamente TEXTO PLANO (identity) para que no lo comprima en ZIP
-            try {
-                const res = await fetch(xmlUrl, {
-                    headers: { 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Accept": "application/xml, text/xml, */*; q=0.01",
-                        "Accept-Encoding": "identity" 
-                    }
-                });
-                if (res.ok) xmlText = await res.text();
-            } catch (err) {
-                console.log(`      ⚠️ Falló conexión directa. Usando AllOrigins RAW...`);
-            }
+            // Conectamos directamente usando nuestra arma secreta
+            let xmlText = await fetchAvanzado(xmlUrl);
 
-            // Intento 2: Proxy AllOrigins en modo RAW (Especial para archivos grandes y XML)
+            // Si falla por cualquier motivo, tiramos de la API JSON de AllOrigins como salvavidas
             if (!xmlText) {
+                console.log(`      ⚠️ Bloqueo detectado. Activando proxy secundario JSON...`);
                 try {
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
-                    const res = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
-                    if (res.ok) xmlText = await res.text();
+                    const proxyRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(xmlUrl)}`);
+                    const dataProxy = await proxyRes.json();
+                    if (dataProxy && dataProxy.contents) xmlText = dataProxy.contents;
                 } catch(e) {}
             }
 
-            // Intento 3: CorsProxy.io
-            if (!xmlText) {
-                console.log(`      ⚠️ Falló AllOrigins. Usando CorsProxy...`);
-                try {
-                    const proxyUrl = `https://corsproxy.io/?url=${encodeURIComponent(xmlUrl)}`;
-                    const res = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
-                    if (res.ok) xmlText = await res.text();
-                } catch(e) {}
-            }
-
-            // Desencriptamos si algún proxy ha alterado los símbolos HTML
+            // Desencriptar por si el proxy ensució el HTML
             if (xmlText) {
                 xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
-            // 🚀 ESCUDO 1: Si el servidor nos responde oficialmente que el ID no existe
-            if (xmlText && xmlText.includes('No hay documento que mostrar')) {
-                console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (Aún no publicado o festivo). Retrocediendo...`);
-                idEstimado -= 20;
-                intentos++;
-                continue;
-            }
-
-            // 🚀 ESCUDO 2: Validar si es un XML real
             if (!xmlText || !xmlText.includes('</root>')) {
-                throw new Error("Respuesta vacía o cortada por el proxy.");
+                console.log(`      ❌ Respuesta inválida o vacía.`);
+                throw new Error("Respuesta vacía o cortada.");
             }
             
             const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
