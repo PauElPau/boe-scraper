@@ -237,9 +237,15 @@ async function obtenerCantabriaMatematico() {
     while (intentos < 5) { // Máximo 5 saltos para no hacer un bucle infinito
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         try {
-            // Intentamos descargar el XML
+            // 🛡️ FETCH CAMUFLADO: Simulamos un Chrome de Windows real para que el WAF no corte la conexión
             const res = await fetch(xmlUrl, {
-                headers: { "User-Agent": "Mozilla/5.0" }
+                headers: { 
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Accept": "application/xml, text/xml, */*; q=0.01",
+                    "Accept-Language": "es-ES,es;q=0.9",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive"
+                }
             });
             
             if (!res.ok) throw new Error("HTTP " + res.status);
@@ -253,8 +259,6 @@ async function obtenerCantabriaMatematico() {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
                 // Extraemos las convocatorias del XML usando Expresiones Regulares
-                // En Cantabria, las plazas suelen estar en la sección "2. Autoridades y Personal" -> "Oposiciones y concursos"
-                // Extraemos los bloques de anuncios
                 const regexAnuncio = /<anuncio>([\s\S]*?)<\/anuncio>/g;
                 let match;
                 while ((match = regexAnuncio.exec(xmlText)) !== null) {
@@ -265,7 +269,7 @@ async function obtenerCantabriaMatematico() {
                     
                     if (tituloMatch && pdfMatch && idAnuncioMatch) {
                         const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
-                        // Filtro básico de empleo (solo nos interesan las que suenen a plaza/empleo)
+                        // Filtro básico de empleo
                         const t = titulo.toLowerCase();
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
@@ -279,10 +283,9 @@ async function obtenerCantabriaMatematico() {
                         }
                     }
                 }
-                return convocatorias; // Devolvemos la lista limpia
+                return convocatorias; 
                 
             } else if (fechaBoletin) {
-                // Convertimos la fecha del boletín a Date para saber si nos hemos pasado o nos quedamos cortos
                 const partes = fechaBoletin.split('/');
                 const dateBoletin = new Date(`${partes[2]}-${partes[1]}-${partes[0]}T00:00:00`);
                 
@@ -294,12 +297,12 @@ async function obtenerCantabriaMatematico() {
                     idEstimado -= 20;
                 }
             } else {
-                // Si no hay fecha, es un XML inválido, avanzamos
                 idEstimado += 20;
             }
         } catch (e) {
             console.log(`   ⚠️ Error al tantear el ID ${idEstimado}: ${e.message}`);
-            idEstimado -= 20; // Si falla, solemos habernos pasado al futuro
+            // Si el WAF sigue bloqueando o el ID no existe, retrocedemos
+            idEstimado -= 20; 
         }
         intentos++;
     }
