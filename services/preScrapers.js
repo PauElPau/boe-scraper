@@ -1,67 +1,49 @@
-const { obtenerTextoUniversal } = require('./scraper');
-
-// 🕵️‍♂️ FETCH INVISIBLE: Simula un navegador Chrome 100% real para esquivar WAFs (Error 422/403)
-async function fetchInvisible(url) {
-    try {
-        const res = await fetch(url, {
-            headers: {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-                "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-                "Cache-Control": "max-age=0",
-                "Upgrade-Insecure-Requests": "1",
-                "Sec-Fetch-Dest": "document",
-                "Sec-Fetch-Mode": "navigate",
-                "Sec-Fetch-Site": "none",
-                "Sec-Fetch-User": "?1"
-            }
-        });
-        if (res.ok) return await res.text();
-        return null;
-    } catch (e) {
-        return null;
-    }
-}
+const { obtenerTextoNativo, obtenerTextoUniversal } = require('./scraper');
 
 // 🎯 FASE PREVIA: Entra a las portadas "caja fuerte" y extrae la URL real del último boletín
 async function obtenerUrlDelDia(fuente) {
+    // 1. Cataluña (DOGC): Solo devuelve un flag para que el engine sepa que debe usar la API
     if (fuente.nombre === "DOGC") {
-        return "https://dogc.gencat.cat/es/pdogc_canals_interns/pdogc_sumari_del_dogc/?seccio=2";
+        return "API_REST";
     }
 
-    console.log(`   🕵️‍♂️ Ejecutando Pre-Scraping Invisible en la portada de ${fuente.nombre}...`);
+    console.log(`   🕵️‍♂️ Ejecutando Pre-Scraping en la portada de ${fuente.nombre}...`);
     
-    let htmlPortada = await fetchInvisible(fuente.url);
-    if (!htmlPortada) {
-        console.log(`   ⚠️ Fetch Invisible falló. Cayendo a proxies universales...`);
+    let htmlPortada = null;
+    
+    // 🛡️ Bypasseamos el cortafuegos de estas comunidades usando CodeTabs de forma explícita
+    if (["BOC_CANTABRIA", "BOR"].includes(fuente.nombre)) {
+        const nativo = await obtenerTextoNativo(fuente.url, true);
+        htmlPortada = nativo ? nativo.texto : null;
+    } else {
         htmlPortada = await obtenerTextoUniversal(fuente.url);
     }
     
     if (!htmlPortada) return null;
 
-    // 2. Cantabria (BOC): Busca solo el parámetro ID matemáticamente (inmune a proxies)
+    // 2. Cantabria (BOC): Busca matemáticamente el ID
     if (fuente.nombre === "BOC_CANTABRIA") {
         const match = htmlPortada.match(/idBoletin=(\d+)/);
         return match ? `https://boc.cantabria.es/boces/verBoletin.do?idBoletin=${match[1]}` : null;
     }
 
-    // 3. La Rioja (BOR): Busca solo el ID numérico del boletín (inmune a proxies)
+    // 3. La Rioja (BOR): Busca matemáticamente el ID
     if (fuente.nombre === "BOR") {
         const match = htmlPortada.match(/bor-boletin\?id=(\d+)/);
         return match ? `https://web.larioja.org/bor-boletin?id=${match[1]}` : null;
     }
 
-    // 4. Melilla (BOME): Busca cualquier PDF que contenga la palabra BOME
+    // 4. Melilla (BOME): Atrapa el primer PDF real de la tabla principal
     if (fuente.nombre === "BOME") {
-        const match = htmlPortada.match(/([^"'>\s]*BOME[^"'>\s]*\.pdf)/i); 
+        const match = htmlPortada.match(/href="([^"]*\.pdf)"/i); 
         let link = match ? match[1] : null;
         if (link && !link.startsWith('http')) link = "https://bomemelilla.es/" + link.replace(/^\/+/, '');
         return link;
     }
 
-    // 5. Ceuta (BOCCE): Busca cualquier PDF que contenga la palabra BOCCE
+    // 5. Ceuta (BOCCE): Atrapa el PDF que esté dentro de su carpeta oficial de boletines
     if (fuente.nombre === "BOCCE") {
-        const match = htmlPortada.match(/([^"'>\s]*(?:bocce|BOCCE)[^"'>\s]*\.pdf)/i);
+        const match = htmlPortada.match(/href="([^"]*\/bocce\/[^"]*\.pdf)"/i);
         let link = match ? match[1] : null;
         if (link && !link.startsWith('http')) link = "https://www.ceuta.es/" + link.replace(/^\/+/, '');
         return link;
