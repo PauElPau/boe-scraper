@@ -223,33 +223,45 @@ async function obtenerCantabriaMatematico() {
     while (fechaTemp < hoy) {
         fechaTemp.setDate(fechaTemp.getDate() + 1);
         const diaSemana = fechaTemp.getDay();
-        // Si no es sábado (6) ni domingo (0), sumamos un día hábil
         if (diaSemana !== 0 && diaSemana !== 6) diasHabiles++;
     }
 
     // 2. Adivinamos el ID de hoy usando tu fórmula (+20 por día hábil)
     let idEstimado = 44405 + (diasHabiles * 20);
-    
-    // 3. Bucle de calibración (por si ha habido festivos que rompan la regla exacta)
     let intentos = 0;
     let convocatorias = [];
     
-    while (intentos < 5) { // Máximo 5 saltos para no hacer un bucle infinito
+    while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
+        
+        // 👁️ IMPRIMIMOS LA URL QUE ESTÁ TANTEANDO EL BOT
+        console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
+        
         try {
-            // 🛡️ FETCH CAMUFLADO: Simulamos un Chrome de Windows real para que el WAF no corte la conexión
-            const res = await fetch(xmlUrl, {
-                headers: { 
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Accept": "application/xml, text/xml, */*; q=0.01",
-                    "Accept-Language": "es-ES,es;q=0.9",
-                    "Cache-Control": "no-cache",
-                    "Connection": "keep-alive"
-                }
-            });
+            let xmlText = null;
             
-            if (!res.ok) throw new Error("HTTP " + res.status);
-            const xmlText = await res.text();
+            // Intento 1: Fetch directo camuflado
+            try {
+                const res = await fetch(xmlUrl, {
+                    headers: { 
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Accept": "application/xml, text/xml, */*; q=0.01"
+                    }
+                });
+                if (res.ok) xmlText = await res.text();
+            } catch (err) {
+                console.log(`      ⚠️ Cortafuegos bloqueó la conexión directa. Activando red de proxies...`);
+            }
+
+            // Intento 2: Si el cortafuegos corta la conexión (fetch failed), usamos nuestra función universal anti-bloqueos
+            if (!xmlText) {
+                // obtenerTextoUniversal probará con Cloudflare, CodeTabs, AllOrigins, etc.
+                xmlText = await obtenerTextoUniversal(xmlUrl); 
+            }
+
+            if (!xmlText || !xmlText.includes('<fecha>')) {
+                throw new Error("El archivo devuelto está vacío o no es un XML");
+            }
             
             // Comprobamos la fecha de publicación dentro del XML
             const matchFecha = xmlText.match(/<fecha>([^<]+)<\/fecha>/);
@@ -269,6 +281,7 @@ async function obtenerCantabriaMatematico() {
                     
                     if (tituloMatch && pdfMatch && idAnuncioMatch) {
                         const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
+                        
                         // Filtro básico de empleo
                         const t = titulo.toLowerCase();
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
@@ -300,9 +313,8 @@ async function obtenerCantabriaMatematico() {
                 idEstimado += 20;
             }
         } catch (e) {
-            console.log(`   ⚠️ Error al tantear el ID ${idEstimado}: ${e.message}`);
-            // Si el WAF sigue bloqueando o el ID no existe, retrocedemos
-            idEstimado -= 20; 
+            console.log(`   ⚠️ Error al analizar el ID ${idEstimado}: ${e.message}`);
+            idEstimado -= 20; // Si el proxy falla o no es un XML válido, retrocedemos
         }
         intentos++;
     }
