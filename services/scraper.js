@@ -208,9 +208,13 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Bypass TLS y Proxies RAW)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Bypass Total con HTTPS Clásico + ZLIB)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
+    
+    // Importamos módulos nativos clásicos (Ignoramos el 'fetch' moderno que Cloudflare bloquea)
+    const https = require('https');
+    const zlib = require('zlib');
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -228,62 +232,55 @@ async function obtenerCantabriaMatematico() {
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
-    
-    // 🛡️ TRUCO MÁGICO: Guardamos la configuración original de seguridad TLS de tu servidor
-    const originalTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+
+    // 🛡️ ARMA DEFINITIVA: Petición HTTPS de muy bajo nivel (Esquiva el bloqueo de 'fetch' de Node.js)
+    const fetchClandestino = (url) => new Promise((resolve) => {
+        const options = {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'application/xml, text/xml, */*; q=0.01',
+                // Aceptamos TODO tipo de compresión, incluido Brotli (br) que es el favorito de Cloudflare
+                'Accept-Encoding': 'gzip, deflate, br', 
+                'Accept-Language': 'es-ES,es;q=0.9',
+                'Connection': 'keep-alive'
+            },
+            rejectUnauthorized: false // Apagamos el candado TLS
+        };
+
+        https.get(url, options, (res) => {
+            let stream = res;
+
+            // Descomprimir según lo que envíe el servidor (Magia pura)
+            if (res.headers['content-encoding'] === 'gzip') {
+                stream = res.pipe(zlib.createGunzip());
+            } else if (res.headers['content-encoding'] === 'deflate') {
+                stream = res.pipe(zlib.createInflate());
+            } else if (res.headers['content-encoding'] === 'br') {
+                stream = res.pipe(zlib.createBrotliDecompress());
+            }
+
+            let data = '';
+            stream.on('data', (chunk) => { data += chunk; });
+            stream.on('end', () => resolve({ ok: res.statusCode === 200, text: data, status: res.statusCode }));
+            stream.on('error', (err) => resolve({ ok: false, text: null, error: err.message }));
+        }).on('error', (err) => resolve({ ok: false, text: null, error: err.message }));
+    });
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
-            let xmlText = null;
+            console.log(`      🚀 Lanzando conexión HTTPS Clandestina...`);
+            const respuesta = await fetchClandestino(xmlUrl);
             
-            // INTENTO 1: Fetch Nativo (Desactivando el candado estricto para evitar el "fetch failed")
-            try {
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // Bajamos escudos temporalmente
-                const res = await fetch(xmlUrl, {
-                    headers: { 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36",
-                        "Accept": "application/xml, text/xml, */*; q=0.01"
-                    }
-                });
-                if (res.ok) {
-                    xmlText = await res.text();
-                } else {
-                    console.log(`      ⚠️ Fallo HTTP Directo: Status ${res.status}`);
-                }
-            } catch (err) {
-                console.log(`      ⚠️ Fallo de Red Directo: ${err.message}`);
-            } finally {
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTls; // Restauramos escudos inmediatamente
+            let xmlText = respuesta.text;
+
+            if (!respuesta.ok && respuesta.status) {
+               console.log(`      ⚠️ El servidor respondió con Status HTTP: ${respuesta.status}`);
             }
 
-            // INTENTO 2: Proxy AllOrigins en modo RAW (Especial para archivos gigantes, no los corta)
-            if (!xmlText) {
-                console.log(`      🔄 Lanzando Proxy AllOrigins (Modo RAW)...`);
-                try {
-                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
-                    const resProxy = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
-                    if (resProxy.ok) xmlText = await resProxy.text();
-                } catch(e) {}
-            }
-
-            // INTENTO 3: Proxy CodeTabs
-            if (!xmlText) {
-                console.log(`      🔄 Lanzando Proxy CodeTabs...`);
-                try {
-                    const resProxy2 = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${xmlUrl}`, { headers: { "User-Agent": "Mozilla/5.0" }});
-                    if (resProxy2.ok) xmlText = await resProxy2.text();
-                } catch(e) {}
-            }
-
-            // LIMPIEZA DE PROXIES (Desencriptar los < > rotos si pasamos por proxy)
-            if (xmlText) {
-                xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
-            }
-
-            // 🚀 ESCUDO DE 404: Si Cantabria devuelve su página HTML de error, es que el boletín aún no existe
+            // 🚀 ESCUDO DE 404: Si Cantabria devuelve su página HTML de error (ID no publicado aún)
             if (xmlText && (xmlText.includes('<!DOCTYPE HTML>') || xmlText.includes('No hay documento'))) {
                 console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (Aún no publicado o festivo). Retrocediendo...`);
                 idEstimado -= 20;
@@ -295,7 +292,7 @@ async function obtenerCantabriaMatematico() {
             if (!xmlText || !xmlText.includes('</root>')) {
                 const preview = xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'TOTALMENTE VACÍO (NULL)';
                 console.log(`      ❌ Respuesta Inválida. Fragmento recibido: ${preview}`);
-                throw new Error("El archivo no pudo descargarse o fue bloqueado por límite de tamaño.");
+                throw new Error("Bloqueo del WAF o archivo truncado.");
             }
             
             // EXTRACCIÓN Y LÓGICA DE FECHAS
