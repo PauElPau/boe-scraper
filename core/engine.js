@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper");
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper"); 
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -15,7 +15,6 @@ const parser = new Parser({
   },
 });
 
-// --- 8. BUCLE PRINCIPAL ---
 async function extraerBoletines() {
   const startTime = Date.now(); 
   let totalErrores = 0; 
@@ -27,7 +26,6 @@ async function extraerBoletines() {
     for (const fuente of FUENTES_BOLETINES) {
       if (getIaDetenida()) break; 
 
-      // Inicializamos las estadísticas de este boletín
       const statsFuente = { encontradas: 0, guardadas: 0, descartadas_ia: 0, descartadas_404: 0, duplicados: 0, enlazadas: 0, errores: 0 };
       reporteStats[fuente.nombre] = statsFuente;
       
@@ -81,7 +79,6 @@ async function extraerBoletines() {
             if (item.pubDate || item.isoDate) {
                 const itemDate = new Date(item.isoDate || item.pubDate);
                 const hoy = new Date();
-                // 🛡️ FECHAS INFALIBLES: Usamos formato ISO 'YYYY-MM-DD' estricto en huso horario de Madrid
                 const formatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
                 if (formatter.format(itemDate) !== formatter.format(hoy)) {
                     continue; 
@@ -123,11 +120,9 @@ async function extraerBoletines() {
             const categoriaSeccion = item.categories?.[0] || `Boletín ${fuente.nombre}`;
             const categoriaOrganismo = item.categories?.[1] || fuente.ambito;
 
-            // --- 🛠️ EXTRACCIÓN Y LIMPIEZA DE PDFS PARA RSS ---
             let enlacePdfRss = item.enclosure?.url || null;
             if (!enlacePdfRss && item.guid && item.guid.toLowerCase().includes('.pdf')) enlacePdfRss = item.guid;
 
-            // 1. BOPV (País Vasco): Reemplazar extensión
             if (fuente.nombre === "BOPV" && item.link) {
                 item.link = item.link.replace('/y22-bopv/', '/web01-bopv/');
                 if (item.link.endsWith('.shtml')) {
@@ -135,18 +130,15 @@ async function extraerBoletines() {
                 }
             }
 
-            // 2. DOG (Galicia): Transformación directa
             if (fuente.nombre === "DOG" && item.link && item.link.endsWith('.html')) {
                 enlacePdfRss = item.link.replace('.html', '.pdf');
             }
 
-            // 3. BOA (Aragón): Obligamos a nulo para que el Extractor Nativo (MLKOB) haga el trabajo
             if (fuente.nombre === "BOA" && item.link && item.link.includes('DOCN=')) {
                 if (item.link.startsWith('/cgi-bin')) item.link = "https://www.boa.aragon.es" + item.link;
                 enlacePdfRss = null; 
             }
 
-            // 4. BORM (Murcia): Generar con la fecha exacta de hoy
             if (fuente.nombre === "BORM" && item.guid && item.guid.includes('/pdf')) {
                 const idMatch = item.guid.match(/\/anuncio\/(\d+)\/pdf/);
                 const numMatch = item.title.match(/^\s*(\d+)/);
@@ -172,8 +164,8 @@ async function extraerBoletines() {
 
             if (["BOE", "BOJA", "BOPV", "BORM", "DOE", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
-              textoParaIA = nativo.texto;
-              pdfExtraidoNativo = nativo.pdf;
+              textoParaIA = nativo ? nativo.texto : null;
+              pdfExtraidoNativo = nativo ? nativo.pdf : null;
             } else if (item.link.toLowerCase().includes('pdf')) {
               textoParaIA = item.tituloLimpioParaLog + " - " + (item.contentSnippet || item.content || "");
             } else {
@@ -195,17 +187,16 @@ async function extraerBoletines() {
         else if (fuente.tipo === "html_directo") {
           let urlFinal = urlFinalLog; 
 
-          // 🚀 NUEVO: INTERCEPCIÓN DE BOLETINES EN CUARENTENA (FASE PREVIA)
+          // 🚀 FASE PREVIA: Boletines en Cuarentena
           if (fuente.fase_previa) {
               urlFinal = await obtenerUrlDelDia(fuente);
               if (!urlFinal) {
                   console.log(`   ⏭️ La portada de ${fuente.nombre} no contiene boletín para hoy.`);
-                  continue; // Saltamos limpio al siguiente boletín
+                  continue; 
               }
-              console.log(`   🎯 URL real del día localizada: ${urlFinal}`);
+              if (urlFinal !== "API_REST") console.log(`   🎯 URL real del día localizada: ${urlFinal}`);
           }
 
-          // 🛠️ INTERCEPTOR BOIB: Leer RSS, buscar el de hoy y construir URL de la sección
           if (fuente.boibRssToHtml) {
               console.log(`   🔗 Extrayendo URL del BOIB de hoy desde su RSS...`);
               try {
@@ -255,49 +246,35 @@ async function extraerBoletines() {
               }
           }
 
-          let markdownWeb = null;
-          if (fuente.nombre === "BOA") {
-              const res = await fetch(urlFinal);
-              markdownWeb = await res.text();
-          } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
-              const nativo = await obtenerTextoNativo(urlFinal, true);
-              markdownWeb = nativo.texto;
-          } else {
-              // 🧠 DOGV, DOGC, BOR y BOC_CANTABRIA caen aquí por descarte (Cloudflare)
-              markdownWeb = await obtenerTextoUniversal(urlFinal);
-          }
-          if (!markdownWeb) continue;
-
-          if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
-
-          if (fuente.nombre === "BOIB") {
-              markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
-          }
-
-          console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
           let listadoBruto = [];
 
           // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
-          // El DOGC no descarga HTML, llama directamente a su función API y se salta a la IA
           if (fuente.nombre === "DOGC") {
               const apiResults = await obtenerDOGCporAPI();
-              if (apiResults !== null) {
+              if (apiResults && apiResults.length > 0) {
                   listadoBruto = apiResults;
+              } else {
+                  console.log(`   ⏭️ La API de Cataluña no devolvió convocatorias de empleo para hoy.`);
+                  continue;
               }
           } 
-          // 🐢 CAMINO TRADICIONAL (HTML + IA) PARA EL RESTO DE COMUNIDADES
+          // 🐢 CAMINO TRADICIONAL PARA EL RESTO
           else {
               let markdownWeb = null;
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "BOC_CANTABRIA", "BOR"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
-                  markdownWeb = nativo.texto;
+                  markdownWeb = nativo ? nativo.texto : null;
               } else {
                   markdownWeb = await obtenerTextoUniversal(urlFinal);
               }
-              if (!markdownWeb) continue;
+              
+              if (!markdownWeb) {
+                  console.log(`   ⚠️ No se pudo extraer el HTML del sumario de ${fuente.nombre}`);
+                  continue;
+              }
 
               if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
 
@@ -376,17 +353,13 @@ async function extraerBoletines() {
                 }
             }
 
-            // 🚀 NUEVO: INTERCEPTOR CATALUÑA (DOGC)
-            if (fuente.nombre === "DOGC" && !enlaceLimpio.startsWith('http')) {
-                enlaceLimpio = "https://dogc.gencat.cat" + enlaceLimpio;
+            if (fuente.nombre === "DOGC") {
+                item.pdfGenerado = item.pdf; 
+                item.htmlGenerado = enlaceLimpio;
             }
-
-            // 🚀 NUEVO: INTERCEPTOR CANTABRIA (BOC)
             if (fuente.nombre === "BOC_CANTABRIA" && !enlaceLimpio.startsWith('http')) {
                 enlaceLimpio = "https://boc.cantabria.es/boces/" + enlaceLimpio.replace(/^\/+/, '');
             }
-
-            // 🚀 NUEVO: INTERCEPTOR LA RIOJA (BOR)
             if (fuente.nombre === "BOR" && !enlaceLimpio.startsWith('http')) {
                 enlaceLimpio = "https://web.larioja.org" + enlaceLimpio;
             }
@@ -425,18 +398,17 @@ async function extraerBoletines() {
                 console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (fuente.nombre === "BON") {
+            } else if (["BON", "BOC_CANTABRIA", "BOR", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
-                textoInterior = nativo.texto;
-                pdfExtraidoNativo = nativo.pdf;
+                textoInterior = nativo ? nativo.texto : null;
+                if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
             } else if (fuente.nombre === "BOPA") {
                 textoInterior = await obtenerTextoUniversal(enlaceFinal);
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                  const nativo = await obtenerTextoNativo(enlaceFinal);
-                 textoInterior = nativo.texto;
-                 pdfExtraidoNativo = nativo.pdf;
+                 textoInterior = nativo ? nativo.texto : null;
+                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
             } else {
-                 // Aquí caerán nuestros 5 boletines nuevos usando Cloudflare de forma nativa
                  textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
 
