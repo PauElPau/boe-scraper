@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI, obtenerCantabriaMatematico } = require("../services/scraper");
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper");
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -187,7 +187,6 @@ async function extraerBoletines() {
         else if (fuente.tipo === "html_directo") {
           let urlFinal = urlFinalLog; 
 
-          // 🚀 FASE PREVIA: Boletines en Cuarentena
           if (fuente.fase_previa) {
               urlFinal = await obtenerUrlDelDia(fuente);
               if (!urlFinal) {
@@ -248,7 +247,7 @@ async function extraerBoletines() {
 
           let listadoBruto = [];
 
-          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC) Y CANTABRIA (BOC)
+          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
           if (fuente.nombre === "DOGC") {
               const apiResults = await obtenerDOGCporAPI();
               if (apiResults && apiResults.length > 0) {
@@ -257,23 +256,15 @@ async function extraerBoletines() {
                   console.log(`   ⏭️ La API de Cataluña no devolvió convocatorias de empleo para hoy.`);
                   continue;
               }
-          } else if (fuente.nombre === "BOC_CANTABRIA") {
-              // 🧮 Usamos tu fórmula matemática del +20
-              const mathResults = await obtenerCantabriaMatematico();
-              if (mathResults && mathResults.length > 0) {
-                  listadoBruto = mathResults;
-              } else {
-                  console.log(`   ⏭️ El Buscador Matemático de Cantabria no encontró convocatorias de empleo para hoy.`);
-                  continue;
-              }
-          }
-          // 🐢 CAMINO TRADICIONAL PARA EL RESTO
+          } 
+          // 🐢 CAMINO TRADICIONAL PARA EL RESTO (Ceuta y Melilla entran aquí)
           else {
               let markdownWeb = null;
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "BOC_CANTABRIA", "BOR"].includes(fuente.nombre)) {
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+                  // Entramos a Ceuta y Melilla saltando WAFs a través de CodeTabs
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
@@ -281,7 +272,7 @@ async function extraerBoletines() {
               }
               
               if (!markdownWeb) {
-                  console.log(`   ⚠️ No se pudo extraer el HTML del sumario de ${fuente.nombre}`);
+                  console.log(`   ⚠️ No se pudo extraer el HTML de la portada de ${fuente.nombre}`);
                   continue;
               }
 
@@ -366,14 +357,6 @@ async function extraerBoletines() {
                 item.pdfGenerado = item.pdf; 
                 item.htmlGenerado = enlaceLimpio;
             }
-          /*  // 🛠️ INTERCEPTOR CANTABRIA (BOC): Rutas Matemáticas
-            if (fuente.nombre === "BOC_CANTABRIA") {
-                item.pdfGenerado = item.pdf; 
-                item.htmlGenerado = enlaceLimpio; 
-            } */
-            if (fuente.nombre === "BOR" && !enlaceLimpio.startsWith('http')) {
-                enlaceLimpio = "https://web.larioja.org" + enlaceLimpio;
-            }
             
             if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
                 console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
@@ -405,11 +388,14 @@ async function extraerBoletines() {
             let textoInterior = null;
             let pdfExtraidoNativo = null; 
             
-            if (enlaceFinal.toLowerCase().includes('.pdf')) {
-                console.log(`   📄 Enlace PDF directo detectado. Omitiendo descarga HTML...`);
-                textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente en formato PDF. Accede al enlace para leer las bases completas.]`;
+            // 🚀 INTERCEPTOR ANTI-PDF: Detectamos si el enlace de Ceuta/Melilla es de descarga para no forzar la lectura HTML
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads');
+
+            if (esPdfOculto) {
+                console.log(`   📄 Enlace (PDF o Descarga) detectado. Omitiendo descarga HTML...`);
+                textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente. Accede al enlace superior para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (["BON", "BOC_CANTABRIA", "BOR", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
+            } else if (["BON", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
