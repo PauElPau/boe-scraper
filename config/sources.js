@@ -32,7 +32,7 @@ const FUENTES_BOLETINES = [
   { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta", fase_previa: true },
   { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla", fase_previa: true },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja", fase_previa: true },
-  { nombre: "DOGC", tipo: "html_directo", url: "API_REST", ambito: "Cataluña", fase_previa: false } // 👈 Ponemos fase_previa a false
+  //{ nombre: "DOGC", tipo: "html_directo", url: "API_REST", ambito: "Cataluña", fase_previa: false } 
 ];
 
 module.exports = {
