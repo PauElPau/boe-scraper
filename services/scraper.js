@@ -208,7 +208,7 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simple, Limpio y con Chivato)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Bypass TLS y Proxies RAW)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
     
@@ -229,6 +229,9 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
     
+    // 🛡️ TRUCO MÁGICO: Guardamos la configuración original de seguridad TLS de tu servidor
+    const originalTls = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+    
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
@@ -236,11 +239,12 @@ async function obtenerCantabriaMatematico() {
         try {
             let xmlText = null;
             
-            // INTENTO 1: Fetch Nativo (Node.js lo descomprime y gestiona solo)
+            // INTENTO 1: Fetch Nativo (Desactivando el candado estricto para evitar el "fetch failed")
             try {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; // Bajamos escudos temporalmente
                 const res = await fetch(xmlUrl, {
                     headers: { 
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36",
                         "Accept": "application/xml, text/xml, */*; q=0.01"
                     }
                 });
@@ -251,48 +255,47 @@ async function obtenerCantabriaMatematico() {
                 }
             } catch (err) {
                 console.log(`      ⚠️ Fallo de Red Directo: ${err.message}`);
+            } finally {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalTls; // Restauramos escudos inmediatamente
             }
 
-            // INTENTO 2: Proxy CodeTabs Puro
+            // INTENTO 2: Proxy AllOrigins en modo RAW (Especial para archivos gigantes, no los corta)
             if (!xmlText) {
-                console.log(`      🔄 Lanzando Proxy CodeTabs...`);
+                console.log(`      🔄 Lanzando Proxy AllOrigins (Modo RAW)...`);
                 try {
-                    const resProxy = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${xmlUrl}`, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
+                    const resProxy = await fetch(proxyUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
                     if (resProxy.ok) xmlText = await resProxy.text();
                 } catch(e) {}
             }
 
-            // INTENTO 3: Proxy AllOrigins JSON
+            // INTENTO 3: Proxy CodeTabs
             if (!xmlText) {
-                console.log(`      🔄 Lanzando Proxy AllOrigins...`);
+                console.log(`      🔄 Lanzando Proxy CodeTabs...`);
                 try {
-                    const resProxy2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(xmlUrl)}`);
-                    if (resProxy2.ok) {
-                        const json = await resProxy2.json();
-                        if (json && json.contents) xmlText = json.contents;
-                    }
+                    const resProxy2 = await fetch(`https://api.codetabs.com/v1/proxy/?quest=${xmlUrl}`, { headers: { "User-Agent": "Mozilla/5.0" }});
+                    if (resProxy2.ok) xmlText = await resProxy2.text();
                 } catch(e) {}
             }
 
-            // LIMPIEZA DE PROXIES (Desencriptar los < > rotos)
+            // LIMPIEZA DE PROXIES (Desencriptar los < > rotos si pasamos por proxy)
             if (xmlText) {
                 xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
-            // 👁️ CHIVATO: Si no es un XML válido, imprimimos qué demonios estamos recibiendo
+            // 🚀 ESCUDO DE 404: Si Cantabria devuelve su página HTML de error, es que el boletín aún no existe
+            if (xmlText && (xmlText.includes('<!DOCTYPE HTML>') || xmlText.includes('No hay documento'))) {
+                console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (Aún no publicado o festivo). Retrocediendo...`);
+                idEstimado -= 20;
+                intentos++;
+                continue;
+            }
+
+            // CHIVATO DE ERRORES REALES
             if (!xmlText || !xmlText.includes('</root>')) {
                 const preview = xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'TOTALMENTE VACÍO (NULL)';
                 console.log(`      ❌ Respuesta Inválida. Fragmento recibido: ${preview}`);
-                
-                // Si el servidor nos responde su mensaje de "ID inexistente", sabemos que nos hemos pasado al futuro
-                if (xmlText && xmlText.includes('No hay documento')) {
-                    console.log(`      ⏩ El ID no existe en el servidor. Retrocediendo...`);
-                    idEstimado -= 20;
-                    intentos++;
-                    continue;
-                }
-                
-                throw new Error("El archivo no pudo descargarse o fue bloqueado por un Captcha.");
+                throw new Error("El archivo no pudo descargarse o fue bloqueado por límite de tamaño.");
             }
             
             // EXTRACCIÓN Y LÓGICA DE FECHAS
