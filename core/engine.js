@@ -278,13 +278,14 @@ async function extraerBoletines() {
           let listadoBruto = [];
 
           // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
+          // El DOGC no descarga HTML, llama directamente a su función API y se salta a la IA
           if (fuente.nombre === "DOGC") {
               const apiResults = await obtenerDOGCporAPI();
               if (apiResults !== null) {
                   listadoBruto = apiResults;
               }
           } 
-          // 🐢 CAMINO TRADICIONAL (HTML + IA) PARA EL RESTO
+          // 🐢 CAMINO TRADICIONAL (HTML + IA) PARA EL RESTO DE COMUNIDADES
           else {
               let markdownWeb = null;
               if (fuente.nombre === "BOA") {
