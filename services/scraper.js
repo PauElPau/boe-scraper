@@ -215,7 +215,6 @@ async function obtenerCantabriaMatematico() {
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
-    // 1. Calculamos los días hábiles aproximados desde tu fecha ancla
     const fechaAncla = new Date('2026-03-31T00:00:00');
     let diasHabiles = 0;
     let fechaTemp = new Date(fechaAncla);
@@ -226,26 +225,32 @@ async function obtenerCantabriaMatematico() {
         if (diaSemana !== 0 && diaSemana !== 6) diasHabiles++;
     }
 
-    // 2. Adivinamos el ID de hoy usando tu fórmula (+20 por día hábil)
     let idEstimado = 44405 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
     
     while (intentos < 5) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
-        
-        // 👁️ IMPRIMIMOS LA URL QUE ESTÁ TANTEANDO EL BOT
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
             let xmlText = null;
             
-            // Intento 1: Fetch directo camuflado
+            // Intento 1: Fetch directo con camuflaje absoluto (Grado Militar)
             try {
                 const res = await fetch(xmlUrl, {
                     headers: { 
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Accept": "application/xml, text/xml, */*; q=0.01"
+                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+                        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
+                        "Accept-Encoding": "gzip, deflate, br",
+                        "Connection": "keep-alive",
+                        "Upgrade-Insecure-Requests": "1",
+                        "Sec-Fetch-Dest": "document",
+                        "Sec-Fetch-Mode": "navigate",
+                        "Sec-Fetch-Site": "none",
+                        "Sec-Fetch-User": "?1",
+                        "DNT": "1"
                     }
                 });
                 if (res.ok) xmlText = await res.text();
@@ -253,27 +258,26 @@ async function obtenerCantabriaMatematico() {
                 console.log(`      ⚠️ Cortafuegos bloqueó la conexión directa. Activando red de proxies...`);
             }
 
-            // Intento 2: Si el cortafuegos corta la conexión (fetch failed), usamos nuestra función universal anti-bloqueos
+            // Intento 2: Si el cortafuegos corta la conexión, usamos la red de proxies
             if (!xmlText) {
                 xmlText = await obtenerTextoUniversal(xmlUrl); 
+            }
+
+            // 🚀 PARCHE CLAVE: Desencriptamos lo que los Proxies (CodeTabs) hayan roto
+            if (xmlText) {
+                xmlText = xmlText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
             }
 
             if (!xmlText || !xmlText.includes('</root>')) {
                 throw new Error("El archivo devuelto está vacío o no es un XML válido (no tiene etiqueta root)");
             }
             
-            // 🚀 PARCHE: Cazamos la fecha que viene DENTRO del atributo: <Fecha fecha="31/03/2026">
             const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
             const fechaBoletin = matchFecha ? matchFecha[1] : null;
             
             if (fechaBoletin === formatoHoy) {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
-                // Buscamos dentro de la Sección 2.2 (Cursos, Oposiciones y Concursos)
-                // Usamos un regex para coger solo los títulos (sumarios) y los enlaces PDF (id_blob_pdf)
-                const regexOposiciones = /<titulo>([^<]+)<\/titulo>[\s\S]*?<id_blob_pdf>(\d+)<\/id_blob_pdf>|<titulo_text>([^<]+)<\/titulo_text>[\s\S]*?<numeroExp>[^<]*<\/numeroExp>[\s\S]*?<num_exp\s+url="([^"]+)"/ig;
-                
-                // Para ser más eficientes, buscaremos la etiqueta <disposicion ...> entera
                 const regexDisposicion = /<disposicion\s+fechaDis="[^"]+"[^>]*>([\s\S]*?)<\/disposicion>/g;
                 let matchDisp;
                 
@@ -282,13 +286,10 @@ async function obtenerCantabriaMatematico() {
                     const tituloMatch = bloque.match(/<titulo_text>([^<]+)<\/titulo_text>/);
                     const enlaceMatch = bloque.match(/<num_exp\s+url="([^"]+)">/);
                     
-                    // Cantabria a veces pone los PDFs como "Anexos" y no tienen enlace principal
-                    // En ese caso usamos el num_exp_url que es el HTML de la disposición
                     if (tituloMatch && enlaceMatch) {
                         const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
                         const htmlDisposicion = enlaceMatch[1].replace(/&amp;/g, '&');
                         
-                        // Filtro básico de empleo
                         const t = titulo.toLowerCase();
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
@@ -297,7 +298,6 @@ async function obtenerCantabriaMatematico() {
                             convocatorias.push({
                                 titulo: titulo,
                                 enlace: htmlDisposicion, 
-                                // Si no hay un PDF directo fácil de cazar, le pasamos el HTML como PDF para que caiga al modo texto universal
                                 pdf: htmlDisposicion
                             });
                         }
