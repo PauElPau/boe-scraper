@@ -389,7 +389,7 @@ async function extraerBoletines() {
             let pdfExtraidoNativo = null; 
             
             // 🚀 INTERCEPTOR ANTI-PDF: Detectamos si el enlace de Ceuta/Melilla es de descarga para no forzar la lectura HTML
-            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads');
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA";
 
             if (esPdfOculto) {
                 console.log(`   📄 Enlace (PDF o Descarga) detectado. Omitiendo descarga HTML...`);
