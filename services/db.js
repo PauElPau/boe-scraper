@@ -210,6 +210,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     sistema: analisisIA.sistema, 
     profesion: profesionPrincipal, 
     profesiones: analisisIA.profesiones,
+    categoria: analisisIA.categoria,
     provincia: analisisIA.provincia || fuente.ambito, 
     titulacion: analisisIA.titulacion, 
     enlace_inscripcion: analisisIA.enlace_inscripcion, 

@@ -80,6 +80,21 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - sistema: Deduce si es Oposición, Concurso-oposición o Concurso.
   - profesiones: Nombres limpios de los puestos.
   
+  - categoria: 🗂️ REGLA DE CATEGORIZACIÓN (MACRO-TAXONOMÍA):
+      Debes clasificar la profesión principal obligatoriamente en UNA de estas categorías cerradas:
+      1. "Administración General" (Ej: Auxiliar administrativo, Técnico de gestión, Administrativo).
+      2. "Economía, Hacienda y Finanzas" (Ej: Interventor, Tesorero, Inspector de Hacienda, Recaudación, Economista).
+      3. "Sanidad y Salud" (Ej: Enfermería, Medicina, Celador sanitario, Fisioterapia, Veterinaria).
+      4. "Cuerpos de Seguridad y Emergencias" (Ej: Policía Local, Bomberos, Guardia Civil, Protección Civil, Ejército).
+      5. "Educación y Docencia" (Ej: Maestros, Profesores, Catedráticos, Educador Infantil).
+      6. "Informática y Telecomunicaciones" (Ej: Técnico de sistemas, Programador, Ingeniero Informático).
+      7. "Ingeniería, Arquitectura y Medio Ambiente" (Ej: Arquitecto, Agente Forestal, Ingeniero de Caminos, Biólogo).
+      8. "Justicia y Legislación" (Ej: Juez, Letrado, Auxilio Judicial, Fiscal).
+      9. "Trabajo Social y Cuidados" (Ej: Trabajador social, Auxiliar de ayuda a domicilio, Integrador social).
+      10. "Cultura, Archivos y Deportes" (Ej: Bibliotecario, Archivero, Técnico de Deportes, Animador, Conservador de museos).
+      11. "Oficios y Mantenimiento" (Ej: Peón, Conserje, Limpieza, Conductor, Electricista, Oficial de oficios).
+      12. "Otros" (Solo si es absolutamente imposible encajarlo en las 11 anteriores).
+
   - organismo: 🏢 REGLA UNIVERSAL DE ORGANISMO FINAL: 
       Identifica la entidad LOCAL o FINAL que realmente ofrece el puesto (ej: 'Ayuntamiento de Torrevieja', 'Universidad de León', 'Hospital Clínico'). 
       ¡NUNCA uses el nombre genérico de la Comunidad Autónoma a menos que la plaza sea para sus propios servicios centrales! Si el texto no te da pistas claras, déjalo en null, NO te inventes ministerios ni copies los ejemplos del prompt.
@@ -127,6 +142,24 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
               sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-oposición', 'Concurso', null] },
               profesiones: { type: "array", items: { type: "string" } },
+              categoria: { 
+                type: ["string", "null"], 
+                enum: [
+                  'Administración General', 
+                  'Economía, Hacienda y Finanzas', 
+                  'Sanidad y Salud', 
+                  'Cuerpos de Seguridad y Emergencias', 
+                  'Educación y Docencia', 
+                  'Informática y Telecomunicaciones', 
+                  'Ingeniería, Arquitectura y Medio Ambiente', 
+                  'Justicia y Legislación', 
+                  'Trabajo Social y Cuidados', 
+                  'Cultura, Archivos y Deportes', 
+                  'Oficios y Mantenimiento', 
+                  'Otros', 
+                  null
+                ] 
+              },
               provincia: { type: ["string", "null"], enum: ['A Coruña', 'Álava', 'Albacete', 'Alicante', 'Almería', 'Asturias', 'Ávila', 'Badajoz', 'Baleares', 'Barcelona', 'Burgos', 'Cáceres', 'Cádiz', 'Cantabria', 'Castellón', 'Ceuta', 'Ciudad Real', 'Córdoba', 'Cuenca', 'Girona', 'Granada', 'Guadalajara', 'Gipuzkoa', 'Huelva', 'Huesca', 'Jaén', 'La Rioja', 'Las Palmas', 'León', 'Lleida', 'Lugo', 'Madrid', 'Málaga', 'Melilla', 'Murcia', 'Navarra', 'Ourense', 'Palencia', 'Pontevedra', 'Salamanca', 'Segovia', 'Sevilla', 'Soria', 'Tarragona', 'Santa Cruz de Tenerife', 'Teruel', 'Toledo', 'Valencia', 'Valladolid', 'Vizcaya', 'Zamora', 'Zaragoza', 'Estatal', null] },
               titulacion: { type: ["string", "null"] },
               enlace_inscripcion: { type: ["string", "null"] },
@@ -138,7 +171,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-           required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
+           required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
