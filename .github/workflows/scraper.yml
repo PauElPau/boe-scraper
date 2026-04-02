@@ -2,9 +2,9 @@ name: BOE Scraper Diario
 
 # 1. Cuándo se ejecuta
 on:
-  #schedule:
-    # 05:25 AM UTC -> (06:25 España Invierno / 07:25 España Verano) de Lunes a Sábado
-  #  - cron: "11 4 * * 1-6"
+  schedule:
+    # 07:05 AM UTC (Horario de invierno: 5 8 * * 1-6) -> (09:05 España Verano / 08:05 España Invierno) de Lunes a Sábado
+    - cron: "5 7 * * 1-6"
   workflow_dispatch:
 
 # 💡 PRO-TIP 1: Evita que se ejecuten dos scrapers al mismo tiempo
@@ -39,7 +39,6 @@ jobs:
           VERCEL_WEBHOOK: ${{ secrets.VERCEL_WEBHOOK }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_API_KEY_2: ${{ secrets.GROQ_API_KEY_2 }}
-          #GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
