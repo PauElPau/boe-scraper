@@ -1,11 +1,11 @@
-name: 🚀 Ejecutar Backfill de Categorías
+name: 🚀 Ejecutar Backfill SEO (Artículos)
 
 # Este disparador crea un botón manual en la pestaña "Actions" de GitHub
 on:
   workflow_dispatch: 
 
 jobs:
-  backfill:
+  backfill-seo:
     runs-on: ubuntu-latest
 
     steps:
@@ -13,18 +13,18 @@ jobs:
       - name: 📥 Clonar repositorio
         uses: actions/checkout@v4
 
-      # 2. Prepara Node.js
+      # 2. Prepara Node.js (Versión 18+ es recomendada para fetch nativo)
       - name: ⚙️ Configurar Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18' # Versión estable y rápida
+          node-version: '18'
 
-      # 3. Instala las librerías (Supabase, OpenAI, etc.)
+      # 3. Instala las librerías necesarias (Supabase, OpenAI)
       - name: 📦 Instalar dependencias
         run: npm install
 
-      # 4. Ejecuta tu script inyectando los secretos
-      - name: 🧠 Ejecutar IA Backfill
+      # 4. Ejecuta el script inyectando los secretos de tu repositorio
+      - name: ✍️ Ejecutar IA Redactor SEO
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
