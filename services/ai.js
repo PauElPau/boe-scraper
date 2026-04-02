@@ -73,7 +73,14 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN:
   - plazas: Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si habla en singular ("un puesto", "la plaza", "la vacante"), el valor es 1. Si es bolsa, null.
   - resumen: Resumen claro de 1-2 frases.
-  - descripcion_extendida: Redacta un párrafo atractivo y humano de unas 4 líneas. Describe en qué consiste la oferta o el puesto y da un breve contexto sobre la entidad, organismo o localidad que lo convoca. Tono profesional, informativo y útil para el opositor.
+  - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
+    ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
+    1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
+    2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial.
+    3. Proceso Selectivo (Usa H3 ###): Resume si es concurso, oposición, qué fases tiene o cómo se va a evaluar.
+    4. Plazos y Presentación (Usa H3 ###): Explica cómo y dónde presentar la instancia.
+    El texto debe sonar natural, humano, animando al opositor y repitiendo palabras clave orgánicas como "oposiciones", "empleo público", "trabajar en", el nombre de la profesión y la provincia. ¡NO te quedes corto, debes superar las 300 palabras para evitar el 'Thin Content' en Google!
+    
   - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
   - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
   - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
