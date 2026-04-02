@@ -68,16 +68,15 @@ async function ejecutarBackfillSEO() {
   // 1. Obtenemos SOLO las convocatorias importantes que tengan texto en bruto
   const { data: convocatorias, error } = await supabase
     .from('convocatorias')
-    .select('slug, title, department, provincia, raw_text, descripcion_extendida')
-    .in('type', ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal']);
+    .select('slug, title, department, provincia, raw_text, descripcion_extendida');
 
   if (error) {
     console.error("❌ Error conectando a Supabase:", error);
     return;
   }
 
-  // Filtramos para actualizar solo las que tienen una descripción corta (menos de 300 caracteres, que son las antiguas)
-  const convocatoriasAActualizar = convocatorias.filter(c => !c.descripcion_extendida || c.descripcion_extendida.length < 300);
+  // Filtramos contando PALABRAS (separadas por espacios). Si tiene menos de 200 palabras, la consideramos "antigua" y la actualizamos.
+  const convocatoriasAActualizar = convocatorias.filter(c => !c.descripcion_extendida || c.descripcion_extendida.split(/\s+/).length < 200);
 
   console.log(`✅ Se van a generar artículos SEO para ${convocatoriasAActualizar.length} plazas.`);
 
