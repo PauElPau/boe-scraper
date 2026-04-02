@@ -1,6 +1,5 @@
 const FUENTES_BOLETINES = [
 
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" },
   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
@@ -26,7 +25,10 @@ const FUENTES_BOLETINES = [
   { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta", fase_previa: false },
   { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla", fase_previa: false },
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada", ambito: "La Rioja", fase_previa: true },
-  { nombre: "DOGC", tipo: "html_directo", url: "API_REST", ambito: "Cataluña"} 
+  { nombre: "DOGC", tipo: "html_directo", url: "API_REST", ambito: "Cataluña"}, 
+
+  //POR ULTIMO EJECUTAMOS EL BOE
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" }
 ];
 
 module.exports = {
