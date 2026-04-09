@@ -113,6 +113,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - organismo: 🏢 REGLA UNIVERSAL DE ORGANISMO FINAL: 
       Identifica la entidad LOCAL o FINAL que realmente ofrece el puesto (ej: 'Ayuntamiento de Torrevieja', 'Universidad de León', 'Hospital Clínico'). 
       ¡NUNCA uses el nombre genérico de la Comunidad Autónoma a menos que la plaza sea para sus propios servicios centrales! Si el texto no te da pistas claras, déjalo en null, NO te inventes ministerios ni copies los ejemplos del prompt.
+      🛑 REGLA ESTRICTA DE NORMALIZACIÓN: No uses NUNCA comillas (ni simples ni dobles) en los nombres (ej. pon Hospital La Paz, no "La Paz", ni 'La Paz'). Si es una Universidad, usa siempre su nombre oficial de forma homogénea (ej. Universitat Jaume I).
   
   - provincia: 🌍 REGLA UNIVERSAL GEOGRÁFICA: 
       1. ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región (ej: No elijas Castellón si estás en Castilla y León).
@@ -122,6 +123,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
       5. ⚠️ MAPA DE CASTILLAS (ANTI-ALUCINACIÓN): NUNCA elijas "Castellón" si la plaza es de Castilla-La Mancha o Castilla y León. 
          - Si es Castilla-La Mancha, deduce la provincia real: Albacete, Ciudad Real, Cuenca, Guadalajara o Toledo. (Si la plaza es general para la Junta y no especifica ciudad, pon Toledo).
          - Si es Castilla y León, deduce la provincia real: Ávila, Burgos, León, Palencia, Salamanca, Segovia, Soria, Valladolid o Zamora. (Si la plaza es general para la Junta y no especifica ciudad, pon Valladolid).
+      6. 🚨 EL SÍNDROME DEL BOE: Aunque la fuente de la noticia sea un Boletín Estatal (BOE), si el organismo es un Ayuntamiento, Universidad u Hospital, DEBES deducir la provincia física real (ej. Universitat Jaume I -> Castellón). Usa 'Estatal' ÚNICA Y EXCLUSIVAMENTE para Ministerios, Fuerzas Armadas o Cuerpos de ámbito verdaderamente nacional.
       
   - titulacion: Busca la titulación mínima exigida. Sé conciso y TRADÚCELO AL ESPAÑOL.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
