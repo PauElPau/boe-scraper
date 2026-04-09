@@ -3,8 +3,8 @@ name: BOE Scraper Diario
 # 1. Cuándo se ejecuta
 on:
   schedule:
-    # 07:05 AM UTC (Horario de invierno: 5 8 * * 1-6) -> (09:05 España Verano / 08:05 España Invierno) de Lunes a Sábado
-    - cron: "5 7 * * 1-6"
+    # 06:05 AM UTC (Horario de invierno: 5 6 * * 1-6) -> (08:05 España Verano / 07:05 España Invierno) de Lunes a Sábado
+    - cron: "5 6 * * 1-6"
   workflow_dispatch:
 
 # 💡 PRO-TIP 1: Evita que se ejecuten dos scrapers al mismo tiempo
