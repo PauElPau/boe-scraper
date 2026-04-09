@@ -78,7 +78,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!parentSlug && departamentoFinal && profesionPrincipal) {
     const { data: posiblesPadres } = await supabase
       .from('convocatorias')
-      .select('slug, type, link_boe, profesion, profesiones')
+      .select('slug, type, link_boe, profesion, profesiones, turno')
       .ilike('department', `%${departamentoFinal}%`)
       .is('parent_slug', null) 
       .order('created_at', { ascending: false }) 
@@ -102,6 +102,18 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           });
       }
 
+      // 🛡️ INICIO DEL ESCUDO ANTIMEZCLAS DE TURNOS
+      if (plazaExistente) {
+          const turnoNuevo = analisisIA.turno || 'Turno Libre';
+          const turnoAntiguo = plazaExistente.turno || 'Turno Libre';
+
+          if (turnoNuevo !== turnoAntiguo) {
+              console.log(`   ⚖️ Salvado de deduplicación: Títulos similares pero TURNOS DISTINTOS (${turnoNuevo} vs ${turnoAntiguo})`);
+              plazaExistente = null; // Anulamos la coincidencia para forzar que se inserte como nueva
+          }
+      }
+      // 🛡️ FIN DEL ESCUDO
+
       if (plazaExistente) {
         if (esTramite) {
           console.log(`   🔗 Trámite detectado por Fuzzy Matching (50%). Enlazando al padre: ${plazaExistente.slug}...`);
@@ -122,7 +134,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
 
   let textoPlazas = analisisIA.plazas ? (analisisIA.plazas === 1 ? '1-plaza-' : `${analisisIA.plazas}-plazas-`) : '';
-  let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}-${departamentoFinal}` : (analisisIA.resumen || itemData.title);
+  // Creamos un sufijo seguro. Si no hay departamento, ponemos "administracion-publica" para el SEO.
+const sufijoDep = departamentoFinal ? `-${departamentoFinal}` : '-administracion-publica';
+let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}${sufijoDep}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
@@ -211,6 +225,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     profesion: profesionPrincipal, 
     profesiones: analisisIA.profesiones,
     categoria: analisisIA.categoria,
+    turno: analisisIA.turno,
     provincia: analisisIA.provincia || fuente.ambito, 
     titulacion: analisisIA.titulacion, 
     enlace_inscripcion: analisisIA.enlace_inscripcion, 

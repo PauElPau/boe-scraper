@@ -69,6 +69,8 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   SECCIÓN DEL BOLETÍN: ${seccion || 'No especificada'}
   COMUNIDAD/CIUDAD AUTÓNOMA: ${ambitoAutonomico}
   TEXTO WEB: ${textoInterior}
+
+  🌍 REGLA DE IDIOMA OBLIGATORIA: ¡TODO el contenido que extraigas y redactes DEBE estar traducido al ESPAÑOL (Castellano)! Si el texto original está en catalán, valenciano, gallego o euskera, tradúcelo antes de devolver el JSON.
   
   ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN:
   - plazas: Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si habla en singular ("un puesto", "la plaza", "la vacante"), el valor es 1. Si es bolsa, null.
@@ -102,6 +104,12 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
       11. "Oficios y Mantenimiento" (Ej: Peón, Conserje, Limpieza, Conductor, Electricista, Oficial de oficios).
       12. "Otros" (Solo si es absolutamente imposible encajarlo en las 11 anteriores).
 
+  - turno: Deduce el turno de acceso de la convocatoria. Usa ESTRICTAMENTE uno de estos tres valores:
+      1. "Turno Libre" (Si es acceso libre, general, u oposición normal abierta a todos).
+      2. "Promoción Interna" (Si menciona que es solo para personal que ya es funcionario o promoción cruzada).
+      3. "Discapacidad" (Si es un turno de reserva exclusiva para diversidad funcional/discapacidad).
+      *Si no lo especifica o no está claro, asume "Turno Libre".
+
   - organismo: 🏢 REGLA UNIVERSAL DE ORGANISMO FINAL: 
       Identifica la entidad LOCAL o FINAL que realmente ofrece el puesto (ej: 'Ayuntamiento de Torrevieja', 'Universidad de León', 'Hospital Clínico'). 
       ¡NUNCA uses el nombre genérico de la Comunidad Autónoma a menos que la plaza sea para sus propios servicios centrales! Si el texto no te da pistas claras, déjalo en null, NO te inventes ministerios ni copies los ejemplos del prompt.
@@ -115,7 +123,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
          - Si es Castilla-La Mancha, deduce la provincia real: Albacete, Ciudad Real, Cuenca, Guadalajara o Toledo. (Si la plaza es general para la Junta y no especifica ciudad, pon Toledo).
          - Si es Castilla y León, deduce la provincia real: Ávila, Burgos, León, Palencia, Salamanca, Segovia, Soria, Valladolid o Zamora. (Si la plaza es general para la Junta y no especifica ciudad, pon Valladolid).
       
-  - titulacion: Busca la titulación mínima exigida. Sé conciso.
+  - titulacion: Busca la titulación mínima exigida. Sé conciso y TRADÚCELO AL ESPAÑOL.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
   - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
   - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo (ej: 'BOE', 'BOP Córdoba').
@@ -149,6 +157,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
               sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-oposición', 'Concurso', null] },
               profesiones: { type: "array", items: { type: "string" } },
+              turno: { 
+                type: ["string", "null"],
+                enum: ["Turno Libre", "Promoción Interna", "Discapacidad", null]
+              },
               categoria: { 
                 type: ["string", "null"], 
                 enum: [
