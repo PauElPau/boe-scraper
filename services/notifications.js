@@ -13,17 +13,38 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
   const { data: radares } = await supabase.from('filtros_radar').select('*');
   if (!radares || radares.length === 0) return 0;
 
+  // 🛠️ HELPER: Elimina tildes, diéresis y pasa a minúsculas
+  const normalizarTexto = (texto) => {
+    if (!texto) return "";
+    return texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  };
+
   for (const radar of radares) {
     if (!radar.filtro) continue;
-    const interesStr = radar.filtro.toLowerCase().trim();
+    
+    // 1. Limpiamos la palabra que el usuario ha guardado en su alerta (sin tildes, en minúscula)
+    const terminoBusqueda = normalizarTexto(radar.filtro.trim());
     const provinciasSub = radar.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
-      const enTitulo = conv.title && conv.title.toLowerCase().includes(interesStr);
-      const enProfesion = conv.profesion && conv.profesion.toLowerCase().includes(interesStr);
-      const encajaInteres = enTitulo || enProfesion;
+      // 2. Unimos los 4 campos clave en una única cadena de texto y la normalizamos
+      const superCadena = normalizarTexto(`
+        ${conv.title || ''} 
+        ${conv.resumen || ''} 
+        ${conv.department || ''} 
+        ${conv.profesion || ''}
+      `);
+
+      // 3. Comprobamos si el término buscado está en cualquier parte de esa súper cadena
+      // (Es exactamente igual a lo que hace el Frontend)
+      const encajaInteres = superCadena.includes(terminoBusqueda);
+
+      // 4. El filtro de Provincias se mantiene intacto
       let encajaProvincia = true;
-      if (provinciasSub.length > 0) encajaProvincia = provinciasSub.includes(conv.provincia);
+      if (provinciasSub.length > 0) {
+          encajaProvincia = provinciasSub.includes(conv.provincia);
+      }
+
       return encajaInteres && encajaProvincia;
     });
 
