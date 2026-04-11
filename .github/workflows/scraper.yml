@@ -15,8 +15,8 @@ concurrency:
 jobs:
   extraer-datos:
     runs-on: ubuntu-latest
-    # 💡 PRO-TIP 2: Freno de emergencia (Mata el proceso si tarda más de 120 mins)
-    timeout-minutes: 180
+    # 💡 PRO-TIP 2: Freno de emergencia (Mata el proceso si tarda más de 240 mins)
+    timeout-minutes: 240
 
     steps:
       - name: Descargar repositorio

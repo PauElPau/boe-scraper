@@ -69,7 +69,14 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
               <p style="color: #64748b; font-size: 13px; margin: 0 0 10px 0; line-height: 1.5;">
                 Recibes este correo porque El Topo está vigilando este rastro para ti. Puedes gestionar tus alertas o decirle que deje de buscar desde tu Madriguera.
               </p>
-              <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline;">Ir a mi Madriguera</a>
+              <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline; display: block; margin-bottom: 20px;">Ir a mi Madriguera</a>
+              
+              <div style="padding-top: 15px; border-top: 1px dashed #e2e8f0;">
+                <p style="color: #94a3b8; font-size: 11px; line-height: 1.5; margin: 0;">
+                  🤖 Este es un mensaje automático, por favor no respondas a este correo.<br>
+                  Si necesitas ayuda o quieres ponerte en contacto con nosotros, escríbenos a <a href="mailto:info@topos.es" style="color: #94a3b8; text-decoration: underline;">info@topos.es</a>.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -119,7 +126,14 @@ async function enviarAlertasFavoritos(nuevasConvocatorias) {
                 <a href="https://topos.es/convocatorias/${update.slug}" style="display: block; text-align: center; background-color: #10b981; color: #ffffff; text-decoration: none; padding: 12px 20px; border-radius: 6px; font-size: 15px; font-weight: 600;">Ver documento oficial &rarr;</a>
               </div>
               <div style="background-color: #ffffff; padding: 25px; text-align: center; border-top: 1px solid #e2e8f0;">
-                <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline;">Gestionar mis plazas desde la Madriguera</a>
+                <a href="https://topos.es/perfil" style="color: #94a3b8; font-size: 12px; text-decoration: underline; display: block; margin-bottom: 20px;">Gestionar mis plazas desde la Madriguera</a>
+
+                <div style="padding-top: 15px; border-top: 1px dashed #e2e8f0;">
+                  <p style="color: #94a3b8; font-size: 11px; line-height: 1.5; margin: 0;">
+                    🤖 Este es un mensaje automático, por favor no respondas a este correo.<br>
+                    Si necesitas ayuda o quieres contactarnos, escríbenos a <a href="mailto:info@topos.es" style="color: #94a3b8; text-decoration: underline;">info@topos.es</a>.
+                  </p>
+                </div>
               </div>
             </div>
           </div>
