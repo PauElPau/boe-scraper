@@ -85,9 +85,19 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
     
   - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
   - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
+  - plazo_numero / plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
+    🛑 REGLA VITAL DE PLAZOS: Si el plazo que menciona el texto es para "interponer recurso" (reposición/alzada), para "subsanar errores" o para "presentar méritos", DEBES devolver null en ambos campos. ¡No confundas el plazo legal de recurso de una lista con el plazo de inscripción!
   - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
   - sistema: Deduce si es Oposición, Concurso-oposición o Concurso.
   - profesiones: Nombres limpios de los puestos.
+
+  - tipo: Deduce el tipo EXACTO de la publicación usando estrictamente el esquema proporcionado. 
+    🛑 REGLAS VITALES DE TIPO: 
+    1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión" o "resolución del concurso", clasifícalo OBLIGATORIAMENTE como 'Aprobados y Adjudicaciones'. ¡No es una apertura!
+    2. ESTABILIZACIÓN: Si el texto dice explícitamente "estabilización" o "concurso excepcional", usa 'Estabilización y Promoción'.
+    3. CORRECCIONES: Si menciona "corrección de errores" o "modificación de la resolución", usa 'Correcciones y Modificaciones'.
+
+  - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachillerato', 'Grado Universitario', 'ESO', 'Licenciatura en Derecho'). Tradúcelo al español.
   
   - categoria: 🗂️ REGLA DE CATEGORIZACIÓN (MACRO-TAXONOMÍA):
       Debes clasificar la profesión principal obligatoriamente en UNA de estas categorías cerradas:
@@ -125,7 +135,6 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
          - Si es Castilla y León, deduce la provincia real: Ávila, Burgos, León, Palencia, Salamanca, Segovia, Soria, Valladolid o Zamora. (Si la plaza es general para la Junta y no especifica ciudad, pon Valladolid).
       6. 🚨 EL SÍNDROME DEL BOE: Aunque la fuente de la noticia sea un Boletín Estatal (BOE), si el organismo es un Ayuntamiento, Universidad u Hospital, DEBES deducir la provincia física real (ej. Universitat Jaume I -> Castellón). Usa 'Estatal' ÚNICA Y EXCLUSIVAMENTE para Ministerios, Fuerzas Armadas o Cuerpos de ámbito verdaderamente nacional.
       
-  - titulacion: Busca la titulación mínima exigida. Sé conciso y TRADÚCELO AL ESPAÑOL.
   - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
   - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
   - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo (ej: 'BOE', 'BOP Córdoba').
