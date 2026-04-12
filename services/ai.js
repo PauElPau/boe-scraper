@@ -72,17 +72,64 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
 
   🌍 REGLA DE IDIOMA OBLIGATORIA: ¡TODO el contenido que extraigas y redactes DEBE estar traducido al ESPAÑOL (Castellano)! Si el texto original está en catalán, valenciano, gallego o euskera, tradúcelo antes de devolver el JSON.
   
-  ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN:
-  - plazas: Busca cuántas plazas o vacantes se convocan. Traduce palabras a números (ej: 'una plaza' -> 1). Si habla en singular ("un puesto", "la plaza", "la vacante"), el valor es 1. Si es bolsa, null.
+  ⚠️ REGLAS CRÍTICAS DE EXTRACCIÓN (MATRIZ 3D):
+
+  1. EL TIPO (Naturaleza del Puesto):
+     - 'Plazas de Nuevo Ingreso': Oposiciones normales para conseguir plaza fija (Turno Libre o Discapacidad).
+     - 'Bolsas de Empleo Temporal': Para entrar como interino/sustituto.
+     - 'Procesos de Estabilización': Procesos excepcionales para hacer fijos a los interinos.
+     - 'Provisión de Puestos y Movilidad': Traslados, libre designación o comisiones de servicio para mover a funcionarios de carrera.
+     - 'Ofertas de Empleo Público (OEP)': El anuncio masivo de plazas futuras, pero que NO ABRE PLAZO AÚN para apuntarse.
+
+  2. EL SISTEMA (Cómo se evalúa):
+     - 'Oposición': Solo exámenes.
+     - 'Concurso de Méritos': Solo se valoran méritos y experiencia (muy común en estabilización y bolsas).
+     - 'Concurso-Oposición': Exámenes + méritos.
+     - 'Libre Designación': Elección directa por idoneidad (muy común en altos cargos y jefaturas).
+
+  3. LA FASE (Momento temporal del documento):
+     - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse.
+     - 'Listas de Admitidos y Excluidos': Listados provisionales o definitivos de participantes.
+     - 'Tribunales y Fechas de Examen': Nombramiento del jurado, sedes, aulas y días de prueba.
+     - 'Calificaciones y Resultados': Publicación de las notas del examen o de los puntos de méritos.
+     - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza o toman posesión).
+     - 'Correcciones y Modificaciones': Fe de erratas o rectificaciones de bases anteriores.
+     - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
+
+  -- PLAZOS:
+     Extrae el plazo_numero y plazo_tipo SOLO si la FASE es 'Apertura de Plazos / Convocatoria' para presentar solicitudes. 
+     🛑 REGLA VITAL: Si la fase es otra (ej: plazo para recurrir una lista, subsanar un error, etc.), devuelve null en los plazos. NUNCA uses la palabra 'días' a secas en el tipo, deduce 'hábiles' o 'naturales'.
+
+  -- PLAZAS Y TURNOS (DESGLOSE):
+     - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
+     - turno: Una convocatoria puede tener varios turnos simultáneos. Deduce los que apliquen y devuélvelos en una lista. Valores: "Turno Libre", "Promoción Interna", "Discapacidad". Si no especifica, asume ["Turno Libre"].
+     - distribucion_plazas: Si el texto desglosa cuántas plazas corresponden a cada turno, crea una lista detallando esto. Ejemplo: [{"turno": "Turno Libre", "plazas": 40}, {"turno": "Discapacidad", "plazas": 10}]. Si no especifica el reparto, devuelve null.
+
+  -- ÁMBITO:
+     Define el alcance territorial del organismo que convoca:
+     - 'Estatal': Ministerios, Ejército, Policía Nacional, Guardia Civil o entes puramente estatales.
+     - 'Autonómico': Consejerías, Juntas, Generalitat o entes que operan a nivel de toda la comunidad autónoma.
+     - 'Local': Ayuntamientos, Diputaciones, Cabildos o Comarcas.
+     - 'Universidades': Cualquier universidad pública.
+
+  -- CATEGORÍA, TITULACIÓN, PROFESIÓN, GRUPO, ORGANISMO Y PROVINCIA:
+     - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachiller o FP', 'Grado Universitario', 'ESO').
+     - categoria: Clasifica obligatoriamente la profesión en UNA de estas: 'Administración General', 'Economía, Hacienda y Finanzas', 'Sanidad y Salud', 'Cuerpos de Seguridad y Emergencias', 'Educación y Docencia', 'Informática y Telecomunicaciones', 'Ingeniería, Arquitectura y Medio Ambiente', 'Justicia y Legislación', 'Trabajo Social y Cuidados', 'Cultura, Archivos y Deportes', 'Oficios y Mantenimiento', 'Otros'.
+     - profesiones: Nombres limpios de los puestos.
+     - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
+     - organismo: Identifica la entidad LOCAL o FINAL que ofrece el puesto (ej: 'Ayuntamiento de Torrevieja'). No uses comillas en los nombres.
+     - provincia: ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final.
+  
+  -- TEXTOS SEO Y LINKS:
   - resumen: Resumen claro de 1-2 frases.
-  - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
+   - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
     ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
     1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
     2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial.
     3. Proceso Selectivo (Usa H3 ###): Resume si es concurso, oposición, qué fases tiene o cómo se va a evaluar.
     4. Plazos y Presentación (Usa H3 ###): Explica cómo y dónde presentar la instancia.
     El texto debe sonar natural, humano, animando al opositor y repitiendo palabras clave orgánicas como "oposiciones", "empleo público", "trabajar en", el nombre de la profesión y la provincia. ¡NO te quedes corto, debes superar las 300 palabras para evitar el 'Thin Content' en Google!
-    
+     
   - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
   - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
   - plazo_numero / plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
@@ -139,6 +186,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
   - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo (ej: 'BOE', 'BOP Córdoba').
   - boletin_origen_fecha: Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'.
+  - referencia_boe_original: Código BOE oficial si existe.
   - meta_description: Descripción corta (máx 150 caracteres) directa al grano, ideal para SEO.
   - enlace_pdf: URL directa al documento oficial PDF.
   `;
@@ -159,19 +207,30 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
           schema: {
             type: "object",
             properties: {
-              tipo: { type: "string", enum: ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación', 'Listas de Admitidos/Excluidos', 'Exámenes y Tribunales', 'Aprobados y Adjudicaciones', 'Correcciones y Modificaciones', 'Otros Trámites', 'IGNORAR'] },
+              tipo: { type: "string", enum: ['Plazas de Nuevo Ingreso', 'Procesos de Estabilización', 'Bolsas de Empleo Temporal', 'Provisión de Puestos y Movilidad', 'Ofertas de Empleo Público (OEP)', 'IGNORAR'] },
+              sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-Oposición', 'Concurso de Méritos', 'Libre Designación', null] },
+              fase: { type: ["string", "null"], enum: ['Apertura de Plazos / Convocatoria', 'Listas de Admitidos y Excluidos', 'Tribunales y Fechas de Examen', 'Calificaciones y Resultados', 'Adjudicación y Nombramientos', 'Correcciones y Modificaciones', 'Otros Trámites', null] },
+              turno: { type: ["array", "null"], items: { type: "string", enum: ["Turno Libre", "Promoción Interna", "Discapacidad"] } },
+              distribucion_plazas: { 
+                type: ["array", "null"], 
+                items: { 
+                  type: "object", 
+                  properties: { 
+                    turno: { type: "string", enum: ["Turno Libre", "Promoción Interna", "Discapacidad"] }, 
+                    plazas: { type: "integer" } 
+                  }, 
+                  required: ["turno", "plazas"], 
+                  additionalProperties: false 
+                } 
+              },
+              ambito: { type: ["string", "null"], enum: ["Estatal", "Autonómico", "Local", "Universidades", null] },
               plazas: { type: ["integer", "null"] },
               resumen: { type: "string" },
               descripcion_extendida: { type: "string" },
               plazo_numero: { type: ["integer", "null"] },
               plazo_tipo: { type: ["string", "null"], enum: ['hábiles', 'naturales', 'meses', null] },
               grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
-              sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-oposición', 'Concurso', null] },
               profesiones: { type: "array", items: { type: "string" } },
-              turno: { 
-                type: ["string", "null"],
-                enum: ["Turno Libre", "Promoción Interna", "Discapacidad", null]
-              },
               categoria: { 
                 type: ["string", "null"], 
                 enum: [
@@ -201,7 +260,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-           required: ["tipo", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "sistema", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf", "turno"],
+           required: ["tipo", "sistema", "fase", "turno", "distribucion_plazas", "ambito", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
