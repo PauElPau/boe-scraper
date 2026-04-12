@@ -17,7 +17,7 @@ async function reprocesar() {
         .from("convocatorias")
         .select("*")
         .order("created_at", { ascending: false })
-        .limit(50); 
+        .limit(700); 
 
     if (error) {
         console.error("❌ Error al conectar con Supabase:", error);
