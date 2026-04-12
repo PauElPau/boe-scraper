@@ -16,8 +16,9 @@ async function reprocesar() {
     const { data: convocatorias, error } = await supabase
         .from("convocatorias")
         .select("*")
+        .is("fase", null) // 👈 ¡AÑADE ESTA LÍNEA!
         .order("created_at", { ascending: false })
-        .limit(700); 
+        .limit(600); // Puedes dejar o quitar el límite según prefieras
 
     if (error) {
         console.error("❌ Error al conectar con Supabase:", error);
