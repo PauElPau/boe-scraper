@@ -79,7 +79,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - 'Bolsas de Empleo Temporal': Para entrar como interino/sustituto.
      - 'Procesos de Estabilización': Procesos excepcionales para hacer fijos a los interinos.
      - 'Provisión de Puestos y Movilidad': Traslados, libre designación o comisiones de servicio para mover a funcionarios de carrera.
-     - 'Ofertas de Empleo Público (OEP)': El anuncio masivo de plazas futuras, pero que NO ABRE PLAZO AÚN para apuntarse.
+     - 'Ofertas de Empleo Público (OEP)': SOLO el Decreto/Acuerdo que aprueba el listado masivo anual de plazas futuras (sin plazo). 🛑 REGLA VITAL ANTI-CONFUSIÓN: Si el documento es una lista de admitidos, una convocatoria o un examen que simplemente menciona "(Oferta de Empleo Público 202X)" como referencia de origen en su título, el tipo NO es OEP, debe ser 'Plazas de Nuevo Ingreso'.
 
   2. EL SISTEMA (Cómo se evalúa):
      - 'Oposición': Solo exámenes.
