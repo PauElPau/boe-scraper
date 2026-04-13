@@ -1,3 +1,7 @@
+// ==========================================
+// ARCHIVO: ./services/db.js (o donde esté ubicado)
+// ==========================================
+
 const { createClient } = require("@supabase/supabase-js");
 const slugify = require("slugify");
 const { analizarConvocatoriaIA } = require("./ai");
@@ -35,9 +39,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       return;
   }
 
+  // 🧠 Llamada al Cerebro de la Matriz 3D
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section, fuente.ambito);
 
- 
   if (analisisIA.tipo === "IGNORAR" || (analisisIA.resumen && analisisIA.resumen.toLowerCase().includes("convenio"))) {
       console.log(`   ⏭️ Ignorado: La IA detectó que es un convenio o trámite no relevante.`);
       statsFuente.descartadas_ia++;
@@ -52,7 +56,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       analisisIA.profesiones = analisisIA.profesiones.map(capitalizarProfesion);
   }
   
-  if (!profesionPrincipal && !analisisIA.plazas && analisisIA.tipo === "Otros Trámites") {
+  // Condición de seguridad antigua, adaptada a la nueva matriz (si no hay profe ni plaza y es "Otros Trámites", adiós).
+  if (!profesionPrincipal && !analisisIA.plazas && analisisIA.fase === "Otros Trámites") {
       console.log(`   ⏭️ Descartado: La IA determinó que es un trámite genérico sin plazas ni profesiones.`);
       statsFuente.descartadas_ia++;
       return;
@@ -60,7 +65,9 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
   let parentSlug = null;
-  const tiposNuevos = ['Oposiciones (Turno Libre)', 'Estabilización y Promoción', 'Bolsas de Empleo Temporal', 'Traslados y Libre Designación'];
+  
+  // ⚠️ NUEVOS TIPOS MATRIZ 3D para definir si es un Trámite (para buscar padre) o una Plaza Nueva
+  const tiposNuevos = ['Plazas de Nuevo Ingreso', 'Procesos de Estabilización', 'Bolsas de Empleo Temporal', 'Provisión de Puestos y Movilidad'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
   // 🥇 PRIORIDAD 1: Cruce seguro por BOE
@@ -102,13 +109,14 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           });
       }
 
-      // 🛡️ INICIO DEL ESCUDO ANTIMEZCLAS DE TURNOS
+      // 🛡️ INICIO DEL ESCUDO ANTIMEZCLAS DE TURNOS (Adaptado a Arrays)
       if (plazaExistente) {
-          const turnoNuevo = analisisIA.turno || 'Turno Libre';
-          const turnoAntiguo = plazaExistente.turno || 'Turno Libre';
+          // Extraemos los turnos como Strings para compararlos rápido (ej. "Turno Libre, Discapacidad")
+          const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
+          const turnoAntiguoStr = Array.isArray(plazaExistente.turno) ? [...plazaExistente.turno].sort().join(',') : (plazaExistente.turno || 'Turno Libre');
 
-          if (turnoNuevo !== turnoAntiguo) {
-              console.log(`   ⚖️ Salvado de deduplicación: Títulos similares pero TURNOS DISTINTOS (${turnoNuevo} vs ${turnoAntiguo})`);
+          if (turnoNuevoStr !== turnoAntiguoStr) {
+              console.log(`   ⚖️ Salvado de deduplicación: Títulos similares pero TURNOS DISTINTOS (${turnoNuevoStr} vs ${turnoAntiguoStr})`);
               plazaExistente = null; // Anulamos la coincidencia para forzar que se inserte como nueva
           }
       }
@@ -135,8 +143,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
   let textoPlazas = analisisIA.plazas ? (analisisIA.plazas === 1 ? '1-plaza-' : `${analisisIA.plazas}-plazas-`) : '';
   // Creamos un sufijo seguro. Si no hay departamento, ponemos "administracion-publica" para el SEO.
-const sufijoDep = departamentoFinal ? `-${departamentoFinal}` : '-administracion-publica';
-let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}${sufijoDep}` : (analisisIA.resumen || itemData.title);
+  const sufijoDep = departamentoFinal ? `-${departamentoFinal}` : '-administracion-publica';
+  let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}${sufijoDep}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
   if (slugBase.length > 80) slugBase = slugBase.substring(0, 80).replace(/-+$/, '');
   
@@ -152,34 +160,29 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
   }
   const slugFinal = `${slugBase}-${suffix}`;
 
-  
   // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (link_boe y guid) ---
-  
   // 1. Asignamos el HTML principal (link_boe)
   let webDefinitiva = itemData.htmlGenerado || itemData.link;
   
   // 2. Asignamos el PDF principal (guid)
-  // 🚨 ORDEN CRÍTICO: El código estricto prevalece. La IA es la última opción.
   let pdfDefinitivo = itemData.pdfGenerado || itemData.pdf_rss || itemData.pdf_extraido || analisisIA.enlace_pdf;
-
 
   // 3. REGLAS DE SEGURIDAD Y LIMPIEZA
   if (webDefinitiva.includes('{')) {
       webDefinitiva = itemData.link_boletin;
   }
 
-  // DOE (Extremadura): Reconstruir HTML desde el PDF (esté donde esté el enlace)
+  // DOE (Extremadura)
   let enlaceBaseDoe = pdfDefinitivo || webDefinitiva || "";
   if (fuente.nombre === "DOE" && enlaceBaseDoe.includes('.pdf')) {
       const matchDoe = enlaceBaseDoe.match(/\/doe\/(\d{4})\/([^/]+)\/(\d+)\.pdf/i);
       if (matchDoe && matchDoe.length === 4) {
-          // 🚀 Formamos el HTML matemáticamente y aseguramos que el PDF se quede en el guid
           webDefinitiva = `https://doe.juntaex.es/otrosFormatos/html.php?xml=20${matchDoe[3]}&anio=${matchDoe[1]}&doe=${matchDoe[2]}`;
           pdfDefinitivo = enlaceBaseDoe; 
       }
   }
 
-  // BOIB (Baleares): Si la IA secundaria encontró el PDF dentro de la página, aseguramos que sea absoluto
+  // BOIB (Baleares)
   if (fuente.nombre === "BOIB" && pdfDefinitivo && pdfDefinitivo.includes('/eboibfront/pdf/')) {
       const matchPdf = pdfDefinitivo.match(/\/eboibfront\/pdf\/.+/);
       if (matchPdf) {
@@ -187,13 +190,12 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
       }
   }
 
-  // BON (Navarra): Forzamos a que el enlace PDF (guid) sea exactamente igual al HTML (link_boe)
+  // BON (Navarra)
   if (fuente.nombre === "BON") {
       pdfDefinitivo = webDefinitiva;
   }
 
-
-  // Fallback de seguridad (BON y demás aplicarán aquí y tendrán links idénticos si no hay PDF extraído)
+  // Fallback de seguridad
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
   // ----------------------------------------------------------
@@ -201,6 +203,7 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
   const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo);
 
+  // 📦 AHORA SÍ: Construimos el objeto definitivo con la Matriz 3D
   const convocatoria = {
     slug: slugFinal, 
     title: limpiarCodificacion(itemData.title), 
@@ -210,7 +213,15 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
     department: departamentoFinal, 
     boletin: `${fuente.nombre} - ${fuente.ambito}`,
     parent_type: "OPOSICION", 
-    type: analisisIA.tipo === "IGNORAR" ? "Otros Trámites" : analisisIA.tipo, 
+
+    // 🏗️ Inyección de la Matriz 3D Completa
+    type: analisisIA.tipo, // La BD se llama type
+    fase: analisisIA.fase,
+    sistema: analisisIA.sistema,
+    turno: analisisIA.turno, // Esto ahora es un Array
+    distribucion_plazas: analisisIA.distribucion_plazas, // El array de objetos para desgloses
+    ambito: analisisIA.ambito, // Territorial
+
     plazas: analisisIA.plazas, 
     resumen: limpiarCodificacion(analisisIA.resumen),
     plazo_numero: analisisIA.plazo_numero,
@@ -218,14 +229,13 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
     fecha_cierre: fechaCierreCalculada,
     boletin_origen_nombre: analisisIA.boletin_origen_nombre,
     boletin_origen_fecha: analisisIA.boletin_origen_fecha,
+    referencia_boe_original: analisisIA.referencia_boe_original, // Faltaba esto para que enlace tramites BOE
     plazo_texto: (analisisIA.plazo_numero && analisisIA.plazo_tipo) ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` : null,
     referencia_bases: (analisisIA.boletin_origen_nombre && analisisIA.boletin_origen_fecha) ? `${analisisIA.boletin_origen_nombre} | ${analisisIA.boletin_origen_fecha}` : null,
     grupo: analisisIA.grupo, 
-    sistema: analisisIA.sistema, 
     profesion: profesionPrincipal, 
     profesiones: analisisIA.profesiones,
     categoria: analisisIA.categoria,
-    turno: analisisIA.turno,
     provincia: analisisIA.provincia || fuente.ambito, 
     titulacion: analisisIA.titulacion, 
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
@@ -244,7 +254,8 @@ let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionP
     statsFuente.errores++;
   } else {
     await gestionarDepartamento(departamentoFinal);
-    console.log(`✅ Guardado -> ${fuente.nombre} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal} | Slug: ${slugFinal} | 🔗 ${webDefinitiva}`);
+    // Print bonito en la consola para confirmar que funciona
+    console.log(`✅ Guardado -> ${fuente.nombre} | Fase: ${analisisIA.fase} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal} | Slug: ${slugFinal} | 🔗 ${webDefinitiva}`);
     statsFuente.guardadas++; // Sumamos como guardada final
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
