@@ -55,7 +55,12 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
 
   for (const radar of radares) {
     if (!radar.filtro) continue;
-    const terminoBusqueda = normalizarTexto(radar.filtro.trim());
+    
+    // 🚀 MEJORA: Dividimos por comas y limpiamos los términos de búsqueda
+    const terminosBusqueda = radar.filtro.split(',')
+      .map(t => normalizarTexto(t.trim()))
+      .filter(t => t.length > 0);
+      
     const provinciasSub = radar.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
@@ -65,7 +70,9 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
         ${conv.department || ''} 
         ${conv.profesion || ''}
       `);
-      const encajaInteres = superCadena.includes(terminoBusqueda);
+      
+      // 🚀 MEJORA: Verificamos si ALGUNO de los términos coincide con la convocatoria (Lógica OR)
+      const encajaInteres = terminosBusqueda.some(termino => superCadena.includes(termino));
       let encajaProvincia = true;
       if (provinciasSub.length > 0) {
           encajaProvincia = provinciasSub.includes(conv.provincia);
