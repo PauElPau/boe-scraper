@@ -88,11 +88,11 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - 'Libre Designación': Elección directa por idoneidad (muy común en altos cargos y jefaturas).
 
   3. LA FASE (Momento temporal del documento):
-     - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse.
+     - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse. 🛑 REGLA VITAL: Las 'Ofertas de Empleo Público (OEP)' DEBEN clasificarse OBLIGATORIAMENTE en esta fase, aunque no tengan plazo abierto aún. 🛑 SEGUNDA REGLA VITAL (ANTI-BLOQUEOS): Si el título menciona "aprobación de bases", "publicación de bases", "convocatoria" de plazas/bolsas o "edicto relativo a una plaza", asume SIEMPRE que la fase es 'Apertura de Plazos / Convocatoria', incluso si el texto principal da error ("Access Denied") o no menciona los días exactos de plazo.
      - 'Listas de Admitidos y Excluidos': Listados provisionales o definitivos de participantes.
      - 'Tribunales y Fechas de Examen': Nombramiento del jurado, sedes, aulas y días de prueba.
      - 'Calificaciones y Resultados': Publicación de las notas del examen o de los puntos de méritos.
-     - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza o toman posesión).
+     - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza, tomas de posesión, o cuando la resolución declara el concurso DESIERTO, caducado o cancelado).
      - 'Correcciones y Modificaciones': Fe de erratas o rectificaciones de bases anteriores.
      - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
 
@@ -114,15 +114,15 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
 
   -- CATEGORÍA, TITULACIÓN, PROFESIÓN, GRUPO, ORGANISMO Y PROVINCIA:
      - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachiller o FP', 'Grado Universitario', 'ESO').
-     - categoria: Clasifica obligatoriamente la profesión en UNA de estas: 'Administración General', 'Economía, Hacienda y Finanzas', 'Sanidad y Salud', 'Cuerpos de Seguridad y Emergencias', 'Educación y Docencia', 'Informática y Telecomunicaciones', 'Ingeniería, Arquitectura y Medio Ambiente', 'Justicia y Legislación', 'Trabajo Social y Cuidados', 'Cultura, Archivos y Deportes', 'Oficios y Mantenimiento', 'Otros'.
+     - categoria: Clasifica obligatoriamente la profesión en UNA de estas: 'Administración General', 'Economía, Hacienda y Finanzas', 'Sanidad y Salud', 'Cuerpos de Seguridad y Emergencias', 'Educación y Docencia', 'Informática y Telecomunicaciones', 'Ingeniería, Arquitectura y Medio Ambiente', 'Justicia y Legislación', 'Trabajo Social y Cuidados', 'Cultura, Archivos y Deportes', 'Oficios y Mantenimiento', 'Otros'. 🛑 REGLA VITAL: Si es una Oferta de Empleo Público (OEP) general sin una profesión clara, asígnale SIEMPRE 'Administración General'.
      - profesiones: Nombres limpios de los puestos.
      - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
      - organismo: Identifica la entidad LOCAL o FINAL que ofrece el puesto (ej: 'Ayuntamiento de Torrevieja'). No uses comillas en los nombres.
      - provincia: ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final.
   
   -- TEXTOS SEO Y LINKS:
-  - resumen: Resumen claro de 1-2 frases.
-   - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
+    - resumen: Resumen claro de 1-2 frases.
+    - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
     ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
     1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
     2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial.
@@ -135,12 +135,12 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - plazo_numero / plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
     🛑 REGLA VITAL DE PLAZOS: Si el plazo que menciona el texto es para "interponer recurso" (reposición/alzada), para "subsanar errores" o para "presentar méritos", DEBES devolver null en ambos campos. ¡No confundas el plazo legal de recurso de una lista con el plazo de inscripción!
   - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
-  - sistema: Deduce si es Oposición, Concurso-oposición o Concurso.
+  - sistema: Deduce si es Oposición, Concurso-oposición o Concurso. Si es una OEP o no se especifica claramente en el texto, asume SIEMPRE 'Oposición'.
   - profesiones: Nombres limpios de los puestos.
 
   - tipo: Deduce el tipo EXACTO de la publicación usando estrictamente el esquema proporcionado. 
     🛑 REGLAS VITALES DE TIPO: 
-    1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión" o "resolución del concurso", clasifícalo OBLIGATORIAMENTE como 'Aprobados y Adjudicaciones'. ¡No es una apertura!
+    1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión", "resolución del concurso", "declara desierto" o "constitución de bolsa", la FASE es OBLIGATORIAMENTE 'Adjudicación y Nombramientos'. ¡No es una apertura y NUNCA debes usar 'IGNORAR'!
     2. ESTABILIZACIÓN: Si el texto dice explícitamente "estabilización" o "concurso excepcional", usa 'Estabilización y Promoción'.
     3. CORRECCIONES: Si menciona "corrección de errores" o "modificación de la resolución", usa 'Correcciones y Modificaciones'.
 
