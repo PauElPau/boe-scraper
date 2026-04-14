@@ -8,8 +8,7 @@ const { analizarConvocatoriaIA } = require("./ai");
 const { 
   calcularFechaCierre, 
   capitalizarProfesion, 
-  limpiarCodificacion, 
-  limpiarPalabraParaFuzzy 
+  limpiarCodificacion
 } = require("../utils/helpers");
 
 const supabase = createClient(
@@ -81,61 +80,57 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     }
   }
 
-  // 🥈 PRIORIDAD 2: Fuzzy Matching
+  // 🥈 PRIORIDAD 2: Fuzzy Matching (Delegado a PostgreSQL)
   if (!parentSlug && departamentoFinal && profesionPrincipal) {
-    const { data: posiblesPadres } = await supabase
-      .from('convocatorias')
-      .select('slug, type, link_boe, profesion, profesiones, turno')
-      .ilike('department', `%${departamentoFinal}%`)
-      .is('parent_slug', null) 
-      .order('created_at', { ascending: false }) 
-      .limit(20); 
+    
+    // Llamamos a la función RPC de Supabase (Súper rápido)
+    const { data: posiblesPadres, error: rpcError } = await supabase
+      .rpc('buscar_padre_fuzzy', {
+        p_departamento: departamentoFinal,
+        p_profesion: profesionPrincipal,
+        p_umbral: 0.55 // Exigimos un 55% de coincidencia combinada mínima
+      });
 
-    if (posiblesPadres && posiblesPadres.length > 0) {
-      let plazaExistente = null;
-      const ignorar = ["de", "la", "el", "en", "para", "del", "las", "los", "jefe", "jefa", "superior", "cuerpo", "escala", "plaza", "plazas", "turno", "libre", "acceso"];
-      const palabrasClave = profesionPrincipal.split(' ').map(limpiarPalabraParaFuzzy).filter(w => w.length > 3 && !ignorar.includes(w));
+    if (rpcError) {
+        console.error("   ❌ Error en RPC buscar_padre_fuzzy:", rpcError.message);
+    } else if (posiblesPadres && posiblesPadres.length > 0) {
+      let plazaExistente = posiblesPadres[0]; // Tomamos el mejor resultado (el #1)
+
+      // 🛡️ ESCUDO ANTIMEZCLAS DE TURNOS
+      // Extraemos los turnos como Strings para compararlos rápido
+      const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
       
-      if (palabrasClave.length > 0) {
-          plazaExistente = posiblesPadres.find(padre => {
-             const profPadreStr = (padre.profesion || '');
-             const profPadreLimpia = profPadreStr.split(' ').map(limpiarPalabraParaFuzzy).join(' ');
-             let coincidencias = 0;
-             for (const palabra of palabrasClave) {
-                 if (profPadreLimpia.includes(palabra)) coincidencias++;
-             }
-            // 🚀 Exigimos un 80% de coincidencia semántica para evitar agrupar especialidades médicas distintas
-            return (coincidencias / palabrasClave.length) >= 0.8;
-          });
+      // En Supabase el turno viene como JSONB, nos aseguramos de extraerlo bien
+      let turnoAntiguoArray = [];
+      if (Array.isArray(plazaExistente.turno)) {
+          turnoAntiguoArray = plazaExistente.turno;
+      } else if (typeof plazaExistente.turno === 'string') {
+          try { turnoAntiguoArray = JSON.parse(plazaExistente.turno); } 
+          catch(e) { turnoAntiguoArray = [plazaExistente.turno]; }
+      }
+      
+      const turnoAntiguoStr = turnoAntiguoArray.length > 0 ? [...turnoAntiguoArray].sort().join(',') : 'Turno Libre';
+
+      if (turnoNuevoStr !== turnoAntiguoStr) {
+          console.log(`   ⚖️ Salvado de deduplicación: Alta similitud (${(plazaExistente.similitud * 100).toFixed(0)}%) pero TURNOS DISTINTOS (${turnoNuevoStr} vs ${turnoAntiguoStr})`);
+          plazaExistente = null; // Anulamos la coincidencia
       }
 
-      // 🛡️ INICIO DEL ESCUDO ANTIMEZCLAS DE TURNOS (Adaptado a Arrays)
-      if (plazaExistente) {
-          // Extraemos los turnos como Strings para compararlos rápido (ej. "Turno Libre, Discapacidad")
-          const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
-          const turnoAntiguoStr = Array.isArray(plazaExistente.turno) ? [...plazaExistente.turno].sort().join(',') : (plazaExistente.turno || 'Turno Libre');
-
-          if (turnoNuevoStr !== turnoAntiguoStr) {
-              console.log(`   ⚖️ Salvado de deduplicación: Títulos similares pero TURNOS DISTINTOS (${turnoNuevoStr} vs ${turnoAntiguoStr})`);
-              plazaExistente = null; // Anulamos la coincidencia para forzar que se inserte como nueva
-          }
-      }
-      // 🛡️ FIN DEL ESCUDO
-
+      // Si sobrevive al escudo de turnos, aplicamos la lógica
       if (plazaExistente) {
         if (esTramite) {
-          console.log(`   🔗 Trámite detectado por Fuzzy Matching (50%). Enlazando al padre: ${plazaExistente.slug}...`);
+          console.log(`   🔗 Trámite enlazado por Trigramas (${(plazaExistente.similitud * 100).toFixed(0)}%). Padre: ${plazaExistente.slug}`);
           parentSlug = plazaExistente.slug;
-          statsFuente.enlazadas++; // Sumamos a estadísticas (se guardará después)
+          statsFuente.enlazadas++; 
         } else {
-          console.log(`   🔄 ¡Duplicado evitado! Esta plaza ya se rastreó antes: ${plazaExistente.slug}`);
-          statsFuente.duplicados++; // Sumamos a duplicados y cancelamos
+          console.log(`   🔄 ¡Duplicado evitado! Similitud del ${(plazaExistente.similitud * 100).toFixed(0)}% con: ${plazaExistente.slug}`);
+          statsFuente.duplicados++; 
           if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
               await supabase.from("convocatorias").update({ 
                   link_boe: itemData.link, publication_date: new Date().toISOString().split('T')[0] 
               }).eq('slug', plazaExistente.slug);
           }
-          return; 
+          return; // Cancelamos la inserción porque ya existe
         }
       }
     }
