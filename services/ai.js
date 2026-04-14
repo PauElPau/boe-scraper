@@ -121,15 +121,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - provincia: ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final.
   
   -- TEXTOS SEO Y LINKS:
-    - resumen: Resumen claro de 1-2 frases.
-    - descripcion_extendida: 🚀 REGLA SEO CRÍTICA: Escribe un artículo completo de AL MENOS 300 PALABRAS estructurado en formato Markdown. 
-    ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
-    1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
-    2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial.
-    3. Proceso Selectivo (Usa H3 ###): Resume si es concurso, oposición, qué fases tiene o cómo se va a evaluar.
-    4. Plazos y Presentación (Usa H3 ###): Explica cómo y dónde presentar la instancia.
-    El texto debe sonar natural, humano, animando al opositor y repitiendo palabras clave orgánicas como "oposiciones", "empleo público", "trabajar en", el nombre de la profesión y la provincia. ¡NO te quedes corto, debes superar las 300 palabras para evitar el 'Thin Content' en Google!
-     
+  - resumen: Resumen claro de 1-2 frases.
   - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
   - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
   - plazo_numero / plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
@@ -226,7 +218,6 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               ambito: { type: ["string", "null"], enum: ["Estatal", "Autonómico", "Local", "Universidades", null] },
               plazas: { type: ["integer", "null"] },
               resumen: { type: "string" },
-              descripcion_extendida: { type: "string" },
               plazo_numero: { type: ["integer", "null"] },
               plazo_tipo: { type: ["string", "null"], enum: ['hábiles', 'naturales', 'meses', null] },
               grupo: { type: ["string", "null"], enum: ['A1', 'A2', 'B', 'C1', 'C2', 'E', null] },
@@ -260,7 +251,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-           required: ["tipo", "sistema", "fase", "turno", "distribucion_plazas", "ambito", "plazas", "resumen", "descripcion_extendida", "plazo_numero", "plazo_tipo", "grupo", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
+           required: ["tipo", "sistema", "fase", "turno", "distribucion_plazas", "ambito", "plazas", "resumen", "plazo_numero", "plazo_tipo", "grupo", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
@@ -278,9 +269,58 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   }
 }
 
+// ✍️ NUEVA FUNCIÓN: Redactora SEO (Alta Temperatura y Creatividad)
+async function redactarArticuloSEOIA(datosExtraidos, textoInterior) {
+  // Pasamos un fragmento de los primeros 3000 caracteres para dar contexto sin consumir tokens innecesarios
+  const textoCorto = textoInterior ? textoInterior.substring(0, 3000) : "";
+  
+  const prompt = `
+  Eres un experto redactor de contenidos SEO especializado en empleo público y oposiciones.
+  Basándote en el siguiente JSON de datos extraídos y en el fragmento del BOE/boletín, redacta un artículo atractivo y motivador de AL MENOS 300 PALABRAS estructurado en formato Markdown.
+
+  DATOS EXTRAÍDOS:
+  - Título/Profesión: ${datosExtraidos.profesiones && datosExtraidos.profesiones.length > 0 ? datosExtraidos.profesiones.join(', ') : 'Empleo Público'}
+  - Organismo: ${datosExtraidos.organismo || datosExtraidos.department || 'Administración Pública'}
+  - Provincia: ${datosExtraidos.provincia || 'España'}
+  - Plazas: ${datosExtraidos.plazas || 'No especificadas'}
+  - Turno: ${datosExtraidos.turno ? datosExtraidos.turno.join(', ') : 'No especificado'}
+  - Titulación Exigida: ${datosExtraidos.titulacion || 'Ver bases oficiales'}
+  - Sistema: ${datosExtraidos.sistema || 'Oposición'}
+  
+  FRAGMENTO DEL BOLETÍN PARA CONTEXTO:
+  "${textoCorto}"
+
+  ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
+  1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
+  2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial, basándote en los datos.
+  3. Proceso Selectivo (Usa H3 ###): Resume si es concurso, oposición, qué fases tiene o cómo se va a evaluar.
+  4. Plazos y Presentación (Usa H3 ###): Explica los plazos si los hay y anima al opositor a inscribirse.
+
+  REGLAS:
+  - El texto debe sonar natural, humano, empático y animando al opositor a dar el paso.
+  - Usa palabras clave orgánicas como "oposiciones", "empleo público", "trabajar en", el nombre exacto de la profesión y la provincia.
+  - ¡DEBES superar las 300 palabras para evitar el 'Thin Content' en Google!
+  - Devuelve SOLO el texto en Markdown. No uses etiquetas de bloque \`\`\`markdown al inicio ni al final, devuelve el texto crudo.
+  - Todo el contenido DEBE estar en ESPAÑOL.
+  `;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0.7, 
+      messages: [{ role: "user", content: prompt }]
+    });
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error("❌ Error en redactarArticuloSEOIA:", error.message);
+    return null;
+  }
+}
+
 module.exports = {
   extraerEnlacesSumarioIA,
   analizarConvocatoriaIA,
+  redactarArticuloSEOIA,
   getIaDetenida,
   setIaDetenida
 };

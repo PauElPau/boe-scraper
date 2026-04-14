@@ -4,7 +4,7 @@
 
 const { createClient } = require("@supabase/supabase-js");
 const slugify = require("slugify");
-const { analizarConvocatoriaIA } = require("./ai");
+const { analizarConvocatoriaIA, redactarArticuloSEOIA } = require("./ai");
 const { 
   calcularFechaCierre, 
   capitalizarProfesion, 
@@ -155,6 +155,18 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   }
   const slugFinal = `${slugBase}-${suffix}`;
 
+  // =========================================================================
+  // ✍️ 🚀 EJECUCIÓN DE LA REDACTORA SEO (Solo para las que sobrevivieron)
+  // =========================================================================
+  // Solo generamos artículos largos para aperturas reales, no para "Trámites" menores, 
+  // así ahorramos dinero en la API. Si es un trámite, la descripcion_extendida será null.
+  let descripcionSEO = null;
+  if (!esTramite || analisisIA.fase === 'Apertura de Plazos / Convocatoria') {
+      console.log(`   ✍️ Redactando artículo SEO extenso para: ${profesionPrincipal || 'Plaza'}...`);
+      descripcionSEO = await redactarArticuloSEOIA(analisisIA, textoParaIA);
+  }
+  // =========================================================================
+
   // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (link_boe y guid) ---
   // 1. Asignamos el HTML principal (link_boe)
   let webDefinitiva = itemData.htmlGenerado || itemData.link;
@@ -203,7 +215,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     slug: slugFinal, 
     title: limpiarCodificacion(itemData.title), 
     meta_description: limpiarCodificacion(analisisIA.meta_description || (analisisIA.resumen ? analisisIA.resumen.substring(0, 150) + "..." : "Ver detalles.")),
-    descripcion_extendida: limpiarCodificacion(analisisIA.descripcion_extendida),
+    descripcion_extendida: limpiarCodificacion(descripcionSEO),
     section: itemData.section, 
     department: departamentoFinal, 
     boletin: `${fuente.nombre} - ${fuente.ambito}`,
