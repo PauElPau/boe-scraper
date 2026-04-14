@@ -56,8 +56,16 @@ function esTramiteBasura(titulo) {
   const accionTribunal = t.includes('nombramiento') || t.includes('designación') || t.includes('composición') || t.includes('modificación');
   const esTribunal = t.includes('tribunal') || t.includes('comisión de selección') || t.includes('comisión de valoración') || t.includes('órgano de selección');
   const esNombramientoTribunal = accionTribunal && esTribunal;
-  const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvencion') || t.includes('licitación') || t.includes('adjudicación de contrato') || t.includes('impacto ambiental') || t.includes('ley ') || t.includes('decreto ');
-
+  const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvenciones') || 
+                  t.includes('licitación') || t.includes('adjudicación de contrato') || 
+                  t.includes('impacto ambiental') || t.includes('ayudas destinadas') || 
+                  t.includes('ayudas al') || t.includes('ayudas para') || t.includes('concesión de ayudas') ||
+                  t.includes('contrato titulado') || t.includes('contrato de relevo') || 
+                  t.includes('beca') || t.includes('premio') || 
+                  t.includes('suministro') || t.includes('se emplaza') || t.includes('emplazamiento') || 
+                  t.includes('recurso contencioso') || t.includes('recurso de alzada') ||
+                  t.includes('licencia ambiental') || t.includes('viviendas de protección') || 
+                  t.includes('suplentes temporales');
   return esCese || esNombramientoTribunal || esRuido;
 }
 
