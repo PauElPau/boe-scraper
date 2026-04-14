@@ -69,33 +69,12 @@ function esTramiteBasura(titulo) {
   return esCese || esNombramientoTribunal || esRuido;
 }
 
-// 🧠 NEUTRALIZADOR DE PALABRAS (Stemmer para Fuzzy Matching)
-function limpiarPalabraParaFuzzy(palabra) {
-  // 1. Quitar acentos, puntuación y pasar a minúsculas
-  let p = palabra.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,]/g, "").toLowerCase();
-  
-  // 2. Quitar sufijos de género típicos (/a, (a))
-  p = p.replace(/\/a$/, '').replace(/\(a\)$/, '');
-  
-  // 3. Quitar plurales básicos ('s' o 'es') si la palabra es larga
-  if (p.length > 4 && p.endsWith('s')) p = p.slice(0, -1);
-  if (p.length > 4 && p.endsWith('e')) p = p.slice(0, -1); 
-  
-  // 4. Normalizar abreviaturas clásicas de la Administración
-  if (p === 'adm' || p.startsWith('admin')) return 'admin';
-  if (p === 'gen' || p.startsWith('gener')) return 'gener';
-  if (p.startsWith('tecnic')) return 'tecnic';
-  if (p.startsWith('auxil')) return 'auxil';
-  if (p.startsWith('ayud')) return 'ayud';
-  
-  return p;
-}
+
 
 module.exports = {
   esperar,
   calcularFechaCierre,
   capitalizarProfesion,
   limpiarCodificacion,
-  esTramiteBasura,
-  limpiarPalabraParaFuzzy
+  esTramiteBasura
 };
