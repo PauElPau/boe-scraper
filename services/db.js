@@ -83,12 +83,16 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   // 🥈 PRIORIDAD 2: Fuzzy Matching (Delegado a PostgreSQL)
   if (!parentSlug && departamentoFinal && profesionPrincipal) {
     
+    // 📍 Usamos la provincia extraída por la IA (o el ámbito por defecto de la fuente)
+    const provinciaFiltro = analisisIA.provincia || fuente.ambito;
+
     // Llamamos a la función RPC de Supabase (Súper rápido)
     const { data: posiblesPadres, error: rpcError } = await supabase
       .rpc('buscar_padre_fuzzy', {
         p_departamento: departamentoFinal,
         p_profesion: profesionPrincipal,
-        p_umbral: 0.55 // Exigimos un 55% de coincidencia combinada mínima
+        p_provincia: provinciaFiltro, // 🛡️ NUEVO: Filtro Quirúrgico por Provincia
+        p_umbral: 0.85                // 🚀 Mantenemos el umbral estricto al 85%
       });
 
     if (rpcError) {
