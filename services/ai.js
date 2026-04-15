@@ -17,7 +17,7 @@ function getIaDetenida() {
 }
 
 // --- 5. MOTORES DE IA (GPT-4o-mini) ---
-async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
+async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin, intentos = 3) {
   const prompt = `
     Eres un experto en empleo público. Analiza este sumario/portada del boletín ${nombreBoletin} en Markdown.
     Tu misión es extraer SOLO las resoluciones individuales de convocatorias de empleo (oposiciones, concursos, plazas, bolsas, estabilización, libre designación).
@@ -49,19 +49,24 @@ async function extraerEnlacesSumarioIA(markdownWeb, nombreBoletin) {
     });
     return JSON.parse(response.choices[0].message.content).convocatorias || [];
   } catch (error) {
-    if (error.status === 401) {
+   if (error.status === 401) {
       console.error("❌ API Key de OpenAI inválida o sin saldo.");
       setIaDetenida(true);
     } else if (error.status === 429) {
-      console.warn("⚠️ Rate limit de OpenAI alcanzado. Reintentando en 5 segundos...");
-      await esperar(5000);
-      return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin);
+      if (intentos > 0) {
+          console.warn(`⚠️ Rate limit de OpenAI. Reintentando en 5s... (Quedan ${intentos} intentos)`);
+          await esperar(5000);
+          return extraerEnlacesSumarioIA(markdownWeb, nombreBoletin, intentos - 1);
+      } else {
+          console.error("❌ OpenAI no responde tras varios intentos. Saltando...");
+          return [];
+      }
     }
     return [];
   }
 }
 
-async function analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico) {
+async function analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico, intentos = 3) {
   const prompt = `
   Eres un experto en extraer datos del empleo público. Analiza el texto de esta web.
   TÍTULO: ${titulo}
@@ -260,9 +265,14 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
     return JSON.parse(response.choices[0].message.content);
   } catch (error) {
     if (error.status === 429) {
-      console.warn(`   ⏳ Límite de IA (429). Esperando 5s para reintentar...`);
-      await esperar(5000);
-      return analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico);
+      if (intentos > 0) {
+          console.warn(`   ⏳ Límite de IA (429). Esperando 5s para reintentar...`);
+          await esperar(5000);
+          return analizarConvocatoriaIA(titulo, textoInterior, departamento, seccion, ambitoAutonomico);
+      } else {
+          console.error("❌ OpenAI no responde tras varios intentos. Saltando...");
+          return [];
+      }
     }
     console.error("❌ Error en analizarConvocatoriaIA:", error.message);
     return { tipo: "Otros Trámites", plazas: null, resumen: titulo };
