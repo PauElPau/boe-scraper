@@ -445,6 +445,10 @@ async function extraerBoletines() {
         alertasFavs = await enviarAlertasFavoritos(convocatoriasInsertadasHoy) || 0;
         await enviarAlertaTelegram(convocatoriasInsertadasHoy);
     }
+
+    // 🚫 Desactiva esto. Con el nuevo sistema SSR ya no es necesario recompilar la web 
+    // cada vez que hay plazas nuevas. Se verán solas al instante.
+    /*
     try {
         if (process.env.VERCEL_WEBHOOK && convocatoriasInsertadasHoy.length > 0) {
             await fetch(process.env.VERCEL_WEBHOOK, { method: 'POST' });
@@ -452,6 +456,7 @@ async function extraerBoletines() {
     } catch (e) {
         console.error("⚠️ Fallo al avisar al webhook de Vercel (Revalidación ISR):", e.message);
     }
+    */
 
     // Ahora el reporte de Telegram está a salvo y siempre se enviará
     const durationMinutes = ((Date.now() - startTime) / 60000).toFixed(2);
