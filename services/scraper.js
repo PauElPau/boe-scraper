@@ -225,7 +225,7 @@ async function obtenerCantabriaMatematico() {
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
-    const fechaAncla = new Date('2026-03-31T00:00:00');
+    const fechaAncla = new Date('2026-04-16T00:00:00');
     let diasHabiles = 0;
     let fechaTemp = new Date(fechaAncla);
     
@@ -235,7 +235,7 @@ async function obtenerCantabriaMatematico() {
         if (diaSemana !== 0 && diaSemana !== 6) diasHabiles++;
     }
 
-    let idEstimado = 44405 + (diasHabiles * 20);
+    let idEstimado = 44565 + (diasHabiles * 20);
     let intentos = 0;
     let convocatorias = [];
 
@@ -253,54 +253,33 @@ async function obtenerCantabriaMatematico() {
         }
     } catch(e) {}
 
-    while (intentos < 5) {
-        const xmlUrl = `https://boc.cantabria.es/boces/verBoletin.do?idBolOrd=${idEstimado}`;
+    // Aumentamos a 10 intentos para darle más margen de búsqueda al Topo
+    while (intentos < 10) {
+        // OJO: Has puesto verBoletin.do en tu log, pero Cantabria usa verXmlAction.do para sacar el XML limpio
+        const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
             let xmlText = null;
 
-            // 🕵️ PASO 2: Hacemos el Fetch copiando exactamente el Payload de tu imagen
+            // 🕵️ PASO 2: Pasamos por CodeTabs para saltarnos la tiranía del Node Fetch
             try {
-                // Desactivamos temporalmente el chequeo TLS estricto de Node por si el certificado caduca
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; 
-                
-                const res = await fetch(xmlUrl, {
-                    headers: {
-                        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
-                        "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-                        "Cache-Control": "max-age=0",
-                        "Connection": "keep-alive",
-                        "Cookie": cookieSesion, // Pasamos la tarjeta de visitante
-                        "Host": "boc.cantabria.es",
-                        "Sec-Ch-Ua": '"Google Chrome";v="123", "Not:A-Brand";v="8", "Chromium";v="123"',
-                        "Sec-Ch-Ua-Mobile": "?0",
-                        "Sec-Ch-Ua-Platform": '"Windows"',
-                        "Sec-Fetch-Dest": "document",
-                        "Sec-Fetch-Mode": "navigate",
-                        "Sec-Fetch-Site": "none",
-                        "Sec-Fetch-User": "?1",
-                        "Upgrade-Insecure-Requests": "1",
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
-                    }
-                });
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(xmlUrl)}`;
+                const res = await fetch(proxyUrl);
                 
                 if (res.ok) {
                     xmlText = await res.text();
                 } else {
-                    console.log(`      ⚠️ Status ${res.status}`);
+                    console.log(`      ⚠️ Proxy CodeTabs Status ${res.status}`);
                 }
             } catch (err) {
-                console.log(`      ⚠️ Fallo de red: ${err.message}`);
-            } finally {
-                process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1"; // Restauramos la seguridad global
+                console.log(`      ⚠️ Fallo de red proxy: ${err.message}`);
             }
 
             // Validar si la respuesta es el XML que buscamos o si está vacío
             if (!xmlText || !xmlText.includes('</root>')) {
-                // Si el servidor nos devuelve la plantilla HTML es que el boletín aún no está subido
                 if (xmlText && xmlText.includes('<!DOCTYPE HTML>')) {
-                    console.log(`      ⏩ El ID ${idEstimado} no existe en el servidor (HTML de error detectado). Retrocediendo...`);
+                    console.log(`      ⏩ El ID ${idEstimado} no existe aún. Retrocediendo...`);
                     idEstimado -= 20;
                     intentos++;
                     continue;

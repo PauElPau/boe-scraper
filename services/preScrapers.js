@@ -19,7 +19,11 @@ async function burlarCortafuegos(url) {
     }
 }
 
-// 🎯 FASE PREVIA: Entra a las portadas "caja fuerte" y extrae la URL real del último boletín
+// ==========================================
+// ARCHIVO: services\preScrapers.js
+// SUSTITUYE LA FUNCIÓN ENTERA obtenerUrlDelDia
+// ==========================================
+
 async function obtenerUrlDelDia(fuente) {
     if (fuente.nombre === "DOGC") return "API_REST";
 
@@ -31,22 +35,26 @@ async function obtenerUrlDelDia(fuente) {
     const yyyy = hoy.getFullYear();
 
     // ==========================================
-    // 1. LA RIOJA (BOR): ATAQUE API DIRECTO
+    // 1. LA RIOJA (BOR): ATAQUE API DIRECTO VÍA PROXY
     // ==========================================
-   if (fuente.nombre === "BOR") {
+    if (fuente.nombre === "BOR") {
         try {
             const fechaBor = `${yyyy}-${mm}-${dd}`;
             const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
             
-            // 🚀 Ruteamos por CodeTabs para saltarnos el TLS/WAF de La Rioja
+            // Usamos CodeTabs para evitar el 'fetch failed' de Node.js
             const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`;
             const res = await fetch(proxyUrl);
             
             if (res.ok) {
-                const data = await res.json();
-                if (data && data.boletines && data.boletines.length > 0) {
-                    const idBoletin = data.boletines[0].idBoletin;
-                    return `https://web.larioja.org/bor-boletin?id=${idBoletin}`;
+                const textData = await res.text();
+                try {
+                    const data = JSON.parse(textData);
+                    if (data && data.boletines && data.boletines.length > 0) {
+                        return `https://web.larioja.org/bor-boletin?id=${data.boletines[0].idBoletin}`;
+                    }
+                } catch(e) {
+                    console.log(`      ⚠️ BOR no devolvió JSON válido hoy.`);
                 }
             }
             return null;
@@ -57,43 +65,47 @@ async function obtenerUrlDelDia(fuente) {
     }
 
     // ==========================================
-    // 2. CEUTA (BOCCE): LECTURA DIRECTA DEL IFRAME RSS
+    // 2. CEUTA (BOCCE) - VÍA NATIVA DIRECTA
     // ==========================================
     if (fuente.nombre === "BOCCE") {
         try {
             const urlXml = "https://www.ceuta.es/ceuta/bocce/ultimos";
-            const htmlBocce = await obtenerTextoUniversal(urlXml);
-            if (!htmlBocce) return null;
+            // Usamos tu scraper nativo forzado para no quemar la API de Cloudflare
+            const nativo = await obtenerTextoNativo(urlXml, true);
+            const htmlBocce = nativo ? nativo.texto : "";
 
-            // 🛠️ REGEX TODOTERRENO: Atrapa HTML (href="...") o Markdown (...)(...)
-            const match = htmlBocce.match(/(?:href=["']|\()([^"')]+(?:bocce|boletines)[^"')]*\.pdf)(?:["']|\))/i);
+            // Tu función nativa convierte enlaces a [Texto](url). Buscamos el primer PDF:
+            const match = htmlBocce.match(/\]\(([^)]+\.pdf)\)/i);
             if (match) {
                 let link = match[1];
                 if (!link.startsWith('http')) link = "https://www.ceuta.es" + (link.startsWith('/') ? '' : '/') + link;
                 return link;
             }
             return null;
-        } catch (e) { return null; }
+        } catch (e) {
+            return null;
+        }
     }
 
-  // ==========================================
-    // 3. MELILLA (BOME)
+    // ==========================================
+    // 3. MELILLA (BOME) - VÍA NATIVA DIRECTA
     // ==========================================
     if (fuente.nombre === "BOME") {
         try {
             const urlBome = "https://bomemelilla.es/boletines/ordinarios"; 
-            const htmlBome = await obtenerTextoUniversal(urlBome);
-            if (!htmlBome) return null;
+            const nativo = await obtenerTextoNativo(urlBome, true);
+            const htmlBome = nativo ? nativo.texto : "";
 
-            // 🛠️ REGEX TODOTERRENO
-            const match = htmlBome.match(/(?:href=["']|\()([^"')]+(?:bome|BOME)[^"')]*\.pdf)(?:["']|\))/i);
+            const match = htmlBome.match(/\]\(([^)]+\.pdf)\)/i);
             if (match) {
                 let link = match[1];
                 if (!link.startsWith('http')) link = "https://bomemelilla.es" + (link.startsWith('/') ? '' : '/') + link;
                 return link;
             }
             return null;
-        } catch (e) { return null; }
+        } catch (e) {
+            return null;
+        }
     }
 
     return fuente.url;
