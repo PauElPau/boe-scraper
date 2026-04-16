@@ -258,7 +258,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     raw_text: textoParaIA, 
   };
 
-  const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select();
+  const { data, error } = await supabase.from("convocatorias").upsert(convocatoria, { onConflict: "slug" }).select('id, slug, title, type, fase, plazas, department, profesion, provincia, fecha_cierre');
   
   if (error) {
     console.error(`❌ Error BD:`, error.message);
