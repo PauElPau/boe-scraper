@@ -246,14 +246,15 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab + Sesión Java)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria...`);
     
     const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0); // 🪄 Reseteamos la hora para que la comparación de fechas sea exacta
+    
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
-    // ANCLA ACTUALIZADA (Tu mejora es perfecta)
     const fechaAncla = new Date('2026-04-16T00:00:00');
     let diasHabiles = 0;
     let fechaTemp = new Date(fechaAncla);
@@ -268,19 +269,7 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
 
-    // 🕵️ PASO 1: Conseguir la Cookie de Sesión con el tanque HTTPS
-    let cookieSesion = "";
-    try {
-        console.log(`      🗝️ Pidiendo Cookie de visitante al servidor...`);
-        const resInit = await fetchNativoSeguro("https://boc.cantabria.es/boces/boletines.do");
-        if (resInit.headers && resInit.headers['set-cookie']) {
-            cookieSesion = resInit.headers['set-cookie'][0].split(';')[0];
-            console.log(`      ✅ Cookie conseguida: ${cookieSesion}`);
-        }
-    } catch(e) {
-        console.log(`      ⚠️ No se pudo obtener cookie inicial.`);
-    }
-
+    // Aumentamos a 10 intentos
     while (intentos < 10) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
@@ -288,20 +277,24 @@ async function obtenerCantabriaMatematico() {
         try {
             let xmlText = null;
 
-            // 🕵️ PASO 2: Descargar el XML usando la Cookie y el tanque HTTPS
+            // 🕵️ PASO 2: Usar AllOrigins RAW para saltar el ETIMEDOUT (bloqueo de IP) y mantener el XML intacto
             try {
-                const res = await fetchNativoSeguro(xmlUrl, cookieSesion);
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
+                const res = await fetch(proxyUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' }
+                });
+                
                 if (res.ok) {
-                    xmlText = res.text;
+                    xmlText = await res.text();
                 } else {
-                    console.log(`      ⚠️ Status HTTP ${res.status}`);
+                    console.log(`      ⚠️ Status Proxy ${res.status}`);
                 }
             } catch (err) {
-                console.log(`      ⚠️ Fallo de red HTTPS: ${err.message}`);
+                console.log(`      ⚠️ Fallo de red Proxy: ${err.message}`);
             }
 
             // Validar si es el XML correcto o si la fecha aún no está subida (devuelve HTML)
-            if (!xmlText || !xmlText.includes('<root>')) {
+            if (!xmlText || (!xmlText.includes('<root>') && !xmlText.includes('<Fecha'))) {
                 if (xmlText && xmlText.toLowerCase().includes('<!doctype html>')) {
                     console.log(`      ⏩ El ID ${idEstimado} no existe aún (devuelve HTML). Retrocediendo...`);
                     idEstimado -= 20;
