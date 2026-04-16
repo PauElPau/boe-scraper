@@ -246,14 +246,18 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs)
 async function obtenerCantabriaMatematico() {
-    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria...`);
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML)...`);
     
     const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); // 🪄 Reseteamos la hora para que la comparación de fechas sea exacta
+    hoy.setHours(0, 0, 0, 0); 
     
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
+    
+    // Nombres de meses para buscar en el HTML de Cantabria (Ej: "16 de abril de 2026")
+    const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const textoHoy = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
     
     const fechaAncla = new Date('2026-04-16T00:00:00');
     let diasHabiles = 0;
@@ -271,87 +275,89 @@ async function obtenerCantabriaMatematico() {
 
     // Aumentamos a 10 intentos
     while (intentos < 10) {
-        const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
-        console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
+        // ⚠️ CAMBIO CRÍTICO: Atacamos el HTML público (verBoletin.do) en vez del XML
+        const htmlUrl = `https://boc.cantabria.es/boces/verBoletin.do?idBolOrd=${idEstimado}`;
+        console.log(`   🔎 Tanteando HTML en: ${htmlUrl}`); 
         
         try {
-            let xmlText = null;
+            let htmlText = null;
 
-            // 🕵️ PASO 2: Usar AllOrigins RAW para saltar el ETIMEDOUT (bloqueo de IP) y mantener el XML intacto
+            // 🕵️ PASO 2: Usar CodeTabs (Sabemos que funciona perfectamente con HTML)
             try {
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(xmlUrl)}`;
-                const res = await fetch(proxyUrl, {
-                    headers: { 'User-Agent': 'Mozilla/5.0' }
-                });
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(htmlUrl)}`;
+                const res = await fetch(proxyUrl);
                 
                 if (res.ok) {
-                    xmlText = await res.text();
+                    htmlText = await res.text();
                 } else {
-                    console.log(`      ⚠️ Status Proxy ${res.status}`);
+                    console.log(`      ⚠️ Status Proxy CodeTabs ${res.status}`);
                 }
             } catch (err) {
                 console.log(`      ⚠️ Fallo de red Proxy: ${err.message}`);
             }
 
-            // Validar si es el XML correcto o si la fecha aún no está subida (devuelve HTML)
-            if (!xmlText || (!xmlText.includes('<root>') && !xmlText.includes('<Fecha'))) {
-                if (xmlText && xmlText.toLowerCase().includes('<!doctype html>')) {
-                    console.log(`      ⏩ El ID ${idEstimado} no existe aún (devuelve HTML). Retrocediendo...`);
-                    idEstimado -= 20;
-                    intentos++;
-                    continue;
-                }
-                console.log(`      ⚠️ Snippet recibido: ${xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'null'}`);
-                throw new Error("El archivo no se descargó o fue bloqueado.");
+            if (!htmlText) throw new Error("Respuesta vacía del proxy.");
+
+            // Si el HTML dice que no encuentra el boletín, es que el ID aún no existe
+            if (htmlText.includes('No se han encontrado resultados') || htmlText.includes('Ha ocurrido un error')) {
+                console.log(`      ⏩ El ID ${idEstimado} no existe aún. Retrocediendo...`);
+                idEstimado -= 20;
+                intentos++;
+                continue;
             }
             
-            // EXTRACCIÓN Y LÓGICA DE FECHAS
-            const matchFecha = xmlText.match(/<Fecha\s+fecha="([^"]+)">/i);
-            const fechaBoletin = matchFecha ? matchFecha[1] : null;
-            
-            if (fechaBoletin === formatoHoy) {
+            // EXTRACCIÓN Y LÓGICA DE FECHAS EN EL HTML
+            // Buscamos si la fecha de hoy ("16 de abril de 2026" o "16/04/2026") está en la cabecera
+            if (htmlText.toLowerCase().includes(textoHoy.toLowerCase()) || htmlText.includes(formatoHoy)) {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
-                const regexDisposicion = /<disposicion\s+fechaDis="[^"]+"[^>]*>([\s\S]*?)<\/disposicion>/g;
-                let matchDisp;
+                // Extraemos todos los enlaces a anuncios del HTML
+                const regexLinks = /<a[^>]+href="([^"]+verAnuncioAction\.do\?idAnuBlob=[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+                let match;
                 
-                while ((matchDisp = regexDisposicion.exec(xmlText)) !== null) {
-                    const bloque = matchDisp[1];
-                    const tituloMatch = bloque.match(/<titulo_text>([^<]+)<\/titulo_text>/);
-                    const enlaceMatch = bloque.match(/<num_exp\s+url="([^"]+)">/);
+                while ((match = regexLinks.exec(htmlText)) !== null) {
+                    let enlaceLimpio = match[1].replace(/&amp;/g, '&');
+                    if (!enlaceLimpio.startsWith('http')) enlaceLimpio = 'https://boc.cantabria.es' + (enlaceLimpio.startsWith('/') ? '' : '/') + enlaceLimpio;
                     
-                    if (tituloMatch && enlaceMatch) {
-                        const titulo = tituloMatch[1].replace(/<!\[CDATA\[|\]\]>/g, '').trim();
-                        const htmlDisposicion = enlaceMatch[1].replace(/&amp;/g, '&');
+                    // Limpiamos las etiquetas HTML de dentro del título
+                    const titulo = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                    const t = titulo.toLowerCase();
+                    
+                    if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
+                        t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
+                        t.includes('selectiv')) {
                         
-                        const t = titulo.toLowerCase();
-                        if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
-                            t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
-                            t.includes('selectiv')) {
-                            
-                            convocatorias.push({
-                                titulo: titulo,
-                                enlace: htmlDisposicion, 
-                                pdf: htmlDisposicion
-                            });
-                        }
+                        convocatorias.push({
+                            titulo: titulo,
+                            enlace: enlaceLimpio, 
+                            pdf: enlaceLimpio
+                        });
                     }
                 }
                 return convocatorias; 
                 
-            } else if (fechaBoletin) {
-                const partes = fechaBoletin.split('/');
-                const dateBoletin = new Date(`${partes[2]}-${partes[1]}-${partes[0]}T00:00:00`);
-                
-                if (dateBoletin < hoy) {
-                    console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${fechaBoletin}. Avanzando +20...`);
-                    idEstimado += 20;
-                } else {
-                    console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${fechaBoletin}. Retrocediendo -20...`);
-                    idEstimado -= 20;
-                }
             } else {
-                idEstimado += 20;
+                // Si existe pero no es de hoy, extraemos qué fecha tiene para saber hacia dónde iterar
+                const extractDate = htmlText.match(/(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})/i);
+                if (extractDate) {
+                   const d = parseInt(extractDate[1]);
+                   const mStr = extractDate[2].toLowerCase();
+                   const y = parseInt(extractDate[3]);
+                   const m = meses.indexOf(mStr);
+                   const dateBoletin = new Date(y, m, d);
+                   
+                   if (dateBoletin < hoy) {
+                       console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${extractDate[0]}. Avanzando +20...`);
+                       idEstimado += 20;
+                   } else {
+                       console.log(`   ⚖️ Calibrando: El ID ${idEstimado} es del ${extractDate[0]}. Retrocediendo -20...`);
+                       idEstimado -= 20;
+                   }
+                } else {
+                   // Fallback por si no logramos leer la fecha
+                   console.log(`   ⚖️ Calibrando a ciegas. Retrocediendo -20...`);
+                   idEstimado -= 20;
+                }
             }
         } catch (e) {
             console.log(`   ⚠️ Error: ${e.message}`);
