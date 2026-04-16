@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI } = require("../services/scraper");
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI, obtenerCantabriaMatematico } = require("../services/scraper");
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -247,16 +247,19 @@ async function extraerBoletines() {
 
           let listadoBruto = [];
 
-          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC)
-          if (fuente.nombre === "DOGC") {
-              const apiResults = await obtenerDOGCporAPI();
-              if (apiResults && apiResults.length > 0) {
-                  listadoBruto = apiResults;
-              } else {
-                  console.log(`   ⏭️ La API de Cataluña no devolvió convocatorias de empleo para hoy.`);
-                  continue;
-              }
-          } 
+          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC) Y MATEMÁTICA PARA CANTABRIA
+            if (fuente.nombre === "DOGC" || fuente.nombre === "BOC_CANTABRIA") {
+                let apiResults = [];
+                if (fuente.nombre === "DOGC") apiResults = await obtenerDOGCporAPI();
+                if (fuente.nombre === "BOC_CANTABRIA") apiResults = await obtenerCantabriaMatematico(); // Llama a tu función
+
+                if (apiResults && apiResults.length > 0) {
+                    listadoBruto = apiResults;
+                } else {
+                    console.log(`   ⏭️ La extracción directa de ${fuente.nombre} no devolvió resultados para hoy.`);
+                    continue;
+                }
+            }
           // 🐢 CAMINO TRADICIONAL PARA EL RESTO (Ceuta y Melilla entran aquí)
           else {
               let markdownWeb = null;

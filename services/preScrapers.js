@@ -41,7 +41,13 @@ async function obtenerUrlDelDia(fuente) {
             
             // Apagamos el candado TLS temporalmente porque a veces la API falla con certificados modernos
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0"; 
-            const res = await fetch(apiUrl, { headers: { "User-Agent": "Mozilla/5.0" }});
+            const res = await fetch(apiUrl, { 
+                headers: { 
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                    "Accept": "application/json",
+                    "Connection": "keep-alive"
+                }
+            });
             process.env.NODE_TLS_REJECT_UNAUTHORIZED = "1";
             
             if (res.ok) {
