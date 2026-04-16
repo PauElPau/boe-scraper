@@ -194,12 +194,22 @@ async function obtenerDOGCporAPI() {
         const data = await response.json();
         
         if (data && data.resultSearch && data.resultSearch.length > 0) {
-            return data.resultSearch.map(item => ({
-                titulo: item.title,
-                // Construimos la URL HTML pública usando el idDocument
-                enlace: `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${item.idDocument}`,
-                pdf: item.linkDownloadPDF
-            }));
+           return data.resultSearch.map(item => {
+                // Capturamos el organismo directamente de los metadatos de la API
+                let dep = null;
+                if (item.issuingAuthority && item.issuingAuthority.length > 0) {
+                    dep = item.issuingAuthority[0];
+                } else if (item.organizationDescriptor && item.organizationDescriptor.length > 0) {
+                    dep = item.organizationDescriptor[0];
+                }
+
+                return {
+                    titulo: item.title,
+                    enlace: `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${item.idDocument}`,
+                    pdf: item.linkDownloadPDF,
+                    departamento: dep // 🔥 AÑADIMOS ESTO AL PAYLOAD
+                };
+            });
         }
         return [];
     } catch (e) {
