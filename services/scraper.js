@@ -254,7 +254,7 @@ async function obtenerCantabriaMatematico() {
     } catch(e) {}
 
     while (intentos < 5) {
-        const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
+        const xmlUrl = `https://boc.cantabria.es/boces/verBoletin.do?idBolOrd=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
