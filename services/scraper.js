@@ -24,27 +24,24 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
     }
   }
 
-  // 2. Cascada Secundaria (Si no era CodeTabs o si CodeTabs falló)
+  // 2. Cascada Secundaria: AHORA USAMOS EL TANQUE HTTPS
   if (!exito) {
     try {
-      const respuesta = await fetch(url, {
-          headers: { 
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "es-ES,es;q=0.9"
-          }
-      });
-      if (!respuesta.ok) throw new Error("Nativo bloqueado");
-      html = await respuesta.text();
+      // Sustituimos el fetch débil por nuestro Tanque imparable
+      const respuesta = await fetchNativoSeguro(url);
+      if (!respuesta.ok) throw new Error("Tanque bloqueado");
+      html = respuesta.text;
+      exito = true;
     } catch (error) {
-      console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
+      console.log(`   ⚠️ Tanque HTTPS bloqueado. Activando Proxy Público...`);
       try {
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
         const resProxy = await fetch(proxyUrl);
         if (!resProxy.ok) throw new Error("Proxy denegado");
         html = await resProxy.text();
+        exito = true;
       } catch (e2) {
-        // Último intento con CodeTabs (por si no lo habíamos forzado antes)
+        // Último intento con CodeTabs
         if (!forzarCodeTabs) {
             console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
             try {
@@ -52,6 +49,7 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
               const resProxy2 = await fetch(proxyUrl2);
               if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
               html = await resProxy2.text();
+              exito = true;
             } catch (e3) {
               console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
               return { texto: null, pdf: null }; 
@@ -81,7 +79,6 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
       if (!href) return;
       
       // Guardamos el PDF directo si lo hay (Escudo Anti-PDF)
-      // 🚀 AÑADIDO 'type=pdf' PARA CAZAR EL CÓDIGO MLKOB DEL BOA
       if (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc') || href.toLowerCase().includes('type=pdf')) {
           if (!pdfLink) {
               try { pdfLink = new URL(href, url).href; } catch(e){}
@@ -219,19 +216,30 @@ async function obtenerDOGCporAPI() {
     }
 }
 
-// 🛡️ HELPER NATIVO INDESTRUCTIBLE: Evita los bloqueos del "fetch" moderno de Node.js
+// 🛡️ HELPER NATIVO INDESTRUCTIBLE (Mejorado con rastreador de redirecciones)
 function fetchNativoSeguro(url, cookie = "") {
     return new Promise((resolve, reject) => {
         const options = {
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*'
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
             },
-            rejectUnauthorized: false // Ignora certificados caducados sin importar la versión de Node
+            rejectUnauthorized: false // Ignora cortafuegos y certificados caducados
         };
         if (cookie) options.headers['Cookie'] = cookie;
 
         https.get(url, options, (res) => {
+            // Si la web nos redirige a otra carpeta, la seguimos como un sabueso
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let newUrl = res.headers.location;
+                if (!newUrl.startsWith('http')) {
+                    const baseUrl = new URL(url);
+                    newUrl = baseUrl.origin + (newUrl.startsWith('/') ? '' : '/') + newUrl;
+                }
+                resolve(fetchNativoSeguro(newUrl, cookie));
+                return;
+            }
+
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
