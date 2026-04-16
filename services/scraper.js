@@ -246,16 +246,15 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Blindado)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio)...`);
     
-    const cheerio = require("cheerio"); // Llamamos a Cheerio para poder navegar por el HTML
+    const cheerio = require("cheerio");
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0); 
     
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
-    
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const textoHoy = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
     
@@ -280,11 +279,9 @@ async function obtenerCantabriaMatematico() {
         try {
             let htmlText = null;
 
-            // Usar CodeTabs (Sabemos que funciona perfectamente con HTML)
             try {
                 const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(htmlUrl)}`;
                 const res = await fetch(proxyUrl);
-                
                 if (res.ok) {
                     htmlText = await res.text();
                 } else {
@@ -303,31 +300,48 @@ async function obtenerCantabriaMatematico() {
                 continue;
             }
             
-            // Si la fecha coincide... ¡BINGO!
+            // 🎯 ¡BINGO!
             if (htmlText.toLowerCase().includes(textoHoy.toLowerCase()) || htmlText.includes(formatoHoy)) {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
-                // 🐛 LA MAGIA DE CHEERIO: Subimos en el DOM para capturar el título real
                 const $ = cheerio.load(htmlText);
+                let totalLinks = 0;
+                let linksAnuncios = 0;
                 
                 $('a').each((i, el) => {
-                    let href = $(el).attr('href');
-                    if (href && href.includes('verAnuncioAction.do?idAnuBlob=')) {
+                    totalLinks++;
+                    let href = $(el).attr('href') || '';
+                    
+                    // 1. Limpiamos la URL por si CodeTabs la ha envuelto
+                    let realHref = href;
+                    if (href.includes('api.codetabs.com')) {
+                        try {
+                            const matchQuest = href.match(/quest=([^&]+)/);
+                            if (matchQuest) realHref = decodeURIComponent(matchQuest[1]);
+                        } catch(e){}
+                    }
+
+                    // 2. Comprobamos si es un enlace a un anuncio
+                    if (realHref.includes('verAnuncioAction.do') || realHref.includes('idAnuBlob')) {
+                        linksAnuncios++;
                         
-                        // Subimos 1 o 2 niveles para atrapar el texto del anuncio completo
-                        let titulo = $(el).closest('li').text().trim();
-                        if (!titulo || titulo.length < 20) titulo = $(el).parent().text().trim();
-                        if (!titulo || titulo.length < 20) titulo = $(el).parent().parent().text().trim();
+                        // 3. Extracción en cascada (Elemento -> Padre -> Abuelo) para no perder texto
+                        let txtElemento = $(el).text().trim();
+                        let txtPadre = $(el).parent().text().trim();
+                        let txtAbuelo = $(el).parent().parent().text().trim();
                         
-                        // Limpiamos saltos de línea y quitamos la palabra "PDF"
-                        titulo = titulo.replace(/\s+/g, ' ').replace(/Descargar|PDF/ig, '').trim();
+                        // Cogemos el texto más largo (el que contenga el título real completo)
+                        let titulo = txtElemento.length > 30 ? txtElemento : (txtPadre.length > 30 ? txtPadre : txtAbuelo);
+                        
+                        // Limpiamos saltos de línea y basura visual
+                        titulo = titulo.replace(/\s+/g, ' ').replace(/Descargar|PDF|HTML/ig, '').trim();
                         
                         let t = titulo.toLowerCase();
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
                             t.includes('selectiv')) {
                             
-                            let enlaceLimpio = href.replace(/&amp;/g, '&');
+                            let enlaceLimpio = realHref.replace(/&amp;/g, '&');
                             if (!enlaceLimpio.startsWith('http')) {
                                 enlaceLimpio = 'https://boc.cantabria.es' + (enlaceLimpio.startsWith('/') ? '' : '/') + enlaceLimpio;
                             }
@@ -341,6 +355,7 @@ async function obtenerCantabriaMatematico() {
                     }
                 });
                 
+                console.log(`      📊 Stats Cheerio: ${totalLinks} enlaces analizados, ${linksAnuncios} eran anuncios.`);
                 return convocatorias; 
                 
             } else {
