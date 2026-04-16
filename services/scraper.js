@@ -246,7 +246,7 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Blindado)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Escalador)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio)...`);
     
@@ -307,6 +307,7 @@ async function obtenerCantabriaMatematico() {
                 const $ = cheerio.load(htmlText);
                 let totalLinks = 0;
                 let linksAnuncios = 0;
+                let cazadas = 0;
                 
                 $('a').each((i, el) => {
                     totalLinks++;
@@ -321,41 +322,58 @@ async function obtenerCantabriaMatematico() {
                         } catch(e){}
                     }
 
-                    // 2. Comprobamos si es un enlace a un anuncio
+                    // 2. Comprobamos si es un enlace a un anuncio (Aislamos los links a PDF)
                     if (realHref.includes('verAnuncioAction.do') || realHref.includes('idAnuBlob')) {
                         linksAnuncios++;
                         
-                        // 3. Extracción en cascada (Elemento -> Padre -> Abuelo) para no perder texto
-                        let txtElemento = $(el).text().trim();
-                        let txtPadre = $(el).parent().text().trim();
-                        let txtAbuelo = $(el).parent().parent().text().trim();
+                        // 3. EXTRACCIÓN EN CASCADA INTELIGENTE
+                        let currentNode = $(el);
+                        let tituloBruto = currentNode.text().trim();
+                        let niveles = 0;
                         
-                        // Cogemos el texto más largo (el que contenga el título real completo)
-                        let titulo = txtElemento.length > 30 ? txtElemento : (txtPadre.length > 30 ? txtPadre : txtAbuelo);
+                        // Escalamos por el DOM hasta que el bloque de texto sea largo (mínimo 45 caracteres) o subamos 5 niveles
+                        while (tituloBruto.length < 45 && niveles < 5 && currentNode.parent().length > 0) {
+                            currentNode = currentNode.parent();
+                            tituloBruto = currentNode.text().trim();
+                            niveles++;
+                        }
                         
-                        // Limpiamos saltos de línea y basura visual
-                        titulo = titulo.replace(/\s+/g, ' ').replace(/Descargar|PDF|HTML/ig, '').trim();
+                        // Limpiamos saltos de línea y basurilla del botón PDF
+                        let tituloLimpio = tituloBruto
+                            .replace(/\s+/g, ' ') // Quita saltos de línea múltiples
+                            .replace(/PDF|HTML|XML|Descargar/ig, '') // Quita palabras de los botones
+                            .replace(/\(BOC-[A-Za-z0-9\-]+\s*-\s*[0-9]+\s*Kb\)/ig, '') // Quita el tamaño del archivo ej: (BOC-2026-3035 - 250 Kb)
+                            .replace(/[()]/g, '') // Quita paréntesis residuales
+                            .trim();
                         
-                        let t = titulo.toLowerCase();
+                        let t = tituloLimpio.toLowerCase();
+                        
+                        // Imprimimos los primeros 3 para depurar si estamos leyendo bien el texto
+                        if (linksAnuncios <= 3) {
+                             console.log(`      👀 [Ojo de Topo]: Viendo texto -> ${tituloLimpio.substring(0, 90)}...`);
+                        }
+
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
                             t.includes('selectiv')) {
                             
-                            let enlaceLimpio = realHref.replace(/&amp;/g, '&');
-                            if (!enlaceLimpio.startsWith('http')) {
-                                enlaceLimpio = 'https://boc.cantabria.es' + (enlaceLimpio.startsWith('/') ? '' : '/') + enlaceLimpio;
+                            cazadas++;
+                            
+                            let enlaceFinal = realHref.replace(/&amp;/g, '&');
+                            if (!enlaceFinal.startsWith('http')) {
+                                enlaceFinal = 'https://boc.cantabria.es' + (enlaceFinal.startsWith('/') ? '' : '/') + enlaceFinal;
                             }
                             
                             convocatorias.push({
-                                titulo: titulo,
-                                enlace: enlaceLimpio, 
-                                pdf: enlaceLimpio
+                                titulo: tituloLimpio,
+                                enlace: enlaceFinal, 
+                                pdf: enlaceFinal
                             });
                         }
                     }
                 });
                 
-                console.log(`      📊 Stats Cheerio: ${totalLinks} enlaces analizados, ${linksAnuncios} eran anuncios.`);
+                console.log(`      📊 Stats Cheerio: ${totalLinks} enlaces en la página, ${linksAnuncios} son anuncios. ¡${cazadas} plazas cazadas!`);
                 return convocatorias; 
                 
             } else {
