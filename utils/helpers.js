@@ -65,7 +65,8 @@ function esTramiteBasura(titulo) {
                   t.includes('suministro') || t.includes('se emplaza') || t.includes('emplazamiento') || 
                   t.includes('recurso contencioso') || t.includes('recurso de alzada') ||
                   t.includes('licencia ambiental') || t.includes('viviendas de protección') || 
-                  t.includes('suplentes temporales');
+                  t.includes('suplentes temporales') || t.includes('impuesto') || 
+                  t.includes('pago voluntario') || t.includes('liquidaciones');
   return esCese || esNombramientoTribunal || esRuido;
 }
 
