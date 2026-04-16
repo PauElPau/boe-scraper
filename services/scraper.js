@@ -220,11 +220,12 @@ async function obtenerDOGCporAPI() {
 
 // 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab + Sesión Java)
 async function obtenerCantabriaMatematico() {
-    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Ancla: 31/03/2026 - ID: 44405)...`);
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria...`);
     
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
+    // Dejamos el ancla original que funcionaba bien para el cálculo
     const fechaAncla = new Date('2026-04-16T00:00:00');
     let diasHabiles = 0;
     let fechaTemp = new Date(fechaAncla);
@@ -239,30 +240,15 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
 
-    // 🕵️ PASO 1: Visitar la portada de incógnito para que el servidor nos dé una Cookie JSESSIONID
-    let cookieSesion = "JSESSIONID=CB2382103BD0C8C38EDC7EE540AEAF0C"; // Fallback calcado de tu captura
-    try {
-        console.log(`      🗝️ Pidiendo Cookie de visitante al servidor...`);
-        const resInit = await fetch("https://boc.cantabria.es/boces/boletines.do", {
-            headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36" }
-        });
-        const setCookie = resInit.headers.get("set-cookie");
-        if (setCookie) {
-            cookieSesion = setCookie.split(";")[0]; // Extraemos el JSESSIONID real del día
-            console.log(`      ✅ Cookie conseguida: ${cookieSesion}`);
-        }
-    } catch(e) {}
-
-    // Aumentamos a 10 intentos para darle más margen de búsqueda al Topo
+    // Aumentamos a 10 intentos
     while (intentos < 10) {
-        // OJO: Has puesto verBoletin.do en tu log, pero Cantabria usa verXmlAction.do para sacar el XML limpio
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
         
         try {
             let xmlText = null;
 
-            // 🕵️ PASO 2: Pasamos por CodeTabs para saltarnos la tiranía del Node Fetch
+            // 🕵️ PASO 2: Pasamos por CodeTabs
             try {
                 const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(xmlUrl)}`;
                 const res = await fetch(proxyUrl);
@@ -276,14 +262,19 @@ async function obtenerCantabriaMatematico() {
                 console.log(`      ⚠️ Fallo de red proxy: ${err.message}`);
             }
 
-            // Validar si la respuesta es el XML que buscamos o si está vacío
-            if (!xmlText || !xmlText.includes('</root>')) {
-                if (xmlText && xmlText.includes('<!DOCTYPE HTML>')) {
-                    console.log(`      ⏩ El ID ${idEstimado} no existe aún. Retrocediendo...`);
+            // 🐛 EL BUG ESTABA AQUÍ: Ya no exigimos </root>
+            // Validamos buscando la cabecera XML o la etiqueta de Fecha de Cantabria.
+            if (!xmlText || (!xmlText.includes('<?xml') && !xmlText.includes('<Fecha'))) {
+                // Si el servidor devuelve HTML, es que ese ID aún no se ha subido
+                if (xmlText && (xmlText.toLowerCase().includes('<!doctype html>') || xmlText.toLowerCase().includes('<html'))) {
+                    console.log(`      ⏩ El ID ${idEstimado} no existe aún (devuelve HTML). Retrocediendo...`);
                     idEstimado -= 20;
                     intentos++;
                     continue;
                 }
+                
+                // Imprimimos un snippet para ver qué demonios está devolviendo si falla
+                console.log(`      ⚠️ Snippet recibido: ${xmlText ? xmlText.substring(0, 150).replace(/\n/g, '') : 'null'}`);
                 throw new Error("El archivo no se descargó o fue bloqueado.");
             }
             
@@ -345,7 +336,6 @@ async function obtenerCantabriaMatematico() {
     console.log("   ⏭️ No se pudo encontrar el boletín de hoy de Cantabria con la fórmula matemática.");
     return null;
 }
-
 module.exports = {
   obtenerTextoNativo,
   obtenerTextoUniversal,
