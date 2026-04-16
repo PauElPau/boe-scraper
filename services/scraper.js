@@ -246,9 +246,9 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Escalador)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Quirúrgico)
 async function obtenerCantabriaMatematico() {
-    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio)...`);
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio Quirúrgico)...`);
     
     const cheerio = require("cheerio");
     const hoy = new Date();
@@ -305,15 +305,15 @@ async function obtenerCantabriaMatematico() {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
                 const $ = cheerio.load(htmlText);
-                let totalLinks = 0;
-                let linksAnuncios = 0;
                 let cazadas = 0;
                 
                 $('a').each((i, el) => {
-                    totalLinks++;
+                    let linkText = $(el).text().trim();
                     let href = $(el).attr('href') || '';
                     
-                    // 1. Limpiamos la URL por si CodeTabs la ha envuelto
+                    // 🛡️ FILTRO DE ORO: Si no es el botón oficial del PDF, lo ignoramos
+                    if (!linkText.includes('PDF (BOC-')) return; 
+
                     let realHref = href;
                     if (href.includes('api.codetabs.com')) {
                         try {
@@ -322,37 +322,27 @@ async function obtenerCantabriaMatematico() {
                         } catch(e){}
                     }
 
-                    // 2. Comprobamos si es un enlace a un anuncio (Aislamos los links a PDF)
-                    if (realHref.includes('verAnuncioAction.do') || realHref.includes('idAnuBlob')) {
-                        linksAnuncios++;
-                        
-                        // 3. EXTRACCIÓN EN CASCADA INTELIGENTE
-                        let currentNode = $(el);
-                        let tituloBruto = currentNode.text().trim();
-                        let niveles = 0;
-                        
-                        // Escalamos por el DOM hasta que el bloque de texto sea largo (mínimo 45 caracteres) o subamos 5 niveles
-                        while (tituloBruto.length < 45 && niveles < 5 && currentNode.parent().length > 0) {
-                            currentNode = currentNode.parent();
-                            tituloBruto = currentNode.text().trim();
-                            niveles++;
-                        }
-                        
-                        // Limpiamos saltos de línea y basurilla del botón PDF
-                        let tituloLimpio = tituloBruto
-                            .replace(/\s+/g, ' ') // Quita saltos de línea múltiples
-                            .replace(/PDF|HTML|XML|Descargar/ig, '') // Quita palabras de los botones
-                            .replace(/\(BOC-[A-Za-z0-9\-]+\s*-\s*[0-9]+\s*Kb\)/ig, '') // Quita el tamaño del archivo ej: (BOC-2026-3035 - 250 Kb)
-                            .replace(/[()]/g, '') // Quita paréntesis residuales
-                            .trim();
-                        
+                    // 3. EXTRACCIÓN QUIRÚRGICA DEL TÍTULO
+                    // Estrategia A: El título está en el mismo bloque (separado por <br>)
+                    let clone = $(el).parent().clone();
+                    clone.find('a').remove(); // Quitamos los botones
+                    clone.find('img').remove();
+                    let txtMismoBloque = clone.text().replace(/\s+/g, ' ').trim();
+                    
+                    // Estrategia B: El título está en el párrafo anterior
+                    let txtBloqueAnterior = $(el).parent().prev().text().replace(/\s+/g, ' ').trim();
+                    
+                    let tituloLimpio = "";
+                    if (txtMismoBloque.length > 15) {
+                        tituloLimpio = txtMismoBloque;
+                    } else if (txtBloqueAnterior.length > 15) {
+                        tituloLimpio = txtBloqueAnterior;
+                    }
+
+                    // Si hemos conseguido un título, analizamos
+                    if (tituloLimpio) {
                         let t = tituloLimpio.toLowerCase();
                         
-                        // Imprimimos los primeros 3 para depurar si estamos leyendo bien el texto
-                        if (linksAnuncios <= 3) {
-                             console.log(`      👀 [Ojo de Topo]: Viendo texto -> ${tituloLimpio.substring(0, 90)}...`);
-                        }
-
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
                             t.includes('selectiv')) {
@@ -373,7 +363,7 @@ async function obtenerCantabriaMatematico() {
                     }
                 });
                 
-                console.log(`      📊 Stats Cheerio: ${totalLinks} enlaces en la página, ${linksAnuncios} son anuncios. ¡${cazadas} plazas cazadas!`);
+                console.log(`      📊 Stats Cheerio: ¡${cazadas} plazas cazadas con bisturí!`);
                 return convocatorias; 
                 
             } else {
