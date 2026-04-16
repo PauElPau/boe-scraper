@@ -1,5 +1,6 @@
 const cheerio = require("cheerio");
 const { esperar } = require("../utils/helpers");
+const https = require('https');
 
 // 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
@@ -218,6 +219,33 @@ async function obtenerDOGCporAPI() {
     }
 }
 
+// 🛡️ HELPER NATIVO INDESTRUCTIBLE: Evita los bloqueos del "fetch" moderno de Node.js
+function fetchNativoSeguro(url, cookie = "") {
+    return new Promise((resolve, reject) => {
+        const options = {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': '*/*'
+            },
+            rejectUnauthorized: false // Ignora certificados caducados sin importar la versión de Node
+        };
+        if (cookie) options.headers['Cookie'] = cookie;
+
+        https.get(url, options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                resolve({ 
+                    ok: res.statusCode === 200, 
+                    status: res.statusCode, 
+                    text: data,
+                    headers: res.headers
+                });
+            });
+        }).on('error', err => reject(err));
+    });
+}
+
 // 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Simulación Perfecta de Network Tab + Sesión Java)
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria...`);
@@ -225,7 +253,7 @@ async function obtenerCantabriaMatematico() {
     const hoy = new Date();
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
-    // Dejamos el ancla original que funcionaba bien para el cálculo
+    // ANCLA ACTUALIZADA (Tu mejora es perfecta)
     const fechaAncla = new Date('2026-04-16T00:00:00');
     let diasHabiles = 0;
     let fechaTemp = new Date(fechaAncla);
@@ -240,7 +268,19 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
 
-    // Aumentamos a 10 intentos
+    // 🕵️ PASO 1: Conseguir la Cookie de Sesión con el tanque HTTPS
+    let cookieSesion = "";
+    try {
+        console.log(`      🗝️ Pidiendo Cookie de visitante al servidor...`);
+        const resInit = await fetchNativoSeguro("https://boc.cantabria.es/boces/boletines.do");
+        if (resInit.headers && resInit.headers['set-cookie']) {
+            cookieSesion = resInit.headers['set-cookie'][0].split(';')[0];
+            console.log(`      ✅ Cookie conseguida: ${cookieSesion}`);
+        }
+    } catch(e) {
+        console.log(`      ⚠️ No se pudo obtener cookie inicial.`);
+    }
+
     while (intentos < 10) {
         const xmlUrl = `https://boc.cantabria.es/boces/verXmlAction.do?idBlob=${idEstimado}`;
         console.log(`   🔎 Tanteando XML en: ${xmlUrl}`); 
@@ -248,33 +288,27 @@ async function obtenerCantabriaMatematico() {
         try {
             let xmlText = null;
 
-            // 🕵️ PASO 2: Pasamos por CodeTabs
+            // 🕵️ PASO 2: Descargar el XML usando la Cookie y el tanque HTTPS
             try {
-                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(xmlUrl)}`;
-                const res = await fetch(proxyUrl);
-                
+                const res = await fetchNativoSeguro(xmlUrl, cookieSesion);
                 if (res.ok) {
-                    xmlText = await res.text();
+                    xmlText = res.text;
                 } else {
-                    console.log(`      ⚠️ Proxy CodeTabs Status ${res.status}`);
+                    console.log(`      ⚠️ Status HTTP ${res.status}`);
                 }
             } catch (err) {
-                console.log(`      ⚠️ Fallo de red proxy: ${err.message}`);
+                console.log(`      ⚠️ Fallo de red HTTPS: ${err.message}`);
             }
 
-            // 🐛 EL BUG ESTABA AQUÍ: Ya no exigimos </root>
-            // Validamos buscando la cabecera XML o la etiqueta de Fecha de Cantabria.
-            if (!xmlText || (!xmlText.includes('<?xml') && !xmlText.includes('<Fecha'))) {
-                // Si el servidor devuelve HTML, es que ese ID aún no se ha subido
-                if (xmlText && (xmlText.toLowerCase().includes('<!doctype html>') || xmlText.toLowerCase().includes('<html'))) {
+            // Validar si es el XML correcto o si la fecha aún no está subida (devuelve HTML)
+            if (!xmlText || !xmlText.includes('<root>')) {
+                if (xmlText && xmlText.toLowerCase().includes('<!doctype html>')) {
                     console.log(`      ⏩ El ID ${idEstimado} no existe aún (devuelve HTML). Retrocediendo...`);
                     idEstimado -= 20;
                     intentos++;
                     continue;
                 }
-                
-                // Imprimimos un snippet para ver qué demonios está devolviendo si falla
-                console.log(`      ⚠️ Snippet recibido: ${xmlText ? xmlText.substring(0, 150).replace(/\n/g, '') : 'null'}`);
+                console.log(`      ⚠️ Snippet recibido: ${xmlText ? xmlText.substring(0, 100).replace(/\n/g, '') : 'null'}`);
                 throw new Error("El archivo no se descargó o fue bloqueado.");
             }
             
@@ -336,6 +370,7 @@ async function obtenerCantabriaMatematico() {
     console.log("   ⏭️ No se pudo encontrar el boletín de hoy de Cantabria con la fórmula matemática.");
     return null;
 }
+
 module.exports = {
   obtenerTextoNativo,
   obtenerTextoUniversal,
