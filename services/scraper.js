@@ -246,9 +246,9 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Quirúrgico)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio Definitivo)
 async function obtenerCantabriaMatematico() {
-    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio Quirúrgico)...`);
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio Definitivo)...`);
     
     const cheerio = require("cheerio");
     const hoy = new Date();
@@ -306,14 +306,11 @@ async function obtenerCantabriaMatematico() {
                 
                 const $ = cheerio.load(htmlText);
                 let cazadas = 0;
+                let linksAnuncios = 0;
                 
                 $('a').each((i, el) => {
-                    let linkText = $(el).text().trim();
                     let href = $(el).attr('href') || '';
                     
-                    // 🛡️ FILTRO DE ORO: Si no es el botón oficial del PDF, lo ignoramos
-                    if (!linkText.includes('PDF (BOC-')) return; 
-
                     let realHref = href;
                     if (href.includes('api.codetabs.com')) {
                         try {
@@ -322,21 +319,36 @@ async function obtenerCantabriaMatematico() {
                         } catch(e){}
                     }
 
+                    // 🛡️ FILTRO DE ORO: Cazamos solo los enlaces reales de anuncios
+                    if (!realHref.includes('verAnuncioAction.do') && !realHref.includes('idAnuBlob')) return; 
+                    
+                    linksAnuncios++;
+
                     // 3. EXTRACCIÓN QUIRÚRGICA DEL TÍTULO
-                    // Estrategia A: El título está en el mismo bloque (separado por <br>)
+                    // Tal y como se ve en tu foto, el título suele estar en el párrafo de arriba o en el texto sin link del mismo bloque.
+                    
+                    // Opción A: Texto en el mismo bloque (le quitamos el enlace 'a' y las imágenes)
                     let clone = $(el).parent().clone();
-                    clone.find('a').remove(); // Quitamos los botones
+                    clone.find('a').remove(); 
                     clone.find('img').remove();
                     let txtMismoBloque = clone.text().replace(/\s+/g, ' ').trim();
                     
-                    // Estrategia B: El título está en el párrafo anterior
+                    // Opción B: Texto en el bloque/párrafo inmediatamente anterior (El más común según tu foto)
                     let txtBloqueAnterior = $(el).parent().prev().text().replace(/\s+/g, ' ').trim();
+
+                    // Opción C: Hermano anterior directo
+                    let txtHermanoAnterior = $(el).prev().text().replace(/\s+/g, ' ').trim();
                     
                     let tituloLimpio = "";
-                    if (txtMismoBloque.length > 15) {
+                    if (txtMismoBloque.length > 20) {
                         tituloLimpio = txtMismoBloque;
-                    } else if (txtBloqueAnterior.length > 15) {
+                    } else if (txtBloqueAnterior.length > 20) {
                         tituloLimpio = txtBloqueAnterior;
+                    } else if (txtHermanoAnterior.length > 20) {
+                        tituloLimpio = txtHermanoAnterior;
+                    } else {
+                        // Último recurso: El abuelo
+                        tituloLimpio = $(el).parent().parent().prev().text().replace(/\s+/g, ' ').trim();
                     }
 
                     // Si hemos conseguido un título, analizamos
@@ -363,7 +375,7 @@ async function obtenerCantabriaMatematico() {
                     }
                 });
                 
-                console.log(`      📊 Stats Cheerio: ¡${cazadas} plazas cazadas con bisturí!`);
+                console.log(`      📊 Stats Cheerio: De ${linksAnuncios} anuncios oficiales, ¡${cazadas} plazas cazadas con bisturí!`);
                 return convocatorias; 
                 
             } else {
