@@ -246,16 +246,16 @@ function fetchNativoSeguro(url, cookie = "") {
     });
 }
 
-// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs)
+// 🚀 NUEVO: Buscador Matemático para BOC Cantabria (Vía HTML + CodeTabs + Cheerio)
 async function obtenerCantabriaMatematico() {
-    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML)...`);
+    console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio)...`);
     
+    const cheerio = require("cheerio"); // Llamamos a Cheerio para poder navegar por el HTML
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0); 
     
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     
-    // Nombres de meses para buscar en el HTML de Cantabria (Ej: "16 de abril de 2026")
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const textoHoy = `${hoy.getDate()} de ${meses[hoy.getMonth()]} de ${hoy.getFullYear()}`;
     
@@ -273,16 +273,14 @@ async function obtenerCantabriaMatematico() {
     let intentos = 0;
     let convocatorias = [];
 
-    // Aumentamos a 10 intentos
     while (intentos < 10) {
-        // ⚠️ CAMBIO CRÍTICO: Atacamos el HTML público (verBoletin.do) en vez del XML
         const htmlUrl = `https://boc.cantabria.es/boces/verBoletin.do?idBolOrd=${idEstimado}`;
         console.log(`   🔎 Tanteando HTML en: ${htmlUrl}`); 
         
         try {
             let htmlText = null;
 
-            // 🕵️ PASO 2: Usar CodeTabs (Sabemos que funciona perfectamente con HTML)
+            // Usar CodeTabs (Sabemos que funciona perfectamente con HTML)
             try {
                 const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(htmlUrl)}`;
                 const res = await fetch(proxyUrl);
@@ -298,7 +296,6 @@ async function obtenerCantabriaMatematico() {
 
             if (!htmlText) throw new Error("Respuesta vacía del proxy.");
 
-            // Si el HTML dice que no encuentra el boletín, es que el ID aún no existe
             if (htmlText.includes('No se han encontrado resultados') || htmlText.includes('Ha ocurrido un error')) {
                 console.log(`      ⏩ El ID ${idEstimado} no existe aún. Retrocediendo...`);
                 idEstimado -= 20;
@@ -306,38 +303,47 @@ async function obtenerCantabriaMatematico() {
                 continue;
             }
             
-            // EXTRACCIÓN Y LÓGICA DE FECHAS EN EL HTML
-            // Buscamos si la fecha de hoy ("16 de abril de 2026" o "16/04/2026") está en la cabecera
+            // Si la fecha coincide... ¡BINGO!
             if (htmlText.toLowerCase().includes(textoHoy.toLowerCase()) || htmlText.includes(formatoHoy)) {
                 console.log(`   🎯 ¡Bingo! Boletín de hoy encontrado en el ID: ${idEstimado}`);
                 
-                // Extraemos todos los enlaces a anuncios del HTML
-                const regexLinks = /<a[^>]+href="([^"]+verAnuncioAction\.do\?idAnuBlob=[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-                let match;
+                // 🐛 LA MAGIA DE CHEERIO: Subimos en el DOM para capturar el título real
+                const $ = cheerio.load(htmlText);
                 
-                while ((match = regexLinks.exec(htmlText)) !== null) {
-                    let enlaceLimpio = match[1].replace(/&amp;/g, '&');
-                    if (!enlaceLimpio.startsWith('http')) enlaceLimpio = 'https://boc.cantabria.es' + (enlaceLimpio.startsWith('/') ? '' : '/') + enlaceLimpio;
-                    
-                    // Limpiamos las etiquetas HTML de dentro del título
-                    const titulo = match[2].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
-                    const t = titulo.toLowerCase();
-                    
-                    if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
-                        t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
-                        t.includes('selectiv')) {
+                $('a').each((i, el) => {
+                    let href = $(el).attr('href');
+                    if (href && href.includes('verAnuncioAction.do?idAnuBlob=')) {
                         
-                        convocatorias.push({
-                            titulo: titulo,
-                            enlace: enlaceLimpio, 
-                            pdf: enlaceLimpio
-                        });
+                        // Subimos 1 o 2 niveles para atrapar el texto del anuncio completo
+                        let titulo = $(el).closest('li').text().trim();
+                        if (!titulo || titulo.length < 20) titulo = $(el).parent().text().trim();
+                        if (!titulo || titulo.length < 20) titulo = $(el).parent().parent().text().trim();
+                        
+                        // Limpiamos saltos de línea y quitamos la palabra "PDF"
+                        titulo = titulo.replace(/\s+/g, ' ').replace(/Descargar|PDF/ig, '').trim();
+                        
+                        let t = titulo.toLowerCase();
+                        if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
+                            t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
+                            t.includes('selectiv')) {
+                            
+                            let enlaceLimpio = href.replace(/&amp;/g, '&');
+                            if (!enlaceLimpio.startsWith('http')) {
+                                enlaceLimpio = 'https://boc.cantabria.es' + (enlaceLimpio.startsWith('/') ? '' : '/') + enlaceLimpio;
+                            }
+                            
+                            convocatorias.push({
+                                titulo: titulo,
+                                enlace: enlaceLimpio, 
+                                pdf: enlaceLimpio
+                            });
+                        }
                     }
-                }
+                });
+                
                 return convocatorias; 
                 
             } else {
-                // Si existe pero no es de hoy, extraemos qué fecha tiene para saber hacia dónde iterar
                 const extractDate = htmlText.match(/(\d{1,2})\s+de\s+([a-z]+)\s+de\s+(\d{4})/i);
                 if (extractDate) {
                    const d = parseInt(extractDate[1]);
@@ -354,7 +360,6 @@ async function obtenerCantabriaMatematico() {
                        idEstimado -= 20;
                    }
                 } else {
-                   // Fallback por si no logramos leer la fecha
                    console.log(`   ⚖️ Calibrando a ciegas. Retrocediendo -20...`);
                    idEstimado -= 20;
                 }
