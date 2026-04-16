@@ -363,7 +363,8 @@ async function obtenerCantabriaMatematico() {
                             
                             let enlaceFinal = realHref.replace(/&amp;/g, '&');
                             if (!enlaceFinal.startsWith('http')) {
-                                enlaceFinal = 'https://boc.cantabria.es' + (enlaceFinal.startsWith('/') ? '' : '/') + enlaceFinal;
+                                // 🐛 Añadimos la carpeta /boces/ que faltaba
+                                enlaceFinal = 'https://boc.cantabria.es/boces/' + enlaceFinal.replace(/^\//, '');
                             }
                             
                             convocatorias.push({
