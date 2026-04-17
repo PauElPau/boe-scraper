@@ -480,13 +480,30 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (A prueba de GitHub Actions)
+// 2. VISIÓN DE RAYOS X (Acorazada para Node 20 en GitHub Actions)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
-        const data = await pdfParse(buffer);
-        return data.text.replace(/\s+/g, ' ').trim();
+        
+        let pdfParser;
+        try {
+            // Intento 1: Cargar la librería normal
+            pdfParser = require('pdf-parse');
+            if (typeof pdfParser !== 'function') throw new Error("Objeto corrupto");
+        } catch (e) {
+            // Intento 2: Invocación quirúrgica directa al archivo interno (Bypass para Node 20)
+            pdfParser = require('pdf-parse/lib/pdf-parse.js');
+        }
+
+        if (typeof pdfParser !== 'function') {
+            console.log(`   ⚠️ Aviso: 'pdf-parse' sigue sin resolverse. El entorno de ejecución está bloqueando la librería.`);
+            return null; // Devolvemos null para que el Topo use el texto de respaldo sin crashear
+        }
+
+        const data = await pdfParser(buffer);
+        let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
+        return textoLimpio;
     } catch (error) {
         console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
