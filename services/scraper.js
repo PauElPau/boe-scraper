@@ -5,12 +5,12 @@ const https = require('https');
 const { esperar } = require("../utils/helpers");
 
 
-// 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
+// 🛡️ MEJORA: Escudo Anti-Geobloqueo usando el Tanque Interno
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let html = "";
   let exito = false;
   
-  // 1. Intento CodeTabs (Si está forzado o como primera opción rápida)
+  // 1. Intento CodeTabs
   if (forzarCodeTabs) {
     console.log(`   🚀 Atajo activado: Saltando barreras y yendo directo al Plan D (CodeTabs)...`);
     try {
@@ -27,27 +27,23 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
     }
   }
 
-  // 2. Cascada Secundaria (Si no era CodeTabs o si CodeTabs falló)
+  // 2. Cascada Secundaria (Usando el Tanque Indestructible)
   if (!exito) {
     try {
-      const respuesta = await fetch(url, {
-          headers: { 
-              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-              "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-              "Accept-Language": "es-ES,es;q=0.9"
-          }
-      });
-      if (!respuesta.ok) throw new Error("Nativo bloqueado");
-      html = await respuesta.text();
+      // 🐛 CAMBIO VITAL: Usamos nuestro Tanque HTTPS en vez del fetch débil de Node.js
+      const res = await fetchNativoSeguro(url);
+      if (!res.ok) throw new Error("Nativo bloqueado");
+      html = res.text;
+      exito = true;
+      console.log(`   ✅ Conexión nativa establecida con éxito.`);
     } catch (error) {
-      console.log(`   ⚠️ Fallo de red detectado (Posible geobloqueo). Activando Proxy Público...`);
+      console.log(`   ⚠️ Fallo de red detectado. Activando Proxy Público...`);
       try {
         const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
         const resProxy = await fetch(proxyUrl);
         if (!resProxy.ok) throw new Error("Proxy denegado");
         html = await resProxy.text();
       } catch (e2) {
-        // Último intento con CodeTabs (por si no lo habíamos forzado antes)
         if (!forzarCodeTabs) {
             console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
             try {
@@ -70,7 +66,6 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   const $ = cheerio.load(html);
   let pdfLink = null;
 
-  // 🚀 PARCHE BOA (Aragón): Cazar el PDF MLKOB directamente del código fuente
   if (url.includes('boa.aragon.es')) {
       const matchMlkob = html.match(/CMD=VEROBJ[^"']*(?:MLKOB=\d+)[^"']*type=pdf/i);
       if (matchMlkob) {
@@ -78,20 +73,16 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
       }
   }
   
-  // 🧠 MAGIA AQUÍ: Convertimos los enlaces <a> en texto Markdown para que la IA los vea
   $('a').each((i, el) => {
       const href = $(el).attr('href');
       if (!href) return;
       
-      // Guardamos el PDF directo si lo hay (Escudo Anti-PDF)
-      // 🚀 AÑADIDO 'type=pdf' PARA CAZAR EL CÓDIGO MLKOB DEL BOA
       if (href.toLowerCase().includes('.pdf') || href.toLowerCase().includes('descargararchivo') || href.toLowerCase().includes('document-del-dogc') || href.toLowerCase().includes('type=pdf')) {
           if (!pdfLink) {
               try { pdfLink = new URL(href, url).href; } catch(e){}
           }
       }
       
-      // Reescribimos el texto del enlace para que .text() no lo borre
       const textoEnlace = $(el).text().replace(/\s+/g, ' ').trim();
       if (textoEnlace && !href.startsWith('javascript') && !href.startsWith('#')) {
           $(el).text(`[${textoEnlace}](${href})`);
@@ -102,8 +93,6 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let textoLimpio = $('#textoxslt').text(); 
   if (!textoLimpio) textoLimpio = $('body').text(); 
   textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
-
-  if (url.includes('dogc.gencat.cat')) textoLimpio = limpiarBasuraDOGC(textoLimpio);
 
   return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
 }
