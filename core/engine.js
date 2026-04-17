@@ -3,7 +3,7 @@ require("../config/env");
 const Parser = require("rss-parser");
 const { FUENTES_BOLETINES } = require("../config/sources");
 const { esperar, esTramiteBasura } = require("../utils/helpers");
-const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI, obtenerCantabriaMatematico } = require("../services/scraper");
+const { obtenerTextoNativo, obtenerTextoUniversal, obtenerDOGCporAPI, obtenerCantabriaMatematico, extraerTextoDePDF } = require("../services/scraper");
 const { extraerEnlacesSumarioIA, getIaDetenida } = require("../services/ai");
 const { procesarYGuardarConvocatoria, gestionarDepartamento } = require("../services/db");
 const { enviarAlertasPorEmail, enviarAlertasFavoritos, enviarAlertaTelegram, enviarReporteAdmin } = require("../services/notifications");
@@ -395,9 +395,21 @@ async function extraerBoletines() {
             let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA";
 
             if (esPdfOculto) {
-                console.log(`   📄 Enlace (PDF o Descarga) detectado. Omitiendo descarga HTML...`);
-                textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente. Accede al enlace superior para leer las bases completas.]`;
+                console.log(`   📄 Enlace (PDF o Descarga) detectado. Activando visión de Rayos X...`);
+                
+                // 🩻 Invocamos al lector de PDFs
+                const textoPdf = await extraerTextoDePDF(enlaceFinal);
+
+                if (textoPdf && textoPdf.length > 50) {
+                    textoInterior = textoPdf;
+                    console.log(`   ✅ PDF leído correctamente (${textoInterior.length} caracteres).`);
+                } else {
+                    console.log(`   ⚠️ El PDF era una imagen escaneada o está protegido. Usando texto de respaldo.`);
+                    textoInterior = `${item.titulo}\n\n[Documento oficial en formato PDF. Accede al enlace superior para leer las bases completas.]`;
+                }
+                
                 pdfExtraidoNativo = enlaceFinal;
+                
             } else if (["BON", "BOCCE", "BOME", "BOC_CANTABRIA"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
