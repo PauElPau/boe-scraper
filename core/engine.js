@@ -264,7 +264,7 @@ async function extraerBoletines() {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
               // 🐛 Añadimos DOGC aquí para que use el Proxy rápido y esquive Cloudflare
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
@@ -298,14 +298,26 @@ async function extraerBoletines() {
 
           for (const item of listado) {
             if (getIaDetenida()) break; 
+            
+            // 🐛 1. REPARAMOS LA URL DE INMEDIATO (Antes de cualquier check)
+            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
+            
+            if (fuente.nombre === "DOGC") {
+                const docIdMatch = enlaceLimpio.match(/documentId=(\d+)/);
+                if (docIdMatch) {
+                    enlaceLimpio = `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${docIdMatch[1]}`;
+                }
+            }
+            // Asignamos el enlace arreglado al item para que todo el sistema lo use bien
+            item.enlace = enlaceLimpio; 
+
+            // 2. AHORA SÍ, HACEMOS LOS CHECKS Y BARRIDOS
             const t = item.titulo.toLowerCase();
             
             if (t.includes('carta de servicios') || t.includes('pago de anuncios') || t.includes('publicar en') || esTramiteBasura(item.titulo)) {
                 console.log(`   🧹 Barrido por el Topo (Regex): ${item.titulo.substring(0,60)}...\n      🔗 ${item.enlace}`);
                 continue;
             }
-
-            let enlaceLimpio = item.enlace.replace(/[>)"'\]]/g, '').trim();
 
             if (fuente.nombre === "BOIB") {
                 let idx = enlaceLimpio.lastIndexOf('eboibfront');
@@ -367,34 +379,27 @@ async function extraerBoletines() {
                 item.htmlGenerado = enlaceLimpio;
             }
             
-            if (enlaceLimpio.includes('#section') || enlaceLimpio.includes('sumari-del-dogc') || enlaceLimpio.startsWith('#')) {
+            // Ignoramos anclas internas, pero perdonamos al DOGC que suele llevar sumari-del-dogc
+            if (enlaceLimpio.includes('#section') || (enlaceLimpio.includes('sumari-del-dogc') && fuente.nombre !== "DOGC") || enlaceLimpio.startsWith('#')) {
                 console.log(`   ⏭️ Ignorado: El enlace es un salto interno de la web -> ${enlaceLimpio}`);
                 continue;
             }
 
            let enlaceFinal = enlaceLimpio;
             
-            // 🐛 ESCUDO DE URLs PARA CATALUÑA
-            if (fuente.nombre === "DOGC") {
-                const docIdMatch = enlaceLimpio.match(/documentId=(\d+)/);
-                if (docIdMatch) {
-                    enlaceFinal = `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${docIdMatch[1]}`;
-                }
-            } else {
-                try {
-                    if (!enlaceFinal.startsWith('http')) {
-                        const urlBaseObj = new URL(urlFinal); 
-                        if (enlaceFinal.startsWith('/')) {
-                            enlaceFinal = urlBaseObj.origin + enlaceFinal;
-                        } else {
-                            enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
-                        }
+            try {
+                if (!enlaceFinal.startsWith('http')) {
+                    const urlBaseObj = new URL(urlFinal); 
+                    if (enlaceFinal.startsWith('/')) {
+                        enlaceFinal = urlBaseObj.origin + enlaceFinal;
+                    } else {
+                        enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
                     }
-                } catch (e) {
-                   console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
-                   totalErrores++; 
-                   continue;
                 }
+            } catch (e) {
+               console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
+               totalErrores++; 
+               continue;
             }
             
             if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
