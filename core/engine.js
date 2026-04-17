@@ -264,7 +264,7 @@ async function extraerBoletines() {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
               // 🐛 Añadimos DOGC aquí para que use el Proxy rápido y esquive Cloudflare
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
