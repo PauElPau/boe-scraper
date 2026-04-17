@@ -446,20 +446,6 @@ async function obtenerCantabriaMatematico() {
     return null;
 }
 
-// 2. VISIÓN DE RAYOS X (Actualizada)
-async function extraerTextoDePDF(pdfUrl) {
-    console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
-    try {
-        const buffer = await descargarPdfBinario(pdfUrl);
-        // 🐛 USAMOS LA VARIABLE 'pdf' en lugar de 'pdfParse'
-        const data = await pdf(buffer);
-        let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
-        return textoLimpio;
-    } catch (error) {
-        console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
-        return null;
-    }
-}
 
 
 // 1. EL TANQUE BINARIO (Actualizado con Proxy para saltar Geobloqueo)
@@ -494,12 +480,13 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (Actualizada con el Tanque Binario)
+// 2. VISIÓN DE RAYOS X (Actualizada)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
-        const data = await pdfParse(buffer);
+        // 🐛 USAMOS LA VARIABLE 'pdf' en lugar de 'pdfParse'
+        const data = await pdf(buffer);
         let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
         return textoLimpio;
     } catch (error) {
