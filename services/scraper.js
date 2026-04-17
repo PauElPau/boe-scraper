@@ -479,18 +479,21 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (Importación Dinámica y Blindada)
+// 2. VISIÓN DE RAYOS X (Blindada contra GitHub Actions / ESM)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
         
-        // 🐛 Importación JIT (Just-In-Time) directa
-        const pdfParser = require('pdf-parse'); 
+        let pdfParser = require('pdf-parse'); 
+        
+        // 🐛 ESCUDO ESM: Si GitHub Actions envuelve el módulo en un objeto, buscamos la función real
+        if (pdfParser && typeof pdfParser === 'object') {
+            pdfParser = pdfParser.default || pdfParser;
+        }
         
         if (typeof pdfParser !== 'function') {
-            console.log("   ⚠️ pdf-parse está devolviendo un objeto:", pdfParser);
-            throw new Error("Instalación de pdf-parse dañada. Ejecuta: npm uninstall pdf-parse && npm install pdf-parse");
+            throw new Error("El módulo pdf-parse no se resolvió como función. Revisa tu package.json.");
         }
 
         const data = await pdfParser(buffer);

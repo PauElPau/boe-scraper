@@ -63,17 +63,17 @@ async function obtenerUrlDelDia(fuente) {
             console.log(`   🔎 Tanteando DOGC ID ${idEstimado}...`);
             
             try {
-                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlDOGC)}`;
-                const res = await fetch(proxyUrl);
+                // 🐛 DOGC: Usamos el Tanque en lugar de CodeTabs porque Akamai bloquea el proxy
+                const res = await fetchNativoSeguro(urlDOGC);
                 if (res.ok) {
-                    const htmlText = await res.text();
+                    const htmlText = res.text;
                     
                     const diaF = hoy.getDate();
                     const esHoy = htmlText.includes(`${diaF}.${month}.${year}`) || htmlText.includes(`${String(diaF).padStart(2,'0')}.${String(month).padStart(2,'0')}.${year}`);
                                   
                     if (esHoy) {
                         console.log(`   🎯 ¡Bingo! DOGC de hoy encontrado con ID: ${idEstimado}`);
-                        fuente.numDOGC_calculado = idEstimado; // Lo guardamos en memoria para usarlo en los PDFs
+                        fuente.numDOGC_calculado = idEstimado; 
                         return urlDOGC;
                     } else {
                         console.log(`   ⚖️ Calibrando fecha. El ID ${idEstimado} no es de hoy. Probando anterior...`);
