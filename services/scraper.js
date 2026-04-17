@@ -448,59 +448,51 @@ async function obtenerCantabriaMatematico() {
 
 
 
-// 1. EL TANQUE BINARIO (Actualizado con Proxy para saltar Geobloqueo)
-async function descargarPdfBinario(url) {
-    const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-    };
-
-    try {
-        // Intento 1: Fetch directo (Node 18+ maneja mejor los certificados modernos)
-        const res = await fetch(url, { headers });
-        if (res.ok) {
-            const arrayBuffer = await res.arrayBuffer();
-            return Buffer.from(arrayBuffer);
+// 1. EL TANQUE BINARIO (Indestructible: Combina HTTPS nativo y Proxy de respaldo)
+function descargarPdfBinario(url) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            rejectUnauthorized: false // 🛡️ Esto nos salta el cortafuegos de Akamai (DOGC)
+        };
+        const req = https.get(url, options, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let newUrl = res.headers.location;
+                if (!newUrl.startsWith('http')) newUrl = new URL(newUrl, url).href;
+                return resolve(descargarPdfBinario(newUrl));
+            }
+            if (res.statusCode !== 200) {
+                return reject(new Error(`HTTP Status ${res.statusCode}`));
+            }
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+        });
+        req.on('error', err => reject(err));
+        req.setTimeout(8000, () => { req.destroy(); reject(new Error("Timeout")); });
+    }).catch(async (err) => {
+        // 🔄 Si la red directa falla (como pasa con la IP de Cantabria), usamos el Proxy Ninja
+        console.log(`   🩻 [Rayos X] Red directa bloqueada (${err.message}). Usando Proxy...`);
+        const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+        const resProxy = await fetch(proxyUrl);
+        if (resProxy.ok) {
+            return Buffer.from(await resProxy.arrayBuffer());
         }
-    } catch (e) {
-        // Si da ETIMEDOUT o fetch failed, es porque el servidor bloquea la IP
-    }
-
-    // Intento 2: Proxy CodeTabs (Vital para Cantabria si el servidor bloquea IPs Cloud)
-    console.log(`   🩻 [Rayos X] Red directa bloqueada (ETIMEDOUT). Usando Proxy para descargar el binario...`);
-    
-    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-    const resProxy = await fetch(proxyUrl, { headers });
-    
-    if (resProxy.ok) {
-        const arrayBuffer = await resProxy.arrayBuffer();
-        return Buffer.from(arrayBuffer);
-    }
-
-    throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
+        throw new Error(`Proxy falló con Status ${resProxy.status}`);
+    });
 }
 
-// 2. VISIÓN DE RAYOS X (Acorazada para Node 20 en GitHub Actions)
+// 2. VISIÓN DE RAYOS X (Limpia y estable para pdf-parse 1.1.1)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
+        // Descargamos el binario (con proxy si hay cortafuegos)
         const buffer = await descargarPdfBinario(pdfUrl);
         
-        let pdfParser;
-        try {
-            // Intento 1: Cargar la librería normal
-            pdfParser = require('pdf-parse');
-            if (typeof pdfParser !== 'function') throw new Error("Objeto corrupto");
-        } catch (e) {
-            // Intento 2: Invocación quirúrgica directa al archivo interno (Bypass para Node 20)
-            pdfParser = require('pdf-parse/lib/pdf-parse.js');
-        }
+        // Importamos la librería oficial
+        const pdfParser = require('pdf-parse'); 
 
-        if (typeof pdfParser !== 'function') {
-            console.log(`   ⚠️ Aviso: 'pdf-parse' sigue sin resolverse. El entorno de ejecución está bloqueando la librería.`);
-            return null; // Devolvemos null para que el Topo use el texto de respaldo sin crashear
-        }
-
+        // Extraemos el texto
         const data = await pdfParser(buffer);
         let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
         return textoLimpio;
