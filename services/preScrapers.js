@@ -1,4 +1,4 @@
-const { obtenerTextoNativo, obtenerTextoUniversal } = require('./scraper');
+const { obtenerTextoNativo, obtenerTextoUniversal, fetchNativoSeguro } = require('./scraper');
 
 // 🛡️ TÁCTICA AVANZADA: Simular un móvil para saltar WAFs (Cortafuegos) de alta seguridad
 async function burlarCortafuegos(url) {

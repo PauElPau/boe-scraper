@@ -526,5 +526,6 @@ module.exports = {
   obtenerTextoUniversal,
   obtenerDOGCporAPI,
   obtenerCantabriaMatematico,
-  extraerTextoDePDF
+  extraerTextoDePDF,
+  fetchNativoSeguro
 };
