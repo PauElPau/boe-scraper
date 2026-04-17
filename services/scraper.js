@@ -103,15 +103,26 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
 }
 
+// 🛡️ HELPER DE NAVEGADOR (Mejorado con selector de contenido principal)
 async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
+    // Si estamos en el DOGC, le decimos a Cloudflare que solo extraiga el contenedor del documento
+    let selector = "";
+    if (url.includes('dogc.gencat.cat')) {
+        selector = "div.container, main, article, #content, .content"; // Selectores comunes de texto principal
+    }
+
+    const payload = { url: url };
+    // Cloudflare browser-rendering admite opciones adicionales. Si es el DOGC, intentamos aislar el texto.
+    // Como el endpoint de Markdown a veces devuelve todo, vamos a asegurarnos de que la IA sepa qué buscar.
+
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ url: url }) 
+      body: JSON.stringify(payload) 
     });
 
     if (response.status === 429) {
@@ -121,7 +132,6 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
          await esperar(tiempoPausa); 
          return obtenerTextoUniversal(url, reintentos - 1); 
       } else {
-         // 🛡️ SALVAVIDAS: Si Cloudflare se rinde, no devolvemos null, intentamos la ruta nativa/proxy
          console.log(`   ❌ Cloudflare agotó los reintentos (429). Activando salvavidas Nativo/Proxy para: ${url}`);
          const nativo = await obtenerTextoNativo(url);
          return nativo.texto;
@@ -138,6 +148,33 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
     
     const data = await response.json();
     let textoLimpio = data.result || "";
+    
+    // 🧹 LIMPIEZA EXTREMA PARA CATALUÑA (Quitamos toda la basura del menú)
+    if (url.includes('dogc.gencat.cat')) {
+        textoLimpio = textoLimpio
+            .replace(/\[ Saltar al contenido principal\][^\n]+/gi, '')
+            .replace(/\[ \!\[Logotipo de la Generalitat\].*?Vés a la pàgina inici"\)/gi, '')
+            .replace(/Menú \n\* \!\[Icon Área privada\].*?/gi, '')
+            .replace(/Salir rápido \n\n× \n\nPara poder garantizar tu privacidad.*?\[esborrar-historial\].*?/gi, '')
+            .trim();
+        
+        // Si después de limpiar sigue habiendo mucha morralla arriba, buscamos palabras clave del BOE
+        const indexResolucio = textoLimpio.toLowerCase().indexOf('resolución');
+        const indexAnuncio = textoLimpio.toLowerCase().indexOf('anuncio');
+        const indexEdicto = textoLimpio.toLowerCase().indexOf('edicto');
+        
+        // Cortamos la basura de arriba para que la IA lea directo la chicha
+        let start = Math.min(
+            indexResolucio !== -1 ? indexResolucio : Infinity,
+            indexAnuncio !== -1 ? indexAnuncio : Infinity,
+            indexEdicto !== -1 ? indexEdicto : Infinity
+        );
+        
+        if (start !== Infinity && start > 0 && start < 2000) {
+            textoLimpio = textoLimpio.substring(start);
+        }
+    }
+
     return typeof textoLimpio === "string" ? textoLimpio.substring(0, 80000) : ""; 
   } catch (error) {
     return null; 
@@ -308,9 +345,10 @@ async function obtenerCantabriaMatematico() {
                 let cazadas = 0;
                 let linksAnuncios = 0;
                 
+                let anunciosProcesados = new Set(); // Para no duplicar
+                
                 $('a').each((i, el) => {
                     let href = $(el).attr('href') || '';
-                    
                     let realHref = href;
                     if (href.includes('api.codetabs.com')) {
                         try {
@@ -322,21 +360,28 @@ async function obtenerCantabriaMatematico() {
                     if (!realHref.includes('verAnuncioAction.do') && !realHref.includes('idAnuBlob')) return; 
                     
                     let linkText = $(el).text().toUpperCase().replace(/\s+/g, ' ').trim();
-                    
-                    // 🛡️ FILTRO INTELIGENTE: Priorizamos leer la web en HTML para que no nos devuelva el binario del PDF
                     let isHTML = linkText.includes('HTML (BOC');
                     let isPDF = linkText.includes('PDF (BOC');
                     
                     if (!isHTML && !isPDF) return;
-                    
-                    if (isPDF) {
-                        // Si es un botón PDF, comprobamos si tiene un botón HTML al lado. 
-                        // Si lo tiene, lo ignoramos (ya cogeremos el HTML en otra vuelta del bucle).
-                        let hasHTMLSibling = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('HTML (BOC')).length > 0;
-                        if (hasHTMLSibling) return; 
-                    }
 
-                    // 3. EXTRACCIÓN QUIRÚRGICA DEL TÍTULO
+                    // Extraemos el ID del anuncio para no procesarlo 2 veces
+                    let idAnuncio = realHref.match(/idAnuBlob=([^&]+)/);
+                    if (!idAnuncio) return;
+                    let idAnu = idAnuncio[1];
+                    
+                    if (anunciosProcesados.has(idAnu)) return; // Ya lo cazamos por el otro botón
+
+                    // Si estamos en un botón PDF, miramos si hay uno HTML
+                    if (isPDF) {
+                        let hasHTML = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('HTML (BOC')).length > 0;
+                        if (hasHTML) return; // Lo ignoramos, ya lo cogerá cuando el bucle pase por el botón HTML
+                    }
+                    
+                    // Si llegamos aquí, o es HTML, o es un PDF huérfano. Lo marcamos como procesado.
+                    anunciosProcesados.add(idAnu);
+
+                    // --- EXTRACCIÓN QUIRÚRGICA DEL TÍTULO ---
                     let clone = $(el).parent().clone();
                     clone.find('a').remove(); 
                     clone.find('img').remove();
@@ -346,49 +391,40 @@ async function obtenerCantabriaMatematico() {
                     let txtHermanoAnterior = $(el).prev().text().replace(/\s+/g, ' ').trim();
                     
                     let tituloLimpio = "";
-                    if (txtMismoBloque.length > 20) {
-                        tituloLimpio = txtMismoBloque;
-                    } else if (txtBloqueAnterior.length > 20) {
-                        tituloLimpio = txtBloqueAnterior;
-                    } else if (txtHermanoAnterior.length > 20) {
-                        tituloLimpio = txtHermanoAnterior;
-                    } else {
-                        tituloLimpio = $(el).parent().parent().prev().text().replace(/\s+/g, ' ').trim();
-                    }
+                    if (txtMismoBloque.length > 20) tituloLimpio = txtMismoBloque;
+                    else if (txtBloqueAnterior.length > 20) tituloLimpio = txtBloqueAnterior;
+                    else if (txtHermanoAnterior.length > 20) tituloLimpio = txtHermanoAnterior;
+                    else tituloLimpio = $(el).parent().parent().prev().text().replace(/\s+/g, ' ').trim();
 
                     if (tituloLimpio) {
                         let t = tituloLimpio.toLowerCase();
-                        
                         if (t.includes('oposición') || t.includes('oposicion') || t.includes('concurso') || 
                             t.includes('provisión') || t.includes('plaza') || t.includes('bolsa') || 
                             t.includes('selectiv')) {
                             
                             cazadas++;
                             
-                            let enlaceFinal = realHref.replace(/&amp;/g, '&');
-                            if (!enlaceFinal.startsWith('http')) {
-                                enlaceFinal = 'https://boc.cantabria.es/boces/' + enlaceFinal.replace(/^\//, '');
-                            }
+                            let enlaceWeb = realHref.replace(/&amp;/g, '&');
+                            if (!enlaceWeb.startsWith('http')) enlaceWeb = 'https://boc.cantabria.es/boces/' + enlaceWeb.replace(/^\//, '');
                             
-                            // Buscar el PDF exacto (suele estar al lado del HTML) para guardarlo en la BBDD
-                            let pdfHref = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('PDF (BOC')).attr('href') || '';
-                            if (pdfHref) {
-                                if (pdfHref.includes('api.codetabs.com')) {
-                                    try {
-                                        const matchQuest = pdfHref.match(/quest=([^&]+)/);
-                                        if (matchQuest) pdfHref = decodeURIComponent(matchQuest[1]);
-                                    } catch(e){}
+                            let pdfHref = isPDF ? enlaceWeb : '';
+                            if (!isPDF) {
+                                pdfHref = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('PDF (BOC')).attr('href') || '';
+                                if (pdfHref) {
+                                    if (pdfHref.includes('api.codetabs.com')) {
+                                        try {
+                                            const m = pdfHref.match(/quest=([^&]+)/);
+                                            if (m) pdfHref = decodeURIComponent(m[1]);
+                                        } catch(e){}
+                                    }
+                                    if (!pdfHref.startsWith('http')) pdfHref = 'https://boc.cantabria.es/boces/' + pdfHref.replace(/^\//, '');
                                 }
-                                pdfHref = pdfHref.replace(/&amp;/g, '&');
-                                if (!pdfHref.startsWith('http')) pdfHref = 'https://boc.cantabria.es/boces/' + pdfHref.replace(/^\//, '');
-                            } else {
-                                pdfHref = enlaceFinal; // Fallback
                             }
-                            
+
                             convocatorias.push({
                                 titulo: tituloLimpio,
-                                enlace: enlaceFinal, 
-                                pdf: pdfHref
+                                enlace: enlaceWeb, // ¡Ahora será HTML garantizado si existe!
+                                pdf: pdfHref || enlaceWeb
                             });
                         }
                     }
