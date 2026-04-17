@@ -408,15 +408,13 @@ async function extraerBoletines() {
             // ===================================================================================
             // 🚀 BLOQUE DE RUTA ESTRICTA Y RAYOS X
             // ===================================================================================
-            // 🐛 AÑADIDO: Si la fuente es DOGC, forzamos a que descargue y lea su PDF oficial directamente
-            let forzarPdfDOGC = fuente.nombre === "DOGC" && (pdfExtraidoNativo || item.pdf_extraido || item.pdfGenerado);
-            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA" || forzarPdfDOGC;
+            // 🐛 Eliminamos el forzado de PDF para DOGC. Dejamos que lea el HTML de la web.
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA";
 
             if (esPdfOculto) {
-                console.log(`   📄 Enlace (PDF o DOGC) detectado. Activando visión de Rayos X...`);
+                console.log(`   📄 Enlace PDF detectado. Activando visión de Rayos X...`);
                 
-                // Si es DOGC, usamos el enlace directo al PDF que nos dio la API. Si no, usamos enlaceFinal.
-                let urlParaRayosX = forzarPdfDOGC ? (pdfExtraidoNativo || item.pdf_extraido || item.pdfGenerado || enlaceFinal) : enlaceFinal;
+                let urlParaRayosX = enlaceFinal;
                 if (!urlParaRayosX.startsWith('http')) urlParaRayosX = 'https://' + urlParaRayosX.replace(/^\/\//, '');
 
                 const textoPdf = await extraerTextoDePDF(urlParaRayosX);
