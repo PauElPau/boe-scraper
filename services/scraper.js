@@ -1,5 +1,5 @@
 const cheerio = require("cheerio");
-const pdfParse = require('pdf-parse');
+const pdf = require('pdf-parse');
 const https = require('https');
 
 const { esperar } = require("../utils/helpers");
@@ -446,30 +446,15 @@ async function obtenerCantabriaMatematico() {
     return null;
 }
 
-// 🩻 NUEVO: Visión de Rayos X para PDFs Ciegos
+// 2. VISIÓN DE RAYOS X (Actualizada)
 async function extraerTextoDePDF(pdfUrl) {
-    console.log(`   🩻 [Rayos X] Extrayendo texto directamente del PDF...`);
+    console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
-        // Usamos un fetch con headers de navegador para descargar el archivo binario
-        const response = await fetch(pdfUrl, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'application/pdf'
-            }
-        });
-
-        if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
-
-        // Convertimos la respuesta a un Buffer que Node.js pueda entender
-        const arrayBuffer = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
-
-        // pdf-parse hace la magia
-        const data = await pdfParse(buffer);
-        
+        const buffer = await descargarPdfBinario(pdfUrl);
+        // 🐛 USAMOS LA VARIABLE 'pdf' en lugar de 'pdfParse'
+        const data = await pdf(buffer);
         let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
         return textoLimpio;
-        
     } catch (error) {
         console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
