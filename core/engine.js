@@ -160,7 +160,7 @@ async function extraerBoletines() {
             console.log(`\n📄 Extrayendo interior de: ${item.tituloLimpioParaLog.substring(0,70)}...\n   🔗 ${item.link}`);
             
             let textoParaIA = null;
-            let pdfExtraidoNativo = null;
+            let pdfExtraidoNativo = item.pdf || null;
 
             if (["BOE", "BOJA", "BOPV", "BORM", "DOE", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
               const nativo = await obtenerTextoNativo(item.link);
@@ -293,6 +293,12 @@ async function extraerBoletines() {
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
+          // 🧪 PARCHE DE PRUEBAS: Limitar DOGC a solo 2 convocatorias
+          if (fuente.nombre === "DOGC") {
+              listado = listado.slice(0, 2);
+              console.log(`   🧪 MODO PRUEBA: Limitando DOGC a solo ${listado.length} convocatorias.`);
+          }
+
           console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
           statsFuente.encontradas = listado.length;
 
@@ -394,21 +400,27 @@ async function extraerBoletines() {
             // ===================================================================================
             // 🚀 BLOQUE DE RUTA ESTRICTA Y RAYOS X
             // ===================================================================================
-            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA";
+            // 🐛 AÑADIDO: Si la fuente es DOGC, forzamos a que descargue y lea su PDF oficial directamente
+            let forzarPdfDOGC = fuente.nombre === "DOGC" && (pdfExtraidoNativo || item.pdf_extraido || item.pdfGenerado);
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA" || forzarPdfDOGC;
 
             if (esPdfOculto) {
-                console.log(`   📄 Enlace (PDF o Descarga) detectado. Activando visión de Rayos X...`);
+                console.log(`   📄 Enlace (PDF o DOGC) detectado. Activando visión de Rayos X...`);
                 
-                const textoPdf = await extraerTextoDePDF(enlaceFinal);
+                // Si es DOGC, usamos el enlace directo al PDF que nos dio la API. Si no, usamos enlaceFinal.
+                let urlParaRayosX = forzarPdfDOGC ? (pdfExtraidoNativo || item.pdf_extraido || item.pdfGenerado || enlaceFinal) : enlaceFinal;
+                if (!urlParaRayosX.startsWith('http')) urlParaRayosX = 'https://' + urlParaRayosX.replace(/^\/\//, '');
+
+                const textoPdf = await extraerTextoDePDF(urlParaRayosX);
 
                 if (textoPdf && textoPdf.length > 50) {
                     textoInterior = textoPdf;
-                    console.log(`   ✅ PDF leído correctamente (${textoInterior.length} caracteres).`);
+                    console.log(`   ✅ PDF leído correctamente con Rayos X (${textoInterior.length} caracteres).`);
                 } else {
                     console.log(`   ⚠️ El PDF era una imagen escaneada o está protegido. Usando texto de respaldo.`);
                     textoInterior = `${item.titulo}\n\n[Documento oficial en formato PDF. Accede al enlace superior para leer las bases completas.]`;
                 }
-                pdfExtraidoNativo = enlaceFinal;
+                pdfExtraidoNativo = urlParaRayosX;
 
             } else if (["BON", "BOCCE", "BOME"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
