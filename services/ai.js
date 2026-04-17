@@ -279,37 +279,52 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   }
 }
 
-// ✍️ NUEVA FUNCIÓN: Redactora SEO (Alta Temperatura y Creatividad)
+// ✍️ NUEVA FUNCIÓN: Redactora SEO (Alta Temperatura, Creatividad y Contexto Total 3D)
 async function redactarArticuloSEOIA(datosExtraidos, textoInterior) {
   // Pasamos un fragmento de los primeros 3000 caracteres para dar contexto sin consumir tokens innecesarios
   const textoCorto = textoInterior ? textoInterior.substring(0, 3000) : "";
   
-  const prompt = `
-  Eres un experto redactor de contenidos SEO especializado en empleo público y oposiciones.
-  Basándote en el siguiente JSON de datos extraídos y en el fragmento del BOE/boletín, redacta un artículo atractivo y motivador de AL MENOS 300 PALABRAS estructurado en formato Markdown.
+  // 🚀 MEJORA SEO: Preparamos el desglose de plazas para que la IA lo entienda fácil
+  let desglosePlazas = "No especificado detalladamente";
+  if (datosExtraidos.distribucion_plazas && datosExtraidos.distribucion_plazas.length > 0) {
+      desglosePlazas = datosExtraidos.distribucion_plazas.map(d => `${d.plazas} plaza(s) para ${d.turno}`).join(', ');
+  }
 
-  DATOS EXTRAÍDOS:
+  const prompt = `
+  Eres un experto redactor de contenidos SEO especializado en empleo público y oposiciones en España.
+  Basándote en el siguiente JSON de datos ultra-detallados y en el fragmento del BOE/boletín, redacta un artículo sumamente atractivo, útil y único de AL MENOS 300 PALABRAS estructurado en formato Markdown.
+
+  DATOS CLAVE EXTRAÍDOS (MATRIZ 3D):
   - Título/Profesión: ${datosExtraidos.profesiones && datosExtraidos.profesiones.length > 0 ? datosExtraidos.profesiones.join(', ') : 'Empleo Público'}
-  - Organismo: ${datosExtraidos.organismo || datosExtraidos.department || 'Administración Pública'}
+  - Organismo Convocante: ${datosExtraidos.organismo || datosExtraidos.department || 'Administración Pública'}
+  - Ámbito Territorial: ${datosExtraidos.ambito || 'No especificado'}
   - Provincia: ${datosExtraidos.provincia || 'España'}
-  - Plazas: ${datosExtraidos.plazas || 'No especificadas'}
-  - Turno: ${datosExtraidos.turno ? datosExtraidos.turno.join(', ') : 'No especificado'}
+  - Categoría Profesional: ${datosExtraidos.categoria || 'No especificada'}
+  - Grupo Funcional: ${datosExtraidos.grupo || 'No especificado'}
+  - Naturaleza (Tipo): ${datosExtraidos.tipo || 'Oposición'} (ej. Plazas de Nuevo Ingreso, Bolsas, Estabilización)
+  - Sistema de Evaluación: ${datosExtraidos.sistema || 'No especificado'} (ej. Oposición, Concurso-Oposición)
+  - FASE ACTUAL: ${datosExtraidos.fase || 'Apertura de Plazos / Convocatoria'}
+  - Total de Plazas: ${datosExtraidos.plazas || 'No especificadas'}
+  - Desglose por Turnos: ${desglosePlazas}
   - Titulación Exigida: ${datosExtraidos.titulacion || 'Ver bases oficiales'}
-  - Sistema: ${datosExtraidos.sistema || 'Oposición'}
+  - Tasas generales: ${datosExtraidos.tasa ? datosExtraidos.tasa + ' €' : 'No especificada'}
   
   FRAGMENTO DEL BOLETÍN PARA CONTEXTO:
   "${textoCorto}"
 
   ESTRUCTURA OBLIGATORIA DEL TEXTO EN MARKDOWN:
-  1. Introducción atractiva (Usa un H2 ##): Habla sobre la oportunidad de conseguir este puesto en [Organismo] y [Provincia].
-  2. Requisitos y Titulación (Usa H3 ### y viñetas -): Explica quién puede presentarse de forma coloquial, basándote en los datos.
-  3. Proceso Selectivo (Usa H3 ###): Resume si es concurso, oposición, qué fases tiene o cómo se va a evaluar.
-  4. Plazos y Presentación (Usa H3 ###): Explica los plazos si los hay y anima al opositor a inscribirse.
+  1. Introducción atractiva (Usa un H2 ##): ¡ADAPTA EL TONO A LA FASE ACTUAL! 
+     - Si la fase es 'Apertura de Plazos / Convocatoria', habla de la gran oportunidad de conseguir plaza/entrar en bolsa en [Organismo] y [Provincia], animando a presentarse.
+     - Si la fase es 'Listas de Admitidos...', 'Tribunales...', 'Calificaciones...' o 'Adjudicación...', informa a los opositores de que el proceso ha avanzado y diles de qué trata esta actualización.
+  2. Detalles de la Convocatoria (Usa H3 ### y viñetas -): Explica el número de plazas, a qué grupo pertenecen (${datosExtraidos.grupo || ''}), si es bolsa o plaza fija (${datosExtraidos.tipo || ''}), y cómo se reparten los turnos (${desglosePlazas}).
+  3. Requisitos y Titulación (Usa H3 ###): Explica quién puede presentarse según la titulación exigida.
+  4. Proceso Selectivo (Usa H3 ###): Explica cómo se evaluará a los candidatos basándote en el Sistema (${datosExtraidos.sistema || ''}) y el texto del boletín.
+  5. Siguientes Pasos (Usa H3 ###): Dales un consejo final sobre qué hacer a continuación según la Fase Actual en la que se encuentra el trámite.
 
   REGLAS:
-  - El texto debe sonar natural, humano, empático y animando al opositor a dar el paso.
-  - Usa palabras clave orgánicas como "oposiciones", "empleo público", "trabajar en", el nombre exacto de la profesión y la provincia.
-  - ¡DEBES superar las 300 palabras para evitar el 'Thin Content' en Google!
+  - El texto debe sonar natural, humano, empático y orientado a ayudar al opositor.
+  - Usa variaciones de palabras clave orgánicas (Long-Tail SEO) como "oposiciones a [Profesión]", "trabajar como [Profesión] en [Provincia]", "empleo público en [Organismo]", "requisitos para [Profesión]".
+  - ¡DEBES superar holgadamente las 300 palabras para evitar el 'Thin Content' en Google!
   - Devuelve SOLO el texto en Markdown. No uses etiquetas de bloque \`\`\`markdown al inicio ni al final, devuelve el texto crudo.
   - Todo el contenido DEBE estar en ESPAÑOL.
   `;
