@@ -398,7 +398,7 @@ async function extraerBoletines() {
                 console.log(`   📄 Enlace (PDF o Descarga) detectado. Omitiendo descarga HTML...`);
                 textoInterior = `${item.titulo}\n\n[Documento oficial publicado directamente. Accede al enlace superior para leer las bases completas.]`;
                 pdfExtraidoNativo = enlaceFinal;
-            } else if (["BON", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
+            } else if (["BON", "BOCCE", "BOME", "BOC_CANTABRIA"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
