@@ -1,8 +1,8 @@
 const cheerio = require("cheerio");
 const pdfParse = require('pdf-parse');
+const https = require('https');
 
 const { esperar } = require("../utils/helpers");
-const https = require('https');
 
 
 // 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
@@ -476,10 +476,6 @@ async function extraerTextoDePDF(pdfUrl) {
     }
 }
 
-// --- FUNCIONES NUEVAS Y ACTUALIZADAS PARA SCRAPER.JS ---
-
-const https = require('https');
-const pdfParse = require('pdf-parse'); // Asegúrate de tener esto arriba del todo
 
 // 1. EL TANQUE BINARIO (Especial para descargar PDFs saltando WAFs)
 function descargarPdfBinario(url) {
