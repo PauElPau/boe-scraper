@@ -1,6 +1,9 @@
 const cheerio = require("cheerio");
+const pdfParse = require('pdf-parse');
+
 const { esperar } = require("../utils/helpers");
 const https = require('https');
+
 
 // 🛡️ MEJORA: Escudo Anti-Geobloqueo, Atajo Directo y Preservación de Enlaces
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
@@ -149,29 +152,16 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
     const data = await response.json();
     let textoLimpio = data.result || "";
     
-    // 🧹 LIMPIEZA EXTREMA PARA CATALUÑA (Quitamos toda la basura del menú)
+   // 🧹 LIMPIEZA EXTREMA PARA CATALUÑA (Cortamos el menú fantasma de raíz)
     if (url.includes('dogc.gencat.cat')) {
-        textoLimpio = textoLimpio
-            .replace(/\[ Saltar al contenido principal\][^\n]+/gi, '')
-            .replace(/\[ \!\[Logotipo de la Generalitat\].*?Vés a la pàgina inici"\)/gi, '')
-            .replace(/Menú \n\* \!\[Icon Área privada\].*?/gi, '')
-            .replace(/Salir rápido \n\n× \n\nPara poder garantizar tu privacidad.*?\[esborrar-historial\].*?/gi, '')
-            .trim();
-        
-        // Si después de limpiar sigue habiendo mucha morralla arriba, buscamos palabras clave del BOE
-        const indexResolucio = textoLimpio.toLowerCase().indexOf('resolución');
-        const indexAnuncio = textoLimpio.toLowerCase().indexOf('anuncio');
-        const indexEdicto = textoLimpio.toLowerCase().indexOf('edicto');
-        
-        // Cortamos la basura de arriba para que la IA lea directo la chicha
-        let start = Math.min(
-            indexResolucio !== -1 ? indexResolucio : Infinity,
-            indexAnuncio !== -1 ? indexAnuncio : Infinity,
-            indexEdicto !== -1 ? indexEdicto : Infinity
-        );
-        
-        if (start !== Infinity && start > 0 && start < 2000) {
-            textoLimpio = textoLimpio.substring(start);
+        // El documento siempre empieza por una de estas palabras clave. 
+        // Buscamos la primera aparición y cortamos todo el menú superior de un plumazo.
+        const match = textoLimpio.match(/(RESOLUCIÓN|ANUNCIO|EDICTO|CORRECCIÓN|ACUERDO)\s/i);
+        if (match) {
+            const startIdx = textoLimpio.indexOf(match[0]);
+            if (startIdx !== -1 && startIdx < 5000) {
+                textoLimpio = textoLimpio.substring(startIdx).trim();
+            }
         }
     }
 
@@ -465,9 +455,40 @@ async function obtenerCantabriaMatematico() {
     return null;
 }
 
+// 🩻 NUEVO: Visión de Rayos X para PDFs Ciegos
+async function extraerTextoDePDF(pdfUrl) {
+    console.log(`   🩻 [Rayos X] Extrayendo texto directamente del PDF...`);
+    try {
+        // Usamos un fetch con headers de navegador para descargar el archivo binario
+        const response = await fetch(pdfUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'application/pdf'
+            }
+        });
+
+        if (!response.ok) throw new Error(`HTTP Status ${response.status}`);
+
+        // Convertimos la respuesta a un Buffer que Node.js pueda entender
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+
+        // pdf-parse hace la magia
+        const data = await pdfParse(buffer);
+        
+        let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
+        return textoLimpio;
+        
+    } catch (error) {
+        console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
+        return null;
+    }
+}
+
 module.exports = {
   obtenerTextoNativo,
   obtenerTextoUniversal,
   obtenerDOGCporAPI,
-  obtenerCantabriaMatematico
+  obtenerCantabriaMatematico,
+  extraerTextoDePDF
 };
