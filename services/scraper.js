@@ -225,25 +225,41 @@ async function obtenerDOGCporAPI() {
         return null;
     }
 }
-
-// 🛡️ HELPER NATIVO INDESTRUCTIBLE: Evita los bloqueos del "fetch" moderno de Node.js
+// 🛡️ HELPER NATIVO INDESTRUCTIBLE: Disfrazado de Google Chrome
 function fetchNativoSeguro(url, cookie = "") {
     return new Promise((resolve, reject) => {
         const options = {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': '*/*'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                'Accept-Language': 'es-ES,es;q=0.9',
+                'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124"',
+                'Sec-Ch-Ua-Mobile': '?0',
+                'Sec-Ch-Ua-Platform': '"Windows"',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'Connection': 'keep-alive'
             },
-            rejectUnauthorized: false // Ignora certificados caducados sin importar la versión de Node
+            rejectUnauthorized: false // Ignora certificados caducados
         };
         if (cookie) options.headers['Cookie'] = cookie;
 
         https.get(url, options, (res) => {
+            // Manejamos redirecciones automáticas por si la web nos redirige
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let newUrl = res.headers.location;
+                if (!newUrl.startsWith('http')) newUrl = new URL(newUrl, url).href;
+                return resolve(fetchNativoSeguro(newUrl, cookie));
+            }
+            
             let data = '';
             res.on('data', chunk => data += chunk);
             res.on('end', () => {
                 resolve({ 
-                    ok: res.statusCode === 200, 
+                    ok: res.statusCode >= 200 && res.statusCode < 300, 
                     status: res.statusCode, 
                     text: data,
                     headers: res.headers
