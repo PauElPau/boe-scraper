@@ -287,12 +287,6 @@ async function extraerBoletines() {
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
-          // 🧪 PARCHE DE PRUEBAS: Limitar DOGC a solo 2 convocatorias
-          if (fuente.nombre === "DOGC") {
-              listado = listado.slice(0, 2);
-              console.log(`   🧪 MODO PRUEBA: Limitando DOGC a solo ${listado.length} convocatorias.`);
-          }
-
           console.log(`✅ Encontradas ${listado.length} posibles convocatorias únicas.`);
           statsFuente.encontradas = listado.length;
 
