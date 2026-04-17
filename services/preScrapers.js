@@ -25,8 +25,6 @@ async function burlarCortafuegos(url) {
 // ==========================================
 
 async function obtenerUrlDelDia(fuente) {
-    if (fuente.nombre === "DOGC") return "API_REST";
-
     console.log(`   🕵️‍♂️ Ejecutando Pre-Scraping Táctico para ${fuente.nombre}...`);
     
     const hoy = new Date();
@@ -34,6 +32,62 @@ async function obtenerUrlDelDia(fuente) {
     const mm = String(hoy.getMonth() + 1).padStart(2, '0');
     const yyyy = hoy.getFullYear();
 
+    // ==========================================
+    // 0. CATALUÑA (DOGC): INGENIERÍA MATEMÁTICA
+    // ==========================================
+    if (fuente.nombre === "DOGC") {
+        console.log(`   🧮 Calculando ID matemático para el Sumario del DOGC...`);
+        hoy.setHours(0,0,0,0);
+        
+        const fechaAncla = new Date('2026-04-17T00:00:00');
+        const idAncla = 9647; // Nuestro número ancla descubierto por ti
+        let diasHabiles = 0;
+        let fechaTemp = new Date(fechaAncla);
+
+        while (fechaTemp < hoy) {
+            fechaTemp.setDate(fechaTemp.getDate() + 1);
+            const diaSemana = fechaTemp.getDay();
+            if (diaSemana !== 0 && diaSemana !== 6) diasHabiles++;
+        }
+        
+        let idEstimado = idAncla + diasHabiles;
+        const year = hoy.getFullYear();
+        const month = hoy.getMonth() + 1;
+        
+        let intentos = 0;
+        let urlDOGC = "";
+
+        // Tanteamos hacia atrás por si hubo algún día festivo sin publicación
+        while (intentos < 5) {
+            urlDOGC = `https://dogc.gencat.cat/es/sumari-del-dogc/?selectedYear=${year}&selectedMonth=${month}&numDOGC=${idEstimado}&language=es_ES`;
+            console.log(`   🔎 Tanteando DOGC ID ${idEstimado}...`);
+            
+            try {
+                const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlDOGC)}`;
+                const res = await fetch(proxyUrl);
+                if (res.ok) {
+                    const htmlText = await res.text();
+                    
+                    const diaF = hoy.getDate();
+                    const esHoy = htmlText.includes(`${diaF}.${month}.${year}`) || htmlText.includes(`${String(diaF).padStart(2,'0')}.${String(month).padStart(2,'0')}.${year}`);
+                                  
+                    if (esHoy) {
+                        console.log(`   🎯 ¡Bingo! DOGC de hoy encontrado con ID: ${idEstimado}`);
+                        fuente.numDOGC_calculado = idEstimado; // Lo guardamos en memoria para usarlo en los PDFs
+                        return urlDOGC;
+                    } else {
+                        console.log(`   ⚖️ Calibrando fecha. El ID ${idEstimado} no es de hoy. Probando anterior...`);
+                        idEstimado--;
+                    }
+                }
+            } catch(e) { }
+            intentos++;
+        }
+        
+        console.log(`   ⚠️ No se pudo confirmar el DOGC exacto. Usando aproximación matemática pura.`);
+        fuente.numDOGC_calculado = idAncla + diasHabiles;
+        return `https://dogc.gencat.cat/es/sumari-del-dogc/?selectedYear=${year}&selectedMonth=${month}&numDOGC=${fuente.numDOGC_calculado}&language=es_ES`;
+    }
     // ==========================================
     // 1. LA RIOJA (BOR): ATAQUE API DIRECTO VÍA PROXY
     // ==========================================
