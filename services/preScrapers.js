@@ -58,11 +58,12 @@ async function obtenerUrlDelDia(fuente) {
         let urlDOGC = "";
 
         // Tanteamos hacia atrás por si hubo algún día festivo sin publicación
-        while (intentos < 5) {
+       while (intentos < 5) {
             urlDOGC = `https://dogc.gencat.cat/es/sumari-del-dogc/?selectedYear=${year}&selectedMonth=${month}&numDOGC=${idEstimado}&language=es_ES`;
             console.log(`   🔎 Tanteando DOGC ID ${idEstimado}...`);
             
             try {
+                // Usamos el tanque porque CodeTabs está bloqueado por la Generalitat
                 const res = await fetchNativoSeguro(urlDOGC);
                 if (res.ok) {
                     const htmlText = res.text;
@@ -77,7 +78,7 @@ async function obtenerUrlDelDia(fuente) {
                 }
             } catch(e) { }
             
-            // 🐛 IMPORTANTE: Siempre restamos 1 si no ha encontrado la fecha de hoy
+            // Si llega aquí, es que no era de hoy o la red falló. Restamos 1 seguro.
             console.log(`   ⚖️ Calibrando fecha. El ID ${idEstimado} no es de hoy o falló la red. Probando anterior...`);
             idEstimado--;
             intentos++;

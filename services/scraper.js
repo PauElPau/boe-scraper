@@ -1,4 +1,5 @@
 const cheerio = require("cheerio");
+const pdfParse = require('pdf-parse'); // 🐛 TIENE QUE ESTAR AQUÍ ARRIBA
 const https = require('https');
 
 const { esperar } = require("../utils/helpers");
@@ -479,32 +480,13 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (Solución Extrema para GitHub Actions)
+// 2. VISIÓN DE RAYOS X (A prueba de GitHub Actions)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
-        
-        // 🐛 INVOCACIÓN DIRECTA: Obligamos a Node a coger el archivo principal de la librería
-        let pdfParser;
-        try {
-            pdfParser = require('pdf-parse/lib/pdf-parse.js');
-        } catch (e) {
-            pdfParser = require('pdf-parse'); // Fallback normal
-        }
-
-        if (pdfParser && typeof pdfParser === 'object') {
-            pdfParser = pdfParser.default || pdfParser;
-        }
-
-        if (typeof pdfParser !== 'function') {
-            console.log(`   ⚠️ Aviso: 'pdf-parse' está mal instalado en este entorno (GitHub Actions). No se puede leer el interior del PDF.`);
-            return null; // Devolvemos null amablemente en lugar de explotar
-        }
-
-        const data = await pdfParser(buffer);
-        let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
-        return textoLimpio;
+        const data = await pdfParse(buffer);
+        return data.text.replace(/\s+/g, ' ').trim();
     } catch (error) {
         console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
