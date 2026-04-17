@@ -214,21 +214,21 @@ async function obtenerDOGCporAPI() {
         
         if (data && data.resultSearch && data.resultSearch.length > 0) {
            return data.resultSearch.map(item => {
-                // Capturamos el organismo directamente de los metadatos de la API
-                let dep = null;
-                if (item.issuingAuthority && item.issuingAuthority.length > 0) {
-                    dep = item.issuingAuthority[0];
-                } else if (item.organizationDescriptor && item.organizationDescriptor.length > 0) {
-                    dep = item.organizationDescriptor[0];
-                }
+                   let dep = null;
+                   if (item.issuingAuthority && item.issuingAuthority.length > 0) dep = item.issuingAuthority[0];
+                   else if (item.organizationDescriptor && item.organizationDescriptor.length > 0) dep = item.organizationDescriptor[0];
 
-                return {
-                    titulo: item.title,
-                    enlace: `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${item.idDocument}`,
-                    pdf: item.linkDownloadPDF,
-                    departamento: dep // 🔥 AÑADIMOS ESTO AL PAYLOAD
-                };
-            });
+                   let linkPdfLimpio = item.linkDownloadPDF || '';
+                   if (linkPdfLimpio && linkPdfLimpio.startsWith('//')) linkPdfLimpio = 'https:' + linkPdfLimpio;
+                   if (linkPdfLimpio && linkPdfLimpio.startsWith('dogc.gencat.cat')) linkPdfLimpio = 'https://' + linkPdfLimpio;
+
+                   return {
+                       titulo: item.title,
+                       enlace: `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${item.idDocument}`,
+                       pdf: linkPdfLimpio, // Pasamos el PDF limpio
+                       departamento: dep 
+                   };
+               });
         }
         return [];
     } catch (e) {
@@ -477,24 +477,36 @@ async function extraerTextoDePDF(pdfUrl) {
 }
 
 
-// 1. EL TANQUE BINARIO (Especial para descargar PDFs saltando WAFs)
-function descargarPdfBinario(url) {
-    return new Promise((resolve, reject) => {
-        const options = {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-            rejectUnauthorized: false // Ignora cortafuegos
-        };
-        https.get(url, options, (res) => {
-            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-                let newUrl = res.headers.location;
-                if (!newUrl.startsWith('http')) newUrl = new URL(newUrl, url).href;
-                return resolve(descargarPdfBinario(newUrl));
-            }
-            const chunks = [];
-            res.on('data', chunk => chunks.push(chunk));
-            res.on('end', () => resolve(Buffer.concat(chunks)));
-        }).on('error', err => reject(err));
-    });
+// 1. EL TANQUE BINARIO (Actualizado con Proxy para saltar Geobloqueo)
+async function descargarPdfBinario(url) {
+    const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/pdf,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+    };
+
+    try {
+        // Intento 1: Fetch directo (Node 18+ maneja mejor los certificados modernos)
+        const res = await fetch(url, { headers });
+        if (res.ok) {
+            const arrayBuffer = await res.arrayBuffer();
+            return Buffer.from(arrayBuffer);
+        }
+    } catch (e) {
+        // Si da ETIMEDOUT o fetch failed, es porque el servidor bloquea la IP
+    }
+
+    // Intento 2: Proxy CodeTabs (Vital para Cantabria si el servidor bloquea IPs Cloud)
+    console.log(`   🩻 [Rayos X] Red directa bloqueada (ETIMEDOUT). Usando Proxy para descargar el binario...`);
+    
+    const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
+    const resProxy = await fetch(proxyUrl, { headers });
+    
+    if (resProxy.ok) {
+        const arrayBuffer = await resProxy.arrayBuffer();
+        return Buffer.from(arrayBuffer);
+    }
+
+    throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
 // 2. VISIÓN DE RAYOS X (Actualizada con el Tanque Binario)
