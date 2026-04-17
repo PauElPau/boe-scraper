@@ -372,20 +372,29 @@ async function extraerBoletines() {
                 continue;
             }
 
-            let enlaceFinal = enlaceLimpio;
-            try {
-                if (!enlaceFinal.startsWith('http')) {
-                    const urlBaseObj = new URL(urlFinal); 
-                    if (enlaceFinal.startsWith('/')) {
-                        enlaceFinal = urlBaseObj.origin + enlaceFinal;
-                    } else {
-                        enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
-                    }
+           let enlaceFinal = enlaceLimpio;
+            
+            // 🐛 ESCUDO DE URLs PARA CATALUÑA
+            if (fuente.nombre === "DOGC") {
+                const docIdMatch = enlaceLimpio.match(/documentId=(\d+)/);
+                if (docIdMatch) {
+                    enlaceFinal = `https://dogc.gencat.cat/es/document-del-dogc/?documentId=${docIdMatch[1]}`;
                 }
-            } catch (e) {
-               console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
-               totalErrores++; 
-               continue;
+            } else {
+                try {
+                    if (!enlaceFinal.startsWith('http')) {
+                        const urlBaseObj = new URL(urlFinal); 
+                        if (enlaceFinal.startsWith('/')) {
+                            enlaceFinal = urlBaseObj.origin + enlaceFinal;
+                        } else {
+                            enlaceFinal = urlBaseObj.origin + '/' + enlaceLimpio;
+                        }
+                    }
+                } catch (e) {
+                   console.log(`   ⚠️ Enlace mal formado ignorado: ${enlaceLimpio}`);
+                   totalErrores++; 
+                   continue;
+                }
             }
             
             if (!enlaceFinal || enlaceFinal === fuente.url || enlaceFinal === fuente.url + '/') continue;
