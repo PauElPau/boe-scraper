@@ -289,7 +289,7 @@ async function extraerBoletines() {
               listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
           }
           
-          const listado = listadoBruto.filter((item, index, self) =>
+          let listado = listadoBruto.filter((item, index, self) =>
               index === self.findIndex((t) => t.enlace === item.enlace)
           );
 
