@@ -245,14 +245,11 @@ async function extraerBoletines() {
               }
           }
 
-          let listadoBruto = [];
+         let listadoBruto = [];
 
-          // 🚀 AUTOPISTA API PARA CATALUÑA (DOGC) Y MATEMÁTICA PARA CANTABRIA
-            if (fuente.nombre === "DOGC" || fuente.nombre === "BOC_CANTABRIA") {
-                let apiResults = [];
-                if (fuente.nombre === "DOGC") apiResults = await obtenerDOGCporAPI();
-                if (fuente.nombre === "BOC_CANTABRIA") apiResults = await obtenerCantabriaMatematico(); // Llama a tu función
-
+          // 🚀 AUTOPISTA MATEMÁTICA PARA CANTABRIA
+            if (fuente.nombre === "BOC_CANTABRIA") {
+                let apiResults = await obtenerCantabriaMatematico();
                 if (apiResults && apiResults.length > 0) {
                     listadoBruto = apiResults;
                 } else {
@@ -260,14 +257,14 @@ async function extraerBoletines() {
                     continue;
                 }
             }
-          // 🐢 CAMINO TRADICIONAL PARA EL RESTO (Ceuta y Melilla entran aquí)
+          // 🐢 CAMINO TRADICIONAL PARA EL RESTO (¡AHORA INCLUYE EL DOGC!)
           else {
               let markdownWeb = null;
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
-                  // Entramos a Ceuta y Melilla saltando WAFs a través de CodeTabs
+              // 🐛 Añadimos DOGC aquí para que use el Proxy rápido y esquive Cloudflare
+              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME", "DOGC"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
@@ -280,10 +277,7 @@ async function extraerBoletines() {
               }
 
               if (markdownWeb.length > 80000) markdownWeb = markdownWeb.substring(0, 80000); 
-
-              if (fuente.nombre === "BOIB") {
-                  markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
-              }
+              if (fuente.nombre === "BOIB") markdownWeb = markdownWeb.replace(/\[[^\]]*\]\([^)]*\/pdf\/[^)]*\)/gi, '');
 
               console.log(`🤖 Buscando enlaces de empleo en el sumario de ${fuente.nombre}...`);
               listadoBruto = await extraerEnlacesSumarioIA(markdownWeb, fuente.nombre);
@@ -363,7 +357,13 @@ async function extraerBoletines() {
             }
 
             if (fuente.nombre === "DOGC") {
-                item.pdfGenerado = item.pdf; 
+                // Sacamos el ID del documento
+                const docIdMatch = enlaceLimpio.match(/documentId=(\d+)/);
+                if (docIdMatch && fuente.numDOGC_calculado) {
+                    const docId = docIdMatch[1];
+                    // Fabricamos el enlace directo e infalible al PDF de la Generalitat
+                    item.pdfGenerado = `https://portaldogc.gencat.cat/utilsEADOP/PDF/${fuente.numDOGC_calculado}/${docId}.pdf`;
+                }
                 item.htmlGenerado = enlaceLimpio;
             }
             
