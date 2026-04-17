@@ -101,8 +101,10 @@ async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   $('script, style, nav, footer, header, aside').remove();
   let textoLimpio = $('#textoxslt').text(); 
   if (!textoLimpio) textoLimpio = $('body').text(); 
-  
   textoLimpio = textoLimpio.replace(/\s+/g, ' ').trim();
+
+  if (url.includes('dogc.gencat.cat')) textoLimpio = limpiarBasuraDOGC(textoLimpio);
+
   return { texto: textoLimpio.substring(0, 15000), pdf: pdfLink };
 }
 
@@ -152,18 +154,7 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
     const data = await response.json();
     let textoLimpio = data.result || "";
     
-   // 🧹 LIMPIEZA EXTREMA PARA CATALUÑA (Cortamos el menú fantasma de raíz)
-    if (url.includes('dogc.gencat.cat')) {
-        // El documento siempre empieza por una de estas palabras clave. 
-        // Buscamos la primera aparición y cortamos todo el menú superior de un plumazo.
-        const match = textoLimpio.match(/(RESOLUCIÓN|ANUNCIO|EDICTO|CORRECCIÓN|ACUERDO)\s/i);
-        if (match) {
-            const startIdx = textoLimpio.indexOf(match[0]);
-            if (startIdx !== -1 && startIdx < 5000) {
-                textoLimpio = textoLimpio.substring(startIdx).trim();
-            }
-        }
-    }
+   if (url.includes('dogc.gencat.cat')) textoLimpio = limpiarBasuraDOGC(textoLimpio);
 
     return typeof textoLimpio === "string" ? textoLimpio.substring(0, 80000) : ""; 
   } catch (error) {
@@ -483,6 +474,64 @@ async function extraerTextoDePDF(pdfUrl) {
         console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
     }
+}
+
+// --- FUNCIONES NUEVAS Y ACTUALIZADAS PARA SCRAPER.JS ---
+
+const https = require('https');
+const pdfParse = require('pdf-parse'); // Asegúrate de tener esto arriba del todo
+
+// 1. EL TANQUE BINARIO (Especial para descargar PDFs saltando WAFs)
+function descargarPdfBinario(url) {
+    return new Promise((resolve, reject) => {
+        const options = {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            rejectUnauthorized: false // Ignora cortafuegos
+        };
+        https.get(url, options, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                let newUrl = res.headers.location;
+                if (!newUrl.startsWith('http')) newUrl = new URL(newUrl, url).href;
+                return resolve(descargarPdfBinario(newUrl));
+            }
+            const chunks = [];
+            res.on('data', chunk => chunks.push(chunk));
+            res.on('end', () => resolve(Buffer.concat(chunks)));
+        }).on('error', err => reject(err));
+    });
+}
+
+// 2. VISIÓN DE RAYOS X (Actualizada con el Tanque Binario)
+async function extraerTextoDePDF(pdfUrl) {
+    console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
+    try {
+        const buffer = await descargarPdfBinario(pdfUrl);
+        const data = await pdfParse(buffer);
+        let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
+        return textoLimpio;
+    } catch (error) {
+        console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
+        return null;
+    }
+}
+
+// 3. LIMPIEZA EXTREMA DEL DOGC (Cuchillo quirúrgico para menús)
+function limpiarBasuraDOGC(texto) {
+    if (!texto) return texto;
+    let limpio = texto
+        .replace(/\[ Saltar al contenido principal\][^\n]+/gi, '')
+        .replace(/\[ \!\[Logotipo.*?Vés a la pàgina inici"\)/gi, '')
+        .replace(/Menú[\s\S]*?Área privada/gi, '') // Quita el menú
+        .replace(/Salir rápido[\s\S]*?\[esborrar-historial\]/gi, '')
+        .trim();
+        
+    // Cuchillo final: Corta todo lo que haya antes de la primera palabra oficial
+    const match = limpio.match(/(RESOLUCIÓN|RESOLUCION|ANUNCIO|EDICTO|CORRECCIÓN|CORRECCION|ACUERDO)\b/i);
+    if (match) {
+        const startIdx = limpio.indexOf(match[0]);
+        if (startIdx !== -1 && startIdx < 5000) return limpio.substring(startIdx).trim();
+    }
+    return limpio;
 }
 
 module.exports = {
