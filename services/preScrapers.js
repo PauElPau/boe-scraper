@@ -88,32 +88,46 @@ async function obtenerUrlDelDia(fuente) {
         fuente.numDOGC_calculado = idAncla + diasHabiles;
         return `https://dogc.gencat.cat/es/sumari-del-dogc/?selectedYear=${year}&selectedMonth=${month}&numDOGC=${fuente.numDOGC_calculado}&language=es_ES`;
     }
-    // ==========================================
-    // 1. LA RIOJA (BOR): ATAQUE API DIRECTO VÍA PROXY
+   // ==========================================
+    // 1. LA RIOJA (BOR): ATAQUE API DIRECTO (Vía Tanque Nativo)
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-            const fechaBor = `${yyyy}-${mm}-${dd}`;
-            const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
+            const fechaBor1 = `${dd}/${mm}/${yyyy}`; // Formato español
+            const fechaBor2 = `${yyyy}-${mm}-${dd}`; // Formato ISO
             
-            // Usamos CodeTabs para evitar el 'fetch failed' de Node.js
-            const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`;
-            const res = await fetch(proxyUrl);
+            // Intento 1: Formato DD/MM/YYYY con el Tanque Nativo (Sin Proxy)
+            let apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor1}`;
+            console.log(`   🔎 Consultando API BOR: ${apiUrl}`);
             
+            let res = await fetchNativoSeguro(apiUrl);
+            
+            // Si falla o viene vacío, intentamos con el otro formato de fecha
+            if (!res.ok || !res.text.includes('idBoletin')) {
+                apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor2}`;
+                console.log(`   🔎 Reintentando API BOR: ${apiUrl}`);
+                res = await fetchNativoSeguro(apiUrl);
+            }
+
             if (res.ok) {
-                const textData = await res.text();
                 try {
-                    const data = JSON.parse(textData);
+                    const data = JSON.parse(res.text);
                     if (data && data.boletines && data.boletines.length > 0) {
-                        return `https://web.larioja.org/bor-boletin?id=${data.boletines[0].idBoletin}`;
+                        const boletinHoy = data.boletines[0];
+                        console.log(`   🎯 ¡Bingo! BOR de hoy encontrado con ID: ${boletinHoy.idBoletin}`);
+                        return `https://web.larioja.org/bor-boletin?id=${boletinHoy.idBoletin}`;
+                    } else {
+                        console.log(`   ⚠️ La API respondió correctamente, pero el array de boletines está vacío. (No hay publicación hoy)`);
                     }
                 } catch(e) {
-                    console.log(`      ⚠️ BOR no devolvió JSON válido hoy.`);
+                    console.log(`   ⚠️ BOR no devolvió JSON válido. Snippet: ${res.text.substring(0, 100)}...`);
                 }
+            } else {
+                console.log(`   ⚠️ Status API BOR bloqueado: HTTP ${res.status}`);
             }
             return null;
         } catch (e) {
-            console.log(`      ⚠️ Fallo API BOR: ${e.message}`);
+            console.log(`   ⚠️ Fallo crítico API BOR: ${e.message}`);
             return null;
         }
     }
