@@ -319,24 +319,30 @@ async function obtenerCantabriaMatematico() {
                         } catch(e){}
                     }
 
-                    // 🛡️ FILTRO DE ORO: Cazamos solo los enlaces reales de anuncios
                     if (!realHref.includes('verAnuncioAction.do') && !realHref.includes('idAnuBlob')) return; 
                     
-                    linksAnuncios++;
+                    let linkText = $(el).text().toUpperCase().replace(/\s+/g, ' ').trim();
+                    
+                    // 🛡️ FILTRO INTELIGENTE: Priorizamos leer la web en HTML para que no nos devuelva el binario del PDF
+                    let isHTML = linkText.includes('HTML (BOC');
+                    let isPDF = linkText.includes('PDF (BOC');
+                    
+                    if (!isHTML && !isPDF) return;
+                    
+                    if (isPDF) {
+                        // Si es un botón PDF, comprobamos si tiene un botón HTML al lado. 
+                        // Si lo tiene, lo ignoramos (ya cogeremos el HTML en otra vuelta del bucle).
+                        let hasHTMLSibling = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('HTML (BOC')).length > 0;
+                        if (hasHTMLSibling) return; 
+                    }
 
                     // 3. EXTRACCIÓN QUIRÚRGICA DEL TÍTULO
-                    // Tal y como se ve en tu foto, el título suele estar en el párrafo de arriba o en el texto sin link del mismo bloque.
-                    
-                    // Opción A: Texto en el mismo bloque (le quitamos el enlace 'a' y las imágenes)
                     let clone = $(el).parent().clone();
                     clone.find('a').remove(); 
                     clone.find('img').remove();
                     let txtMismoBloque = clone.text().replace(/\s+/g, ' ').trim();
                     
-                    // Opción B: Texto en el bloque/párrafo inmediatamente anterior (El más común según tu foto)
                     let txtBloqueAnterior = $(el).parent().prev().text().replace(/\s+/g, ' ').trim();
-
-                    // Opción C: Hermano anterior directo
                     let txtHermanoAnterior = $(el).prev().text().replace(/\s+/g, ' ').trim();
                     
                     let tituloLimpio = "";
@@ -347,11 +353,9 @@ async function obtenerCantabriaMatematico() {
                     } else if (txtHermanoAnterior.length > 20) {
                         tituloLimpio = txtHermanoAnterior;
                     } else {
-                        // Último recurso: El abuelo
                         tituloLimpio = $(el).parent().parent().prev().text().replace(/\s+/g, ' ').trim();
                     }
 
-                    // Si hemos conseguido un título, analizamos
                     if (tituloLimpio) {
                         let t = tituloLimpio.toLowerCase();
                         
@@ -363,14 +367,28 @@ async function obtenerCantabriaMatematico() {
                             
                             let enlaceFinal = realHref.replace(/&amp;/g, '&');
                             if (!enlaceFinal.startsWith('http')) {
-                                // 🐛 Añadimos la carpeta /boces/ que faltaba
                                 enlaceFinal = 'https://boc.cantabria.es/boces/' + enlaceFinal.replace(/^\//, '');
+                            }
+                            
+                            // Buscar el PDF exacto (suele estar al lado del HTML) para guardarlo en la BBDD
+                            let pdfHref = $(el).siblings('a').filter((idx, e) => $(e).text().toUpperCase().includes('PDF (BOC')).attr('href') || '';
+                            if (pdfHref) {
+                                if (pdfHref.includes('api.codetabs.com')) {
+                                    try {
+                                        const matchQuest = pdfHref.match(/quest=([^&]+)/);
+                                        if (matchQuest) pdfHref = decodeURIComponent(matchQuest[1]);
+                                    } catch(e){}
+                                }
+                                pdfHref = pdfHref.replace(/&amp;/g, '&');
+                                if (!pdfHref.startsWith('http')) pdfHref = 'https://boc.cantabria.es/boces/' + pdfHref.replace(/^\//, '');
+                            } else {
+                                pdfHref = enlaceFinal; // Fallback
                             }
                             
                             convocatorias.push({
                                 titulo: tituloLimpio,
                                 enlace: enlaceFinal, 
-                                pdf: enlaceFinal
+                                pdf: pdfHref
                             });
                         }
                     }
