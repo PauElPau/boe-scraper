@@ -267,6 +267,9 @@ async function extraerBoletines() {
               } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
+              } else if (fuente.nombre === "BOR") {
+                  const nativo = await obtenerTextoNativo(urlFinal, false);
+                  markdownWeb = nativo ? nativo.texto : null;
               } else {
                   markdownWeb = await obtenerTextoUniversal(urlFinal);
               }
