@@ -391,13 +391,14 @@ async function extraerBoletines() {
             let textoInterior = null;
             let pdfExtraidoNativo = null; 
             
-            // 🚀 INTERCEPTOR ANTI-PDF: Detectamos si el enlace de Ceuta/Melilla es de descarga para no forzar la lectura HTML
-            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA";
+            // ===================================================================================
+            // 🚀 BLOQUE DE RUTA ESTRICTA Y RAYOS X
+            // ===================================================================================
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA";
 
             if (esPdfOculto) {
                 console.log(`   📄 Enlace (PDF o Descarga) detectado. Activando visión de Rayos X...`);
                 
-                // 🩻 Invocamos al lector de PDFs
                 const textoPdf = await extraerTextoDePDF(enlaceFinal);
 
                 if (textoPdf && textoPdf.length > 50) {
@@ -407,21 +408,18 @@ async function extraerBoletines() {
                     console.log(`   ⚠️ El PDF era una imagen escaneada o está protegido. Usando texto de respaldo.`);
                     textoInterior = `${item.titulo}\n\n[Documento oficial en formato PDF. Accede al enlace superior para leer las bases completas.]`;
                 }
-                
                 pdfExtraidoNativo = enlaceFinal;
-                
-            } else if (["BON", "BOCCE", "BOME", "BOC_CANTABRIA"].includes(fuente.nombre)) {
+
+            } else if (["BON", "BOCCE", "BOME"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
-            } else if (fuente.nombre === "BOPA") {
-                textoInterior = await obtenerTextoUniversal(enlaceFinal);
             } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
-                 const nativo = await obtenerTextoNativo(enlaceFinal);
-                 textoInterior = nativo ? nativo.texto : null;
-                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
+                const nativo = await obtenerTextoNativo(enlaceFinal);
+                textoInterior = nativo ? nativo.texto : null;
+                if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
             } else {
-                 textoInterior = await obtenerTextoUniversal(enlaceFinal);
+                textoInterior = await obtenerTextoUniversal(enlaceFinal);
             }
 
             if (!textoInterior) continue;
