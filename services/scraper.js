@@ -113,14 +113,18 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
   try {
     // Si estamos en el DOGC, le decimos a Cloudflare que solo extraiga el contenedor del documento
     let selector = "";
+    let payload = { url: url };
+
     if (url.includes('dogc.gencat.cat')) {
         selector = "div.container, main, article, #content, .content"; // Selectores comunes de texto principal
+        payload = { 
+            url: url,
+            waitFor: 5000 // Esperamos 5 segundos a que desaparezca el "Cargando..."
+        };
     }
-
-    const payload = { url: url };
+   
     // Cloudflare browser-rendering admite opciones adicionales. Si es el DOGC, intentamos aislar el texto.
     // Como el endpoint de Markdown a veces devuelve todo, vamos a asegurarnos de que la IA sepa qué buscar.
-
     const response = await fetch(`https://api.cloudflare.com/client/v4/accounts/${process.env.CLOUDFLARE_ACCOUNT_ID}/browser-rendering/markdown`, {
       method: 'POST',
       headers: {
