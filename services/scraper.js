@@ -1,5 +1,4 @@
 const cheerio = require("cheerio");
-const pdfParseLib = require('pdf-parse');
 const https = require('https');
 
 const { esperar } = require("../utils/helpers");
@@ -480,24 +479,21 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (Blindada contra conflictos de importación)
+// 2. VISIÓN DE RAYOS X (Importación Dinámica y Blindada)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
         
-        // 🐛 ESCUDO ANTI-FALLOS DE LIBRERÍA: Detectamos cómo está exportada la función
-        let parserFunc = pdfParseLib;
-        if (typeof parserFunc !== 'function') {
-            parserFunc = pdfParseLib.default || pdfParseLib.pdfParse;
-        }
+        // 🐛 Importación JIT (Just-In-Time) directa
+        const pdfParser = require('pdf-parse'); 
         
-        // Si sigue sin ser una función, es que la librería se instaló mal
-        if (typeof parserFunc !== 'function') {
-            throw new Error("Librería corrupta. Detén el servidor y ejecuta: npm install pdf-parse");
+        if (typeof pdfParser !== 'function') {
+            console.log("   ⚠️ pdf-parse está devolviendo un objeto:", pdfParser);
+            throw new Error("Instalación de pdf-parse dañada. Ejecuta: npm uninstall pdf-parse && npm install pdf-parse");
         }
 
-        const data = await parserFunc(buffer);
+        const data = await pdfParser(buffer);
         let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
         return textoLimpio;
     } catch (error) {
