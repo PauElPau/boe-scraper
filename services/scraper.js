@@ -479,21 +479,27 @@ async function descargarPdfBinario(url) {
     throw new Error(`Imposible descargar el PDF. Status Proxy: ${resProxy.status}`);
 }
 
-// 2. VISIÓN DE RAYOS X (Blindada contra GitHub Actions / ESM)
+// 2. VISIÓN DE RAYOS X (Solución Extrema para GitHub Actions)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     try {
         const buffer = await descargarPdfBinario(pdfUrl);
         
-        let pdfParser = require('pdf-parse'); 
-        
-        // 🐛 ESCUDO ESM: Si GitHub Actions envuelve el módulo en un objeto, buscamos la función real
+        // 🐛 INVOCACIÓN DIRECTA: Obligamos a Node a coger el archivo principal de la librería
+        let pdfParser;
+        try {
+            pdfParser = require('pdf-parse/lib/pdf-parse.js');
+        } catch (e) {
+            pdfParser = require('pdf-parse'); // Fallback normal
+        }
+
         if (pdfParser && typeof pdfParser === 'object') {
             pdfParser = pdfParser.default || pdfParser;
         }
-        
+
         if (typeof pdfParser !== 'function') {
-            throw new Error("El módulo pdf-parse no se resolvió como función. Revisa tu package.json.");
+            console.log(`   ⚠️ Aviso: 'pdf-parse' está mal instalado en este entorno (GitHub Actions). No se puede leer el interior del PDF.`);
+            return null; // Devolvemos null amablemente en lugar de explotar
         }
 
         const data = await pdfParser(buffer);

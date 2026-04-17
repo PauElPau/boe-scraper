@@ -63,11 +63,9 @@ async function obtenerUrlDelDia(fuente) {
             console.log(`   🔎 Tanteando DOGC ID ${idEstimado}...`);
             
             try {
-                // 🐛 DOGC: Usamos el Tanque en lugar de CodeTabs porque Akamai bloquea el proxy
                 const res = await fetchNativoSeguro(urlDOGC);
                 if (res.ok) {
                     const htmlText = res.text;
-                    
                     const diaF = hoy.getDate();
                     const esHoy = htmlText.includes(`${diaF}.${month}.${year}`) || htmlText.includes(`${String(diaF).padStart(2,'0')}.${String(month).padStart(2,'0')}.${year}`);
                                   
@@ -75,12 +73,13 @@ async function obtenerUrlDelDia(fuente) {
                         console.log(`   🎯 ¡Bingo! DOGC de hoy encontrado con ID: ${idEstimado}`);
                         fuente.numDOGC_calculado = idEstimado; 
                         return urlDOGC;
-                    } else {
-                        console.log(`   ⚖️ Calibrando fecha. El ID ${idEstimado} no es de hoy. Probando anterior...`);
-                        idEstimado--;
                     }
                 }
             } catch(e) { }
+            
+            // 🐛 IMPORTANTE: Siempre restamos 1 si no ha encontrado la fecha de hoy
+            console.log(`   ⚖️ Calibrando fecha. El ID ${idEstimado} no es de hoy o falló la red. Probando anterior...`);
+            idEstimado--;
             intentos++;
         }
         
