@@ -14,8 +14,8 @@ const FUENTES_BOLETINES = [
  // { nombre: "BON", tipo: "html_directo", url: "https://bon.navarra.es/es/ultimo", ambito: "Navarra" },
  // { nombre: "BOIB", tipo: "html_directo", url: "https://www.caib.es/eboibfront/indexrss.do?lang=es", ambito: "Islas Baleares", boibRssToHtml: true },
  // { nombre: "BOPA", tipo: "html_directo", url: "https://sede.asturias.es/ultimos-boletines?p_r_p_summaryLastBopa=true", ambito: "Asturias" },
-  { nombre: "DOGC", tipo: "html_directo", url: "API_REST", ambito: "Cataluña"},  
-  
+    { nombre: "DOGC", tipo: "html_directo", url: "https://dogc.gencat.cat/es/sumari-del-dogc/", ambito: "Cataluña", fase_previa: true },
+
   // A REVISAR (Scraping de 2 Fases activado)
   { nombre: "BOC_CANTABRIA", tipo: "html_directo", url: "https://boc.cantabria.es/boces/boletines.do", ambito: "Cantabria", fase_previa: true },
  // { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta", fase_previa: true },
