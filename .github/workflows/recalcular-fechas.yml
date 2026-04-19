@@ -27,4 +27,4 @@ jobs:
           # Solo inyectamos los secretos de Supabase porque es lo único que necesita este script
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: node scripts/recalcular-fechas.js
+        run: node recalcular-fechas.js
