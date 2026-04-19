@@ -490,6 +490,23 @@ function descargarPdfBinario(url) {
 // 2. VISIÓN DE RAYOS X (Limpia y estable para pdf-parse 1.1.1)
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
+    
+    // 🤫 MUTEADOR NINJA: Silenciamos los warnings molestos de pdf.js
+    const originalWarn = console.warn;
+    console.warn = function (...args) {
+        const msg = args[0] || '';
+        if (typeof msg === 'string' && (
+            msg.includes('Ignoring invalid character') || 
+            msg.includes('TT: undefined function') || 
+            msg.includes('TT: invalid function id') || 
+            msg.includes('Indexing all PDF objects')
+        )) {
+            return; // Destruimos el mensaje molesto
+        }
+        // Si es un warning real de otra cosa, lo dejamos pasar
+        originalWarn.apply(console, args);
+    };
+
     try {
         // Descargamos el binario (con proxy si hay cortafuegos)
         const buffer = await descargarPdfBinario(pdfUrl);
@@ -504,6 +521,9 @@ async function extraerTextoDePDF(pdfUrl) {
     } catch (error) {
         console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
+    } finally {
+        // 🔊 MUY IMPORTANTE: Devolvemos la voz a la consola pase lo que pase
+        console.warn = originalWarn;
     }
 }
 

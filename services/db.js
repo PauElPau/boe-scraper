@@ -211,8 +211,18 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
   // ----------------------------------------------------------
 
-  const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
-  const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo);
+/*   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
+  const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo); */
+
+  // 1. Usamos la fecha real que nos llega del engine (o la de hoy por defecto)
+  const fechaPublicacionReal = itemData.fecha_publicacion_real || new Date().toISOString().split('T')[0];
+  
+  // 2. Si la IA logró encontrar una fecha exacta escrita en el texto, la usamos. 
+  // Si no, delegamos en tu cálculo matemático de días hábiles/naturales.
+  // Usamos la provincia extraída por la IA (o la genérica de la fuente si la IA falló)
+  const provinciaCalculo = analisisIA.provincia || fuente.ambito;
+
+  const fechaCierreCalculada = analisisIA.fecha_cierre_exacta || calcularFechaCierre(fechaPublicacionReal, analisisIA.plazo_numero, analisisIA.plazo_tipo, provinciaCalculo);
 
   // 📦 AHORA SÍ: Construimos el objeto definitivo con la Matriz 3D
   const convocatoria = {

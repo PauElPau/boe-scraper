@@ -175,9 +175,12 @@ async function extraerBoletines() {
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
             if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
+            // Busca donde llamas a procesarYGuardarConvocatoria en la parte RSS y modifícalo:
+            const fechaRealRss = item.isoDate ? item.isoDate.split('T')[0] : new Date().toISOString().split('T')[0];
+
             await procesarYGuardarConvocatoria({ 
               title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, link_boletin: urlFinalLog,
-              pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo 
+              pdf_rss: enlacePdfRss || pdfExtraidoNativo, section: categoriaSeccion, department: categoriaOrganismo, fecha_publicacion_real: fechaRealRss 
             }, textoParaIA, fuente, convocatoriasInsertadasHoy, statsFuente);
             
             await esperar(6000);
@@ -447,6 +450,8 @@ async function extraerBoletines() {
             
             if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
+            const fechaRealHtml = new Date().toISOString().split('T')[0];
+
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
               link: enlaceFinal, 
@@ -456,7 +461,8 @@ async function extraerBoletines() {
               htmlGenerado: item.htmlGenerado, 
               pdfGenerado: item.pdfGenerado,   
               section: `Boletín ${fuente.nombre}`, 
-              department: item.departamento 
+              department: item.departamento,
+              fecha_publicacion_real: fechaRealHtml 
             }, textoInterior, fuente, convocatoriasInsertadasHoy, statsFuente);
             
             await esperar(6000);

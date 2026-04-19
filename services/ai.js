@@ -134,6 +134,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
   - sistema: Deduce si es Oposición, Concurso-oposición o Concurso. Si es una OEP o no se especifica claramente en el texto, asume SIEMPRE 'Oposición'.
   - profesiones: Nombres limpios de los puestos.
+  - fecha_cierre_exacta: Si el texto indica explícitamente el día exacto en que termina el plazo (ej: 'del 15 al 16 de abril de 2026', 'hasta el 20/05/2026'), deduce la fecha final y devuélvela estrictamente en formato 'YYYY-MM-DD'. Si el texto solo dice '20 días' pero no da el día exacto del calendario, devuelve null.
 
   - tipo: Deduce el tipo EXACTO de la publicación usando estrictamente el esquema proporcionado. 
     🛑 REGLAS VITALES DE TIPO: 
@@ -208,6 +209,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               sistema: { type: ["string", "null"], enum: ['Oposición', 'Concurso-Oposición', 'Concurso de Méritos', 'Libre Designación', null] },
               fase: { type: ["string", "null"], enum: ['Apertura de Plazos / Convocatoria', 'Listas de Admitidos y Excluidos', 'Tribunales y Fechas de Examen', 'Calificaciones y Resultados', 'Adjudicación y Nombramientos', 'Correcciones y Modificaciones', 'Otros Trámites', null] },
               turno: { type: ["array", "null"], items: { type: "string", enum: ["Turno Libre", "Promoción Interna", "Discapacidad"] } },
+              fecha_cierre_exacta: { type: ["string", "null"], description: "Formato YYYY-MM-DD" },
               distribucion_plazas: { 
                 type: ["array", "null"], 
                 items: { 
@@ -256,7 +258,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
               meta_description: { type: "string" },
               enlace_pdf: { type: ["string", "null"] }
             },
-           required: ["tipo", "sistema", "fase", "turno", "distribucion_plazas", "ambito", "plazas", "resumen", "plazo_numero", "plazo_tipo", "grupo", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "organismo", "meta_description", "enlace_pdf"],
+           required: ["tipo", "sistema", "fase", "turno", "distribucion_plazas", "ambito", "plazas", "resumen", "plazo_numero", "plazo_tipo", "grupo", "profesiones", "categoria", "provincia", "titulacion", "enlace_inscripcion", "tasa", "boletin_origen_nombre", "boletin_origen_fecha", "referencia_boe_original", "fecha_cierre_exacta", "organismo", "meta_description", "enlace_pdf"],
             additionalProperties: false
           }
         }
