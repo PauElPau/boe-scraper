@@ -2,9 +2,9 @@
 // ARCHIVO: scripts/recalcular-fechas.js
 // ==========================================
 
-require("config/env");
-const { supabase } = require("services/db");
-const { calcularFechaCierre } = require("utils/helpers");
+require("../config/env");
+const { supabase } = require("./services/db");
+const { calcularFechaCierre } = require("./utils/helpers");
 
 async function recalcularFechasBD() {
   console.log("🔄 Iniciando recálculo masivo de fechas de cierre...");
