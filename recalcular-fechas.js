@@ -2,7 +2,7 @@
 // ARCHIVO: scripts/recalcular-fechas.js
 // ==========================================
 
-require("../config/env");
+require("./config/env");
 const { supabase } = require("./services/db");
 const { calcularFechaCierre } = require("./utils/helpers");
 
