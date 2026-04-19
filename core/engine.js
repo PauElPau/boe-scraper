@@ -17,14 +17,39 @@ const parser = new Parser({
 
 async function extraerBoletines() {
   const startTime = Date.now(); 
+  
+  // 📅 LÓGICA DE FILTRADO POR DÍA DE LA SEMANA
+  const ahora = new Date();
+  // Forzamos zona horaria de España para que el script sepa qué día es allí realmente
+  const opciones = { timeZone: 'Europe/Madrid', weekday: 'numeric' };
+  const diaSemana = parseInt(new Intl.DateTimeFormat('en-US', opciones).format(ahora)); 
+  // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+
+  // 1. DOMINGOS: No se hace nada
+  if (diaSemana === 0) {
+    console.log("😴 Hoy es domingo. El Topo se queda en la madriguera descansando.");
+    return; // Abortamos ejecución
+  }
+
+  let fuentesFiltradas = FUENTES_BOLETINES;
+
+  // 2. SÁBADOS: Filtro selectivo
+  if (diaSemana === 6) {
+    console.log("🛡️ Hoy es sábado. Ejecutando solo fuentes prioritarias (RSS, DOGV y BOE)...");
+    fuentesFiltradas = FUENTES_BOLETINES.filter(fuente => {
+      return fuente.tipo === "rss" || fuente.nombre === "DOGV" || fuente.nombre === "BOE";
+    });
+  }
+
   let totalErrores = 0; 
   const reporteStats = {};
 
   try {
     const convocatoriasInsertadasHoy = [];
 
-    for (const fuente of FUENTES_BOLETINES) {
-      if (getIaDetenida()) break; 
+    // CAMBIO IMPORTANTE: Ahora iteramos sobre 'fuentesFiltradas' en lugar de FUENTES_BOLETINES
+    for (const fuente of fuentesFiltradas) {
+      if (getIaDetenida()) break;
 
       const statsFuente = { encontradas: 0, guardadas: 0, descartadas_ia: 0, descartadas_404: 0, duplicados: 0, enlazadas: 0, errores: 0 };
       reporteStats[fuente.nombre] = statsFuente;

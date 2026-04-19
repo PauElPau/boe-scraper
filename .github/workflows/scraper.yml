@@ -4,7 +4,7 @@ name: Scraper boletines Diario
 on:
   schedule:
     # 05:23 AM UTC (07:23 España Verano / 06:23 España Invierno) TODOS LOS DÍAS
-    - cron: "23 5 * * *"
+    - cron: "23 5 * * 1-6"
   workflow_dispatch:
 
 # 💡 PRO-TIP 1: Evita que se ejecuten dos scrapers al mismo tiempo
