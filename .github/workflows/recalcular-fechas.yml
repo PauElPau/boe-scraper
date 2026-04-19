@@ -1,0 +1,30 @@
+name: 🛠️ Recalcular Fechas BD (Manual)
+
+on:
+  # El trigger "workflow_dispatch" crea un botón en la pestaña "Actions" de GitHub
+  # para que lo lances solo cuando tú decidas.
+  workflow_dispatch: 
+
+jobs:
+  recalcular:
+    name: Actualizar fechas de cierre
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Clonar el repositorio
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 📦 Instalar dependencias
+        run: npm ci
+
+      - name: 🔄 Ejecutar script de recálculo
+        env:
+          # Solo inyectamos los secretos de Supabase porque es lo único que necesita este script
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: node scripts/recalcular-fechas.js
