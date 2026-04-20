@@ -41,6 +41,30 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   // 🧠 Llamada al Cerebro de la Matriz 3D
   const analisisIA = await analizarConvocatoriaIA(itemData.title, textoParaIA, itemData.department, itemData.section, fuente.ambito);
 
+  // 🧮 AUTOCORRECCIÓN MATEMÁTICA: Agrupar y sumar distribución de plazas
+  if (analisisIA.distribucion_plazas && Array.isArray(analisisIA.distribucion_plazas)) {
+      const agrupado = {};
+      let sumaTotal = 0;
+      
+      for (const item of analisisIA.distribucion_plazas) {
+          if (item.turno && typeof item.plazas === 'number') {
+              agrupado[item.turno] = (agrupado[item.turno] || 0) + item.plazas;
+              sumaTotal += item.plazas;
+          }
+      }
+      
+      // Transformamos el objeto de nuevo al formato JSON Array
+      analisisIA.distribucion_plazas = Object.keys(agrupado).map(turno => ({
+          turno: turno,
+          plazas: agrupado[turno]
+      }));
+
+      // Parche de seguridad: Si la IA falló sumando el total, lo pisamos con la suma real
+      if (sumaTotal > 0 && analisisIA.plazas !== sumaTotal) {
+          analisisIA.plazas = sumaTotal;
+      }
+  }
+
   if (analisisIA.tipo === "IGNORAR" || (analisisIA.resumen && analisisIA.resumen.toLowerCase().includes("convenio"))) {
       console.log(`   ⏭️ Ignorado: La IA detectó que es un convenio o trámite no relevante.`);
       statsFuente.descartadas_ia++;

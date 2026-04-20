@@ -108,7 +108,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   -- PLAZAS Y TURNOS (DESGLOSE):
      - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
      - turno: Una convocatoria puede tener varios turnos simultáneos. Deduce los que apliquen y devuélvelos en una lista. Valores: "Turno Libre", "Promoción Interna", "Discapacidad". Si no especifica, asume ["Turno Libre"].
-     - distribucion_plazas: Si el texto desglosa cuántas plazas corresponden a cada turno, crea una lista detallando esto. Ejemplo: [{"turno": "Turno Libre", "plazas": 40}, {"turno": "Discapacidad", "plazas": 10}]. Si no especifica el reparto, devuelve null.
+     - distribucion_plazas: Si el texto desglosa plazas por turno, devuelve una lista SUMADA Y AGRUPADA por cada turno. ¡PROHIBIDO REPETIR TURNOS! Debes sumar todas las plazas del mismo turno. Ejemplo: [{"turno": "Turno Libre", "plazas": 40}, {"turno": "Discapacidad", "plazas": 10}]. Si no especifica el reparto, devuelve null.
 
   -- ÁMBITO:
      Define el alcance territorial del organismo que convoca:
