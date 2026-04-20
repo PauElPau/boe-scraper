@@ -64,11 +64,14 @@ async function enviarAlertasPorEmail(nuevasConvocatorias) {
     const provinciasSub = radar.provincias || []; 
 
     const coincidencias = convocatoriasReales.filter(conv => {
+      const textoProfesiones = Array.isArray(conv.profesiones) ? conv.profesiones.join(' ') : '';
+
       const superCadena = normalizarTexto(`
         ${conv.title || ''} 
         ${conv.resumen || ''} 
         ${conv.department || ''} 
         ${conv.profesion || ''}
+        ${textoProfesiones}
       `);
       
       // 🚀 MEJORA: Verificamos si ALGUNO de los términos coincide con la convocatoria (Lógica OR)
