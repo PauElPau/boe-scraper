@@ -156,9 +156,12 @@ function esTramiteBasura(titulo) {
   const esNombramientoTribunal = accionTribunal && esTribunal;
   const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvenciones') || 
                   t.includes('licitación') || t.includes('adjudicación de contrato') || 
-                  t.includes('impacto ambiental') || t.includes('ayudas destinadas') || 
-                  t.includes('ayudas al') || t.includes('ayudas para') || t.includes('concesión de ayudas') ||
+                  t.includes('impacto ambiental') || 
+                  t.includes('ayudas ') || t.includes('ayuda a la ') || t.includes('solicitud de ayuda') || t.includes('solicitud de la ayuda') || 
+                  t.includes('concesión de ayudas') ||
                   t.includes('contrato titulado') || t.includes('contrato de relevo') || 
+                  t.includes('proyectos específicos de i+d') || t.includes('proyectos de investigación') || 
+                  t.includes('residencias juveniles') || 
                   t.includes('beca') || t.includes('premio') || 
                   t.includes('suministro') || t.includes('se emplaza') || t.includes('emplazamiento') || 
                   t.includes('licencia ambiental') || t.includes('viviendas de protección') || 

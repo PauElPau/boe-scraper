@@ -91,7 +91,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       .rpc('buscar_padre_fuzzy', {
         p_departamento: departamentoFinal,
         p_profesion: profesionPrincipal,
-        p_provincia: provinciaFiltro, // 🛡️ NUEVO: Filtro Quirúrgico por Provincia
+        p_provincia: provinciaFiltro, // 🛡️ Filtro Quirúrgico por Provincia
         p_umbral: 0.85                // 🚀 Mantenemos el umbral estricto al 85%
       });
 
@@ -101,10 +101,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       let plazaExistente = posiblesPadres[0]; // Tomamos el mejor resultado (el #1)
 
       // 🛡️ ESCUDO ANTIMEZCLAS DE TURNOS
-      // Extraemos los turnos como Strings para compararlos rápido
       const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
       
-      // En Supabase el turno viene como JSONB, nos aseguramos de extraerlo bien
       let turnoAntiguoArray = [];
       if (Array.isArray(plazaExistente.turno)) {
           turnoAntiguoArray = plazaExistente.turno;
@@ -120,21 +118,30 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           plazaExistente = null; // Anulamos la coincidencia
       }
 
-      // Si sobrevive al escudo de turnos, aplicamos la lógica
+      // 🚀 AHORA SÍ: NUEVA LÓGICA DE HISTORIAL DE PUBLICACIONES
       if (plazaExistente) {
         if (esTramite) {
           console.log(`   🔗 Trámite enlazado por Trigramas (${(plazaExistente.similitud * 100).toFixed(0)}%). Padre: ${plazaExistente.slug}`);
           parentSlug = plazaExistente.slug;
           statsFuente.enlazadas++; 
         } else {
-          console.log(`   🔄 ¡Duplicado evitado! Similitud del ${(plazaExistente.similitud * 100).toFixed(0)}% con: ${plazaExistente.slug}`);
-          statsFuente.duplicados++; 
+          // Ya no es un "Duplicado evitado", es un "Historial detectado"
+          console.log(`   📖 Historial detectado (${(plazaExistente.similitud * 100).toFixed(0)}%): Vinculando nueva publicación al boletín original: ${plazaExistente.slug}`);
+          
+          // Enlazamos la nueva fila al padre para crear la cronología
+          parentSlug = plazaExistente.slug;
+          statsFuente.enlazadas++; // Lo contamos como enlazada
+          
+          // Por si acaso, le inyectamos el link del BOE al padre original (para retrocompatibilidad en el frontend)
           if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
               await supabase.from("convocatorias").update({ 
-                  link_boe: itemData.link, publication_date: new Date().toISOString().split('T')[0] 
+                  link_boe: itemData.link 
               }).eq('slug', plazaExistente.slug);
           }
-          return; // Cancelamos la inserción porque ya existe
+          
+          // 🛑 AQUÍ ESTÁ LA MAGIA: Hemos eliminado el 'return;'
+          // Al no abortar, el código seguirá bajando, calculará las fechas correctamente,
+          // redactará el texto SEO y hará el INSERT de esta nueva fila en la base de datos.
         }
       }
     }

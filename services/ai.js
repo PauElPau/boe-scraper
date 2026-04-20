@@ -92,18 +92,18 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - 'Concurso-Oposición': Exámenes + méritos.
      - 'Libre Designación': Elección directa por idoneidad (muy común en altos cargos y jefaturas).
 
-  3. LA FASE (Momento temporal del documento):
-     - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse. 🛑 REGLA VITAL: Las 'Ofertas de Empleo Público (OEP)' DEBEN clasificarse OBLIGATORIAMENTE en esta fase, aunque no tengan plazo abierto aún. 🛑 SEGUNDA REGLA VITAL (ANTI-BLOQUEOS): Si el título menciona "aprobación de bases", "publicación de bases", "convocatoria" de plazas/bolsas o "edicto relativo a una plaza", asume SIEMPRE que la fase es 'Apertura de Plazos / Convocatoria', incluso si el texto principal da error ("Access Denied") o no menciona los días exactos de plazo.
+ 3. LA FASE (Momento temporal del documento):
+     - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse. 🛑 REGLA VITAL: Las 'Ofertas de Empleo Público (OEP)' DEBEN clasificarse OBLIGATORIAMENTE en esta fase. 🛑 REGLA ANTI-BLOQUEOS: Si el título dice "aprobación de bases" o "convocatoria", asume que es apertura. ¡PERO OJO!: Si el título también contiene palabras como "nombramiento", "adjudicación", "resuelve el proceso", "lista definitiva" o "toma de posesión", ESTAS PALABRAS TIENEN PRIORIDAD ABSOLUTA y la fase NO será apertura, sino 'Adjudicación y Nombramientos'.
      - 'Listas de Admitidos y Excluidos': Listados provisionales o definitivos de participantes.
      - 'Tribunales y Fechas de Examen': Nombramiento del jurado, sedes, aulas y días de prueba.
      - 'Calificaciones y Resultados': Publicación de las notas del examen o de los puntos de méritos.
-     - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza, tomas de posesión, o cuando la resolución declara el concurso DESIERTO, caducado o cancelado).
+     - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza, tomas de posesión, resolución del concurso, propuesta de nombramiento, o cuando declara el proceso DESIERTO). 🛑 TRAMPA DE DESTINOS: Si el texto indica que se "ofrecen plazas a los aspirantes que han superado el proceso selectivo" o pide presentar solicitud para la "adjudicación de destinos", la fase ES SIEMPRE 'Adjudicación y Nombramientos' y sus plazos deben ser nulos (es un trámite interno para aprobados, no una oposición nueva).
      - 'Correcciones y Modificaciones': Fe de erratas o rectificaciones de bases anteriores.
      - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
 
   -- PLAZOS:
      Extrae el plazo_numero y plazo_tipo SOLO si la FASE es 'Apertura de Plazos / Convocatoria' para presentar solicitudes. 
-     🛑 REGLA VITAL: Si la fase es otra (ej: plazo para recurrir una lista, subsanar un error, etc.), devuelve null en los plazos. NUNCA uses la palabra 'días' a secas en el tipo, deduce 'hábiles' o 'naturales'.
+     🛑 REGLA VITAL: Si la fase es otra (ej: plazo para adjudicar destinos, plazo para recurrir una lista, subsanar un error, etc.), devuelve null en los plazos. NUNCA uses la palabra 'días' a secas en el tipo, deduce 'hábiles' o 'naturales'.
 
   -- PLAZAS Y TURNOS (DESGLOSE):
      - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
@@ -138,7 +138,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
 
   - tipo: Deduce el tipo EXACTO de la publicación usando estrictamente el esquema proporcionado. 
     🛑 REGLAS VITALES DE TIPO: 
-    1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión", "resolución del concurso", "declara desierto" o "constitución de bolsa", la FASE es OBLIGATORIAMENTE 'Adjudicación y Nombramientos'. ¡No es una apertura y NUNCA debes usar 'IGNORAR'!
+    1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión", "resolución del concurso", "declara desierto" o "constitución de bolsa", usa OBLIGATORIAMENTE 'Adjudicación y Nombramientos'. ¡No es una apertura y NUNCA debes usar 'IGNORAR'!
     2. ESTABILIZACIÓN: Si el texto dice explícitamente "estabilización" o "concurso excepcional", usa 'Estabilización y Promoción'.
     3. CORRECCIONES: Si menciona "corrección de errores" o "modificación de la resolución", usa 'Correcciones y Modificaciones'.
 
