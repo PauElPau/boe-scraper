@@ -108,10 +108,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   -- PLAZAS Y TURNOS (DESGLOSE):
      - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
      - turno: Una convocatoria puede tener varios turnos simultáneos. Deduce los que apliquen y devuélvelos en una lista. Valores: "Turno Libre", "Promoción Interna", "Discapacidad". Si no especifica, asume ["Turno Libre"].
-     - distribucion_plazas: Si el texto desglosa cuántas plazas corresponden a cada turno y/o puesto, crea una lista detallando esto línea a línea.
-       🛑 REGLA VITAL: Para convocatorias con MÚLTIPLES PROFESIONES distintas (ej: "3 plazas de Bombero" + "2 plazas de Auxiliar"), DEBES crear UNA ENTRADA por cada combinación de profesion+turno. Incluye SIEMPRE el campo 'profesion' con el nombre exacto del puesto en cada línea.
-       Ejemplo correcto: [{"profesion": "Bombero/a", "turno": "Turno Libre", "plazas": 16}, {"profesion": "Auxiliar Administrativo", "turno": "Turno Libre", "plazas": 6}, {"profesion": "Auxiliar Administrativo", "turno": "Discapacidad", "plazas": 3}].
-       Si el texto solo distingue por turno (sin especificar puestos), omite el campo 'profesion' o ponlo null. Si no hay ningún desglose, devuelve null en el campo completo.
+     - distribucion_plazas: Si el texto desglosa cuántas plazas corresponden a cada turno, crea una lista detallando esto. Ejemplo: [{"turno": "Turno Libre", "plazas": 40}, {"turno": "Discapacidad", "plazas": 10}]. Si no especifica el reparto, devuelve null.
 
   -- ÁMBITO:
      Define el alcance territorial del organismo que convoca:
@@ -218,11 +215,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
                 items: { 
                   type: "object", 
                   properties: { 
-                    profesion: { type: ["string", "null"], description: "Nombre exacto del puesto/profesión de esta línea. Obligatorio si hay múltiples profesiones en la convocatoria." },
                     turno: { type: "string", enum: ["Turno Libre", "Promoción Interna", "Discapacidad"] }, 
                     plazas: { type: "integer" } 
                   }, 
-                  required: ["profesion", "turno", "plazas"], 
+                  required: ["turno", "plazas"], 
                   additionalProperties: false 
                 } 
               },
