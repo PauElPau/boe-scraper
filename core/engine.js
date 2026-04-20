@@ -18,12 +18,15 @@ const parser = new Parser({
 async function extraerBoletines() {
   const startTime = Date.now(); 
   
-  // 📅 LÓGICA DE FILTRADO POR DÍA DE LA SEMANA
-  const ahora = new Date();
-  // Forzamos zona horaria de España para que el script sepa qué día es allí realmente
-  const opciones = { timeZone: 'Europe/Madrid', weekday: 'numeric' };
-  const diaSemana = parseInt(new Intl.DateTimeFormat('en-US', opciones).format(ahora)); 
-  // 0 = Domingo, 1 = Lunes, ..., 6 = Sábado
+    // 📅 LÓGICA DE FILTRADO POR DÍA DE LA SEMANA
+  // 1. Obtenemos la fecha y hora exacta en España en formato texto (inglés para parseo fácil)
+  const fechaMadridStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+  
+  // 2. Creamos un objeto Date basado en esa hora de Madrid
+  const fechaMadrid = new Date(fechaMadridStr);
+  
+  // 3. Extraemos el día de la semana (0 = Domingo, 1 = Lunes, ..., 6 = Sábado)
+  const diaSemana = fechaMadrid.getDay(); 
 
   // 1. DOMINGOS: No se hace nada
   if (diaSemana === 0) {
