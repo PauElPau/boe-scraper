@@ -147,7 +147,7 @@ function esTramiteBasura(titulo) {
   const t = titulo.toLowerCase();
 
   const esCese = t.includes('cese') || t.includes('jubilación') || t.includes('jubilacion') || t.includes('renuncia');
-  const accionTribunal = t.includes('nombramiento') || t.includes('designación') || t.includes('composición') || t.includes('modificación');
+  const accionTribunal = t.includes('nombramiento') || t.includes('nombra ') || t.includes('designación') || t.includes('designa ') || t.includes('composición') || t.includes('modificación');
   const esTribunal = t.includes('tribunal') || t.includes('comisión de selección') || t.includes('comisión de valoración') || t.includes('órgano de selección');
   const esRecurso = t.includes('trámite de audiencia') || t.includes('tramite de audiencia') || 
                     t.includes('recurso potestativo') || t.includes('recurso de reposición') || t.includes('recurso de reposicion') ||

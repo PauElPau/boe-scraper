@@ -293,7 +293,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
     tasa: analisisIA.tasa,
     parent_slug: parentSlug, 
-    publication_date: new Date().toISOString().split('T')[0], 
+    publication_date: fechaPublicacionReal,
     link_boe: webDefinitiva, 
     guid: pdfDefinitivo,
     raw_text: textoParaIA, 

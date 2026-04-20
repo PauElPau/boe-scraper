@@ -203,8 +203,12 @@ async function extraerBoletines() {
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
             if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
-            // Busca donde llamas a procesarYGuardarConvocatoria en la parte RSS y modifícalo:
-            const fechaRealRss = item.isoDate ? item.isoDate.split('T')[0] : new Date().toISOString().split('T')[0];
+            let fechaRealRss = new Date().toISOString().split('T')[0];
+            if (item.isoDate || item.pubDate) {
+                const itemDate = new Date(item.isoDate || item.pubDate);
+                // Forzamos la hora local de España. Así las 23:45 UTC del día 19, pasarán a ser las 01:45 CEST del día 20.
+                fechaRealRss = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' }).format(itemDate);
+            }
 
             await procesarYGuardarConvocatoria({ 
               title: item.tituloLimpioParaLog, link: item.link, guid: item.guid, link_boletin: urlFinalLog,

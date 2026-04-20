@@ -95,15 +95,16 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
  3. LA FASE (Momento temporal del documento):
      - 'Apertura de Plazos / Convocatoria': Cuando se abren las instancias y empieza la cuenta atrás legal para apuntarse. 🛑 REGLA VITAL: Las 'Ofertas de Empleo Público (OEP)' DEBEN clasificarse OBLIGATORIAMENTE en esta fase. 🛑 REGLA ANTI-BLOQUEOS: Si el título dice "aprobación de bases" o "convocatoria", asume que es apertura. ¡PERO OJO!: Si el título también contiene palabras como "nombramiento", "adjudicación", "resuelve el proceso", "lista definitiva" o "toma de posesión", ESTAS PALABRAS TIENEN PRIORIDAD ABSOLUTA y la fase NO será apertura, sino 'Adjudicación y Nombramientos'.
      - 'Listas de Admitidos y Excluidos': Listados provisionales o definitivos de participantes.
-     - 'Tribunales y Fechas de Examen': Nombramiento del jurado, sedes, aulas y días de prueba.
+     - 'Tribunales y Fechas de Examen': Nombramiento del jurado, sedes, aulas y días de prueba. 🛑 REGLA PRIORITARIA: Si el título menciona "comisión de selección", "tribunal", "órgano de selección" o "lista de aprobados", la fase ES SIEMPRE esta o 'Adjudicación y Nombramientos', IGNORANDO la palabra "convocatoria".
      - 'Calificaciones y Resultados': Publicación de las notas del examen o de los puntos de méritos.
      - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza, tomas de posesión, resolución del concurso, propuesta de nombramiento, o cuando declara el proceso DESIERTO). 🛑 TRAMPA DE DESTINOS: Si el texto indica que se "ofrecen plazas a los aspirantes que han superado el proceso selectivo" o pide presentar solicitud para la "adjudicación de destinos", la fase ES SIEMPRE 'Adjudicación y Nombramientos' y sus plazos deben ser nulos (es un trámite interno para aprobados, no una oposición nueva).
      - 'Correcciones y Modificaciones': Fe de erratas o rectificaciones de bases anteriores.
      - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
 
   -- PLAZOS:
-     Extrae el plazo_numero y plazo_tipo SOLO si la FASE es 'Apertura de Plazos / Convocatoria' para presentar solicitudes. 
-     🛑 REGLA VITAL: Si la fase es otra (ej: plazo para adjudicar destinos, plazo para recurrir una lista, subsanar un error, etc.), devuelve null en los plazos. NUNCA uses la palabra 'días' a secas en el tipo, deduce 'hábiles' o 'naturales'.
+     Extrae el plazo_numero y plazo_tipo SOLO Y EXCLUSIVAMENTE si la FASE es 'Apertura de Plazos / Convocatoria' para presentar solicitudes de inscripción inicial. 
+     🛑 REGLA VITAL 1 (PROHIBICIÓN ESTRICTA): Si has clasificado la FASE como cualquier otra cosa que no sea 'Apertura de Plazos / Convocatoria' (por ejemplo, si es 'Adjudicación y Nombramientos', 'Listas de Admitidos', etc.), ESTÁ TERMINANTEMENTE PROHIBIDO extraer ningún plazo. DEBES devolver SIEMPRE null en plazo_numero y plazo_tipo, sin importar si el texto menciona "días para presentar documentación", "toma de posesión" o "recursos".
+     🛑 REGLA VITAL 2 (CONDICIÓN BOE): Es muy común en Ayuntamientos publicar las bases en el boletín autonómico/provincial indicando que el plazo empezará a contar "desde la publicación en el Boletín Oficial del Estado (BOE)". Si el texto indica que el plazo de presentación de instancias empezará a contar a partir de una publicación futura en el BOE u otro boletín, DEBES DEVOLVER null en plazo_numero y plazo_tipo. Solo extrae el plazo si empieza a contar a partir de *este mismo* boletín que estás leyendo.
 
   -- PLAZAS Y TURNOS (DESGLOSE):
      - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
