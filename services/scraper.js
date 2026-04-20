@@ -491,21 +491,32 @@ function descargarPdfBinario(url) {
 async function extraerTextoDePDF(pdfUrl) {
     console.log(`   🩻 [Rayos X] Descargando y leyendo PDF interno...`);
     
-    // 🤫 MUTEADOR NINJA: Silenciamos los warnings molestos de pdf.js
+    // 🤫 MUTEADOR ACORAZADO: Secuestramos log, warn y error temporalmente
+    const originalLog = console.log;
     const originalWarn = console.warn;
-    console.warn = function (...args) {
-        const msg = args[0] || '';
-        if (typeof msg === 'string' && (
-            msg.includes('Ignoring invalid character') || 
-            msg.includes('TT: undefined function') || 
-            msg.includes('TT: invalid function id') || 
-            msg.includes('Indexing all PDF objects')
-        )) {
-            return; // Destruimos el mensaje molesto
-        }
-        // Si es un warning real de otra cosa, lo dejamos pasar
-        originalWarn.apply(console, args);
+    const originalError = console.error;
+
+    const silenciador = (funcionOriginal) => {
+        return function (...args) {
+            // Juntamos todos los argumentos en un solo texto para que no se escape nada
+            const msg = args.map(String).join(' ');
+            if (
+                msg.includes('Ignoring invalid character') || 
+                msg.includes('TT: undefined function') || 
+                msg.includes('invalid function id') || 
+                msg.includes('Indexing all PDF objects') ||
+                msg.includes('Warning: TT:')
+            ) {
+                return; // 🥷 Lo destruimos silenciosamente
+            }
+            // Si es un log normal (como los nuestros), lo dejamos pasar
+            funcionOriginal.apply(console, args);
+        };
     };
+
+    console.log = silenciador(originalLog);
+    console.warn = silenciador(originalWarn);
+    console.error = silenciador(originalError);
 
     try {
         // Descargamos el binario (con proxy si hay cortafuegos)
@@ -519,11 +530,14 @@ async function extraerTextoDePDF(pdfUrl) {
         let textoLimpio = data.text.replace(/\s+/g, ' ').trim();
         return textoLimpio;
     } catch (error) {
-        console.error(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
+        // Usamos la consola original por si falla algo real
+        originalError(`   ❌ Error leyendo PDF con Rayos X: ${error.message}`);
         return null;
     } finally {
-        // 🔊 MUY IMPORTANTE: Devolvemos la voz a la consola pase lo que pase
+        // 🔊 MUY IMPORTANTE: Devolvemos sus funciones normales a Node.js
+        console.log = originalLog;
         console.warn = originalWarn;
+        console.error = originalError;
     }
 }
 
