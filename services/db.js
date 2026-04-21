@@ -1,7 +1,3 @@
-// ==========================================
-// ARCHIVO: ./services/db.js (o donde esté ubicado)
-// ==========================================
-
 const { createClient } = require("@supabase/supabase-js");
 const slugify = require("slugify");
 const { analizarConvocatoriaIA, redactarArticuloSEOIA } = require("./ai");
@@ -142,6 +138,29 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           plazaExistente = null; // Anulamos la coincidencia
       }
 
+     // ⏱️ ESCUDO CRONOLÓGICO EVOLUTIVO (Motor de rangos)
+      if (plazaExistente) {
+          const RANGOS = {
+              'Apertura de Plazos / Convocatoria': 1,
+              'Listas de Admitidos y Excluidos': 2,
+              'Tribunales y Fechas de Examen': 3,
+              'Calificaciones y Resultados': 4,
+              'Adjudicación y Nombramientos': 5,
+              'Correcciones y Modificaciones': 0, // Las correcciones pueden ir a cualquier rango
+              'Otros Trámites': 0
+          };
+
+          const rangoNuevo = RANGOS[analisisIA.fase] || 0;
+          const rangoPadre = RANGOS[plazaExistente.fase] || 0;
+
+          // REGLA DE ORO: Solo enlazamos si el nuevo trámite es de igual rango o superior al que ya tenemos.
+          // Si rangoNuevo es 0 (corrección), lo permitimos siempre.
+          if (rangoNuevo > 0 && rangoPadre > 0 && rangoNuevo < rangoPadre) {
+              console.log(`   ⏱️ Salvado de deduplicación: La plaza encontrada está más avanzada (${plazaExistente.fase}) que este documento (${analisisIA.fase}). Son plazas distintas.`);
+              plazaExistente = null; 
+          }
+      }
+
       // 🚀 AHORA SÍ: NUEVA LÓGICA DE HISTORIAL DE PUBLICACIONES
       if (plazaExistente) {
         if (esTramite) {
@@ -156,16 +175,35 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           parentSlug = plazaExistente.slug;
           statsFuente.enlazadas++; // Lo contamos como enlazada
           
-          // Por si acaso, le inyectamos el link del BOE al padre original (para retrocompatibilidad en el frontend)
-          if (fuente.nombre === "BOE" && !plazaExistente.link_boe) {
-              await supabase.from("convocatorias").update({ 
-                  link_boe: itemData.link 
-              }).eq('slug', plazaExistente.slug);
+          // 🔄 ENRIQUECIMIENTO DEL PADRE (Sincronización Retrospectiva)
+          // Si el BOE nos da la información que el boletín autonómico no tenía (los plazos),
+          // se la inyectamos a la plaza original para que aparezca como "Abierta" en las búsquedas.
+          if (fuente.nombre === "BOE") {
+              const datosActualizacionPadre = {};
+              
+              // 1. Inyectamos el link del BOE si no lo tenía
+              if (!plazaExistente.link_boe) {
+                  datosActualizacionPadre.link_boe = itemData.link;
+              }
+              
+              // 2. Inyectamos los plazos SI Y SOLO SI el padre los tiene vacíos
+              if (!plazaExistente.fecha_cierre && fechaCierreCalculada) {
+                  datosActualizacionPadre.fecha_cierre = fechaCierreCalculada;
+                  datosActualizacionPadre.plazo_numero = analisisIA.plazo_numero;
+                  datosActualizacionPadre.plazo_tipo = analisisIA.plazo_tipo;
+                  datosActualizacionPadre.plazo_texto = (analisisIA.plazo_numero && analisisIA.plazo_tipo) 
+                      ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` 
+                      : null;
+              }
+
+              // Solo ejecutamos el update si hay algo nuevo que aportar
+              if (Object.keys(datosActualizacionPadre).length > 0) {
+                  console.log('   ✨ [Sincronización] Enriqueciendo plaza original (${plazaExistente.slug}) con plazos del BOE.');
+                  await supabase.from("convocatorias")
+                    .update(datosActualizacionPadre)
+                    .eq('slug', plazaExistente.slug);
+              }
           }
-          
-          // 🛑 AQUÍ ESTÁ LA MAGIA: Hemos eliminado el 'return;'
-          // Al no abortar, el código seguirá bajando, calculará las fechas correctamente,
-          // redactará el texto SEO y hará el INSERT de esta nueva fila en la base de datos.
         }
       }
     }
