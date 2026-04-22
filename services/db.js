@@ -230,6 +230,24 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           }
       }
 
+      // 🛡️ 4. ESCUDO ANTI-BUCLE DE APERTURAS (Refinado para BOE/Boletines Mixtos)
+      if (plazaExistente) {
+          if (analisisIA.fase === 'Apertura de Plazos / Convocatoria' && plazaExistente.fase === 'Apertura de Plazos / Convocatoria') {
+              
+              // Comprobamos si ambas publicaciones vienen del mismo boletín (Ej: Las 2 son del BOJA)
+              const mismoBoletin = plazaExistente.boletin && plazaExistente.boletin.startsWith(fuente.nombre);
+              
+              if (mismoBoletin) {
+                  console.log(`   🚫 Salvado de deduplicación: Dos 'Aperturas' en el MISMO boletín (${fuente.nombre}) son procesos paralelos/distintos.`);
+                  plazaExistente = null;
+              } else {
+                  console.log(`   🤝 Excepción Mixta: Se permite enlazar dos 'Aperturas' porque provienen de boletines distintos (${fuente.nombre} y ${plazaExistente.boletin}).`);
+              }
+          }
+      }
+
+      
+
       // 🚀 AHORA SÍ: LÓGICA DE HISTORIAL DE PUBLICACIONES (VERSIÓN INMUTABLE)
       if (plazaExistente) {
         if (esTramite) {
