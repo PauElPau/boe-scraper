@@ -100,6 +100,12 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - 'Adjudicación y Nombramientos': El final del proceso (aprobados que consiguen la plaza, tomas de posesión, resolución del concurso, propuesta de nombramiento, o cuando declara el proceso DESIERTO). 🛑 TRAMPA DE DESTINOS: Si el texto indica que se "ofrecen plazas a los aspirantes que han superado el proceso selectivo" o pide presentar solicitud para la "adjudicación de destinos", la fase ES SIEMPRE 'Adjudicación y Nombramientos' y sus plazos deben ser nulos (es un trámite interno para aprobados, no una oposición nueva).
      - 'Correcciones y Modificaciones': Fe de erratas o rectificaciones de bases anteriores.
      - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
+     🛑 REGLA ANTI-ENGAÑOS: Los boletines siempre empiezan recordando el objetivo del proceso (ej: "Resolución para la provisión definitiva de una plaza..."). NO uses esto para deducir la fase. Busca la ACCIÓN REAL que aprueba el documento (suele estar tras palabras como "Aprobar", "Publicar", "Se resuelve"). 
+     - Si menciona "lista provisional/definitiva de excluidos/admitidos" o "subsanación de errores", la fase es SIEMPRE 'Listas de Admitidos y Excluidos'.
+     🛑 REGLA ESPECIAL GVA / ADC:
+      - Si el documento menciona "Anuncio de Difícil Cobertura" (ADC) o "Ampliación de plazo", la fase es SIEMPRE 'Apertura de Plazos / Convocatoria', incluso si aparece el texto "Bolsa en funcionamiento".
+      - "Bolsa en funcionamiento" solo indica el contexto, pero la "Acción" de ampliar un plazo es lo que define la fase como abierta para la participación.
+      🛑 REGLA ANTI-CONFUSIÓN DE NOTAS: Si el documento menciona "puntuación provisional", "calificaciones", "notas", "resultados de la prueba" o "valoración de méritos", la fase es SIEMPRE 'Calificaciones y Resultados', incluso si abre un plazo de "alegaciones" o menciona listados "provisionales".
 
   -- PLAZOS:
      Extrae el plazo_numero y plazo_tipo SOLO si la FASE es 'Apertura de Plazos / Convocatoria', 'Listas de Admitidos y Excluidos' o 'Calificaciones y Resultados'.
@@ -122,9 +128,13 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachiller o FP', 'Grado Universitario', 'ESO').
      - categoria: Clasifica obligatoriamente la profesión en UNA de estas: 'Administración General', 'Economía, Hacienda y Finanzas', 'Sanidad y Salud', 'Cuerpos de Seguridad y Emergencias', 'Educación y Docencia', 'Informática y Telecomunicaciones', 'Ingeniería, Arquitectura y Medio Ambiente', 'Justicia y Legislación', 'Trabajo Social y Cuidados', 'Cultura, Archivos y Deportes', 'Oficios y Mantenimiento', 'Otros'. 🛑 REGLA VITAL: Si es una Oferta de Empleo Público (OEP) general sin una profesión clara, asígnale SIEMPRE 'Administración General'.
      - profesiones: Nombres limpios de los puestos.
-     - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
+     - grupo: Grupo profesional (A1, A2, B, C1, C2, Agrupaciones Profesionales/E). 🛑 REGLA VITAL: Si el texto no menciona la letra del grupo (ej: "Grupo A1"), dedúcelo a partir del "Cuerpo" o "Escala" mencionada. REGLAS ESTRICTAS DE CLASIFICACIÓN:
+        - "Escala Administrativa", "Cuerpo Administrativo" o titulación de "Bachiller/Técnico" -> Grupo C1.
+        - "Escala Auxiliar", "Cuerpo Auxiliar Administrativo" o titulación de "ESO" -> Grupo C2.
+        - "Subalterno", "Celador", "Ordenanza" -> Agrupaciones Profesionales.
+        - NUNCA asignes un grupo A1 o A2 a un cuerpo Administrativo o Auxiliar, sin importar si es un puesto de "Alto Cargo" o "Secretario". Manda la Escala.
      - organismo: Identifica la entidad LOCAL o FINAL que ofrece el puesto (ej: 'Ayuntamiento de Madrid', 'Servicio Andaluz de Salud', 'Universidad de Salamanca'). 🛑 REGLA ANTI-VACÍOS: Si te es imposible deducir el organismo local, usa el valor de 'DEPARTAMENTO/ORGANISMO DE ORIGEN'. Este campo NUNCA puede ser null. Si no sabes qué poner, usa el nombre genérico de la administración (Ej: 'Generalitat de Catalunya').
-    - provincia:  ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final. Indica la provincia específica (Ej: 'Castellón', 'Madrid'). 🛑 REGLA GEOGRÁFICA CRÍTICA: 
+     - provincia:  ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final. Indica la provincia específica (Ej: 'Castellón', 'Madrid'). 🛑 REGLA GEOGRÁFICA CRÍTICA: 
         1. Identifica el municipio o comarca en el título (ej: "Elda"-> Alicante, "La Plana"-> Castellón).
         2. La 'provincia' debe ser SIEMPRE coherente con el boletín. Si es un boletín autonómico, la provincia DEBE ser de esa comunidad. JAMÁS inventes una provincia de otra región.
   
@@ -132,20 +142,25 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
   - resumen: Resumen claro de 1-2 frases.
   - plazo_numero: Extrae SOLO la cantidad numérica del plazo (ej: 20).
   - plazo_tipo: Si el texto dice 'días hábiles', deduce 'hábiles'. NUNCA uses la palabra 'días' a secas.
-  - plazo_numero / plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
+  - plazo_numero y plazo_tipo: Extrae el plazo SOLO si es para presentar INSTANCIAS o SOLICITUDES de participación (para apuntarse a la oposición).
+    🛑 REGLA VITAL PARA MESES: Si el texto dice "un mes", "dos meses", etc., DEBES extraer exactamente el número de meses (ej: 1) y el tipo "meses". ESTÁ TERMINANTEMENTE PROHIBIDO convertir meses a "30 días" o "días hábiles". Respeta la unidad original del texto ('días hábiles', 'días naturales' o 'meses').
     🛑 REGLA VITAL DE PLAZOS: Si el plazo que menciona el texto es para "interponer recurso" (reposición/alzada), para "subsanar errores" o para "presentar méritos", DEBES devolver null en ambos campos. ¡No confundas el plazo legal de recurso de una lista con el plazo de inscripción!
-  - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
-  - sistema: Deduce si es Oposición, Concurso-oposición o Concurso. Si es una OEP o no se especifica claramente en el texto, asume SIEMPRE 'Oposición'.
+    🛑 REGLA ANTI-ALUCINACIÓN: Solo puedes extraer esto si el texto menciona EXPLÍCITAMENTE una cantidad (ej: "20 días", "1 mes"). Si el texto solo dice "hasta el 15 de mayo", DEBES devolver null en plazo_numero y plazo_tipo, y poner esa fecha directamente en fecha_cierre_exacta. ¡Prohibido hacer cálculos mentales para deducir los días!
+  
+  - sistema: Deduce si es Oposición, Concurso-Oposición, Concurso de Méritos o Libre Designación. Si no se especifica claramente en el texto, asume SIEMPRE 'Oposición'.
+    🛑 REGLA DE TRADUCCIÓN Y MAPEO: Si el texto original dice "Concurs", "Concurs de mèrits", "Valoración de méritos" o "Concurso y entrevista", debes mapearlo OBLIGATORIAMENTE a 'Concurso de Méritos'. No apliques la regla por defecto de 'Oposición' si ves la raíz de la palabra "concurs".
   - profesiones: Nombres limpios de los puestos.
-  - fecha_cierre_exacta: Si el texto indica explícitamente el día exacto en que termina el plazo (ej: 'del 15 al 16 de abril de 2026', 'hasta el 20/05/2026'), deduce la fecha final y devuélvela estrictamente en formato 'YYYY-MM-DD'. Si el texto solo dice '20 días' pero no da el día exacto del calendario, devuelve null.
-
+  - fecha_cierre_exacta: Extrae la fecha de cierre SOLO si el texto indica explícitamente el día exacto en que termina el plazo (ej: "el plazo finaliza el 15 de mayo de 2026"). 🛑 REGLA VITAL: NUNCA uses la fecha de firma del documento ni la fecha de publicación del boletín como fecha de cierre. Si el texto solo dice "10 días hábiles", debes devolver null obligatoriamente y dejar que el sistema lo calcule. Formato: YYYY-MM-DD.
   - tipo: Deduce el tipo EXACTO de la publicación usando estrictamente el esquema proporcionado. 
     🛑 REGLAS VITALES DE TIPO: 
     1. FINALIZADOS: Si el texto contiene "adjudicación de destin", "nombramiento", "lista definitiva de aprobados", "toma de posesión", "resolución del concurso", "declara desierto" o "constitución de bolsa", usa OBLIGATORIAMENTE 'Adjudicación y Nombramientos'. ¡No es una apertura y NUNCA debes usar 'IGNORAR'!
     2. ESTABILIZACIÓN: Si el texto dice explícitamente "estabilización" o "concurso excepcional", usa 'Estabilización y Promoción'.
     3. CORRECCIONES: Si menciona "corrección de errores" o "modificación de la resolución", usa 'Correcciones y Modificaciones'.
+    🛑 REGLA VITAL PARA OEPs: 'Ofertas de Empleo Público (OEP)' SOLO se puede usar para los Decretos o Acuerdos generales anuales que anuncian el número total de vacantes a rellenar en un año (ej: "Se aprueba la Oferta de Empleo Público para 2026"). 
+    🛑 REGLA VITAL PARA TRÁMITES: Si el documento es una Lista de Admitidos, un Nombramiento, una Fecha de Examen o una Corrección de Errores, el TIPO debe ser el del proceso original (por defecto 'Plazas de Nuevo Ingreso' o 'Provisión de Puestos...'). NUNCA uses 'OEP' para trámites de procesos que ya están en marcha.
+    🛑 REGLA ANTI-RUIDO: Si el documento habla de "Movilidad", "Erasmus", "Ayudas", "Becas", "Estancias docentes/investigación" o procesos exclusivos para personal que YA forma parte de la plantilla para irse al extranjero, el tipo DEBE ser obligatoriamente 'IGNORAR'.
 
-  - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachillerato', 'Grado Universitario', 'ESO', 'Licenciatura en Derecho'). Tradúcelo al español.
+  - titulacion: Busca la titulación mínima exigida. Sé EXTREMADAMENTE CONCISO, máximo 3 o 4 palabras (Ej: 'Bachillerato', 'Grado Universitario', 'ESO', 'Licenciatura en Derecho'). Tradúcelo al español. Sé conciso pero incluye TODAS las especialidades si se nombran (ej: no digas solo "Técnico Superior", di "Técnico/a Superior en Asistencia a la Dirección o Administración y Finanzas").
   
   - categoria: 🗂️ REGLA DE CATEGORIZACIÓN (MACRO-TAXONOMÍA):
       Debes clasificar la profesión principal obligatoriamente en UNA de estas categorías cerradas:
@@ -183,8 +198,7 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
          - Si es Castilla y León, deduce la provincia real: Ávila, Burgos, León, Palencia, Salamanca, Segovia, Soria, Valladolid o Zamora. (Si la plaza es general para la Junta y no especifica ciudad, pon Valladolid).
       6. 🚨 EL SÍNDROME DEL BOE: Aunque la fuente de la noticia sea un Boletín Estatal (BOE), si el organismo es un Ayuntamiento, Universidad u Hospital, DEBES deducir la provincia física real (ej. Universitat Jaume I -> Castellón). Usa 'Estatal' ÚNICA Y EXCLUSIVAMENTE para Ministerios, Fuerzas Armadas o Cuerpos de ámbito verdaderamente nacional.
       
-  - enlace_inscripcion: URL exacta para presentar instancia (sede electrónica).
-  - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
+- enlace_inscripcion: URL para el trámite telemático o descarga de modelos. Si el texto menciona una web (ej: "www.saludcantabria.es"), añádele "https://" al principio si no lo tiene y devuélvelo. Ignora rutas relativas como "/sede-electronica/".  - tasa: Importe de la tasa (derechos de examen) numérico. Ej: 15.20.
   - boletin_origen_nombre: Si las bases están publicadas en otro boletín, extrae SOLO el acrónimo (ej: 'BOE', 'BOP Córdoba').
   - boletin_origen_fecha: Si menciona la fecha del boletín de origen, formato 'YYYY-MM-DD'.
   - referencia_boe_original: Código BOE oficial si existe.

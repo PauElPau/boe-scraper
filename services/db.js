@@ -311,8 +311,20 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
 
-  // FECHAS
+// --- 🛡️ ESCUDO MATEMÁTICO ABSOLUTO PARA FECHAS DE CIERRE ---
   const fechaPublicacionReal = itemData.fecha_publicacion_real || new Date().toISOString().split('T')[0];
+  
+  // REGLA DE HIERRO: Si el texto indica que hay un "plazo_numero" (ej: 15 días, 1 mes),
+  // se anula SIEMPRE cualquier fecha de cierre exacta que la IA haya intentado deducir.
+  // La IA es pésima sumando días hábiles, así que obligamos al sistema a usar la función calcularFechaCierre() de helpers.js.
+  if (analisisIA.plazo_numero > 0) {
+      if (analisisIA.fecha_cierre_exacta) {
+          console.log(`   🛡️ Escudo Fechas: Anulando fecha exacta de la IA (${analisisIA.fecha_cierre_exacta}) para delegar el cálculo matemático de los ${analisisIA.plazo_numero} ${analisisIA.plazo_tipo}.`);
+          analisisIA.fecha_cierre_exacta = null;
+      }
+  }
+
+  // Ahora, calcularFechaCierre se ejecutará obligatoriamente siempre que haya días/meses de plazo.
   const fechaCierreCalculada = analisisIA.fecha_cierre_exacta || calcularFechaCierre(fechaPublicacionReal, analisisIA.plazo_numero, analisisIA.plazo_tipo, provinciaValidada);
 
   // 📦 CONSTRUCCIÓN DEL OBJETO DEFINITIVO

@@ -79,29 +79,25 @@ function esDiaFestivo(fechaObj, region) {
   return false;
 }
 
-// ⏱️ CÁLCULO DE FECHA DE CIERRE (Ahora recibe la provincia)
+// ⏱️ CÁLCULO DE FECHA DE CIERRE (Blindado Ley 39/2015)
 function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo, provincia = null) {
   if (!plazoNumero || !plazoTipo || !fechaPublicacion) return null;
   
-  // Traducimos la provincia a su Comunidad Autónoma (Si no hay provincia, usamos null)
   const region = provincia ? PROVINCIA_TO_CCAA[provincia] : null;
-
-  const fechaBase = new Date(fechaPublicacion);
-  fechaBase.setDate(fechaBase.getDate() + 1); 
-  let fechaCierre = new Date(fechaBase);
+  let fechaCierre = new Date(fechaPublicacion);
   const tipo = plazoTipo.toLowerCase();
   
   try {
     if (tipo.includes('hábil') || tipo.includes('habil')) {
+      // DÍAS HÁBILES: Se cuentan saltando fines de semana y festivos
+      fechaCierre.setDate(fechaCierre.getDate() + 1); // Empieza el día siguiente
       let diasSumados = 0;
       fechaCierre.setDate(fechaCierre.getDate() - 1); 
       
       while (diasSumados < plazoNumero) {
         fechaCierre.setDate(fechaCierre.getDate() + 1);
         const diaSemana = fechaCierre.getDay();
-        
         const esFinDeSemana = (diaSemana === 0 || diaSemana === 6);
-        // Le pasamos la 'region' ya traducida
         const esFestivo = esDiaFestivo(fechaCierre, region);
 
         if (!esFinDeSemana && !esFestivo) {
@@ -109,17 +105,43 @@ function calcularFechaCierre(fechaPublicacion, plazoNumero, plazoTipo, provincia
         }
       }
     } 
-    else if (tipo.includes('natural') || tipo.includes('día') || tipo.includes('dia')) {
-      fechaCierre.setDate(fechaCierre.getDate() + plazoNumero - 1);
-    } 
     else if (tipo.includes('mes')) {
+      // MESES: El plazo concluye el MISMO DÍA de la publicación en el mes de vencimiento.
+      const diaPublicacion = fechaCierre.getDate();
       fechaCierre.setMonth(fechaCierre.getMonth() + plazoNumero);
-      fechaCierre.setDate(fechaCierre.getDate() - 1); 
+
+      // Parche "Efecto Febrero" (Evitar que JS salte al mes siguiente si el día no existe)
+      if (fechaCierre.getDate() !== diaPublicacion) {
+          fechaCierre.setDate(0); // Retrocedemos al último día del mes correcto
+      }
     } 
-    else return null;
+    else if (tipo.includes('natural') || tipo.includes('día') || tipo.includes('dia')) {
+      // DÍAS NATURALES: Se suma la cantidad directamente desde el día de publicación
+      fechaCierre.setDate(fechaCierre.getDate() + plazoNumero);
+    } 
+    else {
+      return null;
+    }
+    
+    // 🛡️ REGLA UNIVERSAL INQUEBRANTABLE (Ley 39/2015 Art 30.5)
+    // Si el día final en el que cae el plazo es inhábil (sábado, domingo o festivo),
+    // se prorroga automáticamente al primer día hábil siguiente.
+    while (true) {
+        const diaSemana = fechaCierre.getDay();
+        const esFinDeSemana = (diaSemana === 0 || diaSemana === 6);
+        const esFestivo = esDiaFestivo(fechaCierre, region);
+
+        if (esFinDeSemana || esFestivo) {
+            fechaCierre.setDate(fechaCierre.getDate() + 1); // Sumamos un día y volvemos a comprobar
+        } else {
+            break; // Es un día hábil legal, nos detenemos.
+        }
+    }
     
     return fechaCierre.toISOString().split('T')[0];
-  } catch (error) { return null; }
+  } catch (error) { 
+    return null; 
+  }
 }
 
 // 🧹 Helper para formatear profesiones a Title Case (Primera Letra Mayúscula)
@@ -154,8 +176,10 @@ function esTramiteBasura(titulo) {
                     t.includes('recurso contencioso') || t.includes('recurso de alzada') ||
                     t.includes('recurso extraordinario') || t.includes('interposición de recurso');
   const esNombramientoTribunal = accionTribunal && esTribunal;
-  const esRuido = t.includes('convenio') || t.includes('subvención') || t.includes('subvenciones') || 
-                  t.includes('licitación') || t.includes('adjudicación de contrato') || 
+const esRuido =   t.includes('convenio') || t.includes('subvención') || t.includes('subvenciones') || 
+                  t.includes('licitación') || t.includes('adjudicación de contrato') || t.includes('adjudicación del contrato') || 
+                  t.includes('contrato de suministro') || t.includes('contrato de servicio') || t.includes('contrato de obra') ||
+                  t.includes('arrendamiento') || t.includes('enajenación') || t.includes('subasta') ||
                   t.includes('impacto ambiental') || 
                   t.includes('ayudas ') || t.includes('ayuda a la ') || t.includes('solicitud de ayuda') || t.includes('solicitud de la ayuda') || 
                   t.includes('concesión de ayudas') ||
@@ -166,7 +190,9 @@ function esTramiteBasura(titulo) {
                   t.includes('suministro') || t.includes('se emplaza') || t.includes('emplazamiento') || 
                   t.includes('licencia ambiental') || t.includes('viviendas de protección') || 
                   t.includes('suplentes temporales') || t.includes('impuesto') || 
-                  t.includes('pago voluntario') || t.includes('liquidaciones');
+                  t.includes('pago voluntario') || t.includes('liquidaciones') ||
+                  t.includes('movilidad internacional') || t.includes('erasmus') || 
+                  t.includes('estancias docentes') || t.includes('estancias de investigación');
   return esCese || esNombramientoTribunal || esRecurso || esRuido;
 }
 
