@@ -1,3 +1,7 @@
+// ==========================================
+// ARCHIVO: ./services/db.js
+// ==========================================
+
 const { createClient } = require("@supabase/supabase-js");
 const slugify = require("slugify");
 const { analizarConvocatoriaIA, redactarArticuloSEOIA } = require("./ai");
@@ -11,6 +15,25 @@ const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY,
 );
+
+// 🗺️ MAPA DE JURISDICCIONES PARA EVITAR ALUCINACIONES GEOGRÁFICAS DE LA IA
+const JURISDICCIONES = {
+  'BOCYL': ['Ávila', 'Burgos', 'León', 'Palencia', 'Salamanca', 'Segovia', 'Soria', 'Valladolid', 'Zamora', 'Castilla y León'],
+  'DOGV': ['Alicante', 'Castellón', 'Valencia', 'Comunidad Valenciana'],
+  'DOG': ['A Coruña', 'Lugo', 'Ourense', 'Pontevedra', 'Galicia'],
+  'BOJA': ['Almería', 'Cádiz', 'Córdoba', 'Granada', 'Huelva', 'Jaén', 'Málaga', 'Sevilla', 'Andalucía'],
+  'BOC': ['Las Palmas', 'Santa Cruz de Tenerife', 'Canarias'],
+  'BOR': ['La Rioja'],
+  'BORM': ['Murcia'],
+  'BOCM': ['Madrid', 'Comunidad de Madrid'],
+  'BON': ['Navarra'],
+  'DOE': ['Badajoz', 'Cáceres', 'Extremadura'],
+  'BOIB': ['Illes Balears', 'Baleares'],
+  'BOA': ['Huesca', 'Teruel', 'Zaragoza', 'Aragón'],
+  'BOPA': ['Asturias'],
+  'BOCAN': ['Cantabria'],
+  'DOCM': ['Albacete', 'Ciudad Real', 'Cuenca', 'Guadalajara', 'Toledo', 'Castilla-La Mancha']
+};
 
 async function gestionarDepartamento(nombre) {
   if (!nombre) return;
@@ -75,11 +98,21 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       analisisIA.profesiones = analisisIA.profesiones.map(capitalizarProfesion);
   }
   
-  // Condición de seguridad antigua, adaptada a la nueva matriz (si no hay profe ni plaza y es "Otros Trámites", adiós).
+  // Condición de seguridad adaptada a la nueva matriz
   if (!profesionPrincipal && !analisisIA.plazas && analisisIA.fase === "Otros Trámites") {
       console.log(`   ⏭️ Descartado: La IA determinó que es un trámite genérico sin plazas ni profesiones.`);
       statsFuente.descartadas_ia++;
       return;
+  }
+
+  // --- 🛡️ VALIDACIÓN DE INTEGRIDAD TERRITORIAL ---
+  let provinciaValidada = analisisIA.provincia || fuente.ambito;
+  if (JURISDICCIONES[fuente.nombre]) {
+      const permitidas = JURISDICCIONES[fuente.nombre];
+      if (!permitidas.includes(provinciaValidada)) {
+          console.log(`   ⚠️ Alucinación Geográfica: ${provinciaValidada} no pertenece a ${fuente.nombre}. Corrigiendo...`);
+          provinciaValidada = permitidas[permitidas.length - 1]; // Forzamos a la Comunidad Autónoma
+      }
   }
 
   const departamentoFinal = analisisIA.organismo || itemData.department;
@@ -103,42 +136,57 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   // 🥈 PRIORIDAD 2: Fuzzy Matching (Delegado a PostgreSQL)
   if (!parentSlug && departamentoFinal && profesionPrincipal) {
     
-    // 📍 Usamos la provincia extraída por la IA (o el ámbito por defecto de la fuente)
-    const provinciaFiltro = analisisIA.provincia || fuente.ambito;
-
-    // Llamamos a la función RPC de Supabase (Súper rápido)
     const { data: posiblesPadres, error: rpcError } = await supabase
       .rpc('buscar_padre_fuzzy', {
         p_departamento: departamentoFinal,
         p_profesion: profesionPrincipal,
-        p_provincia: provinciaFiltro, // 🛡️ Filtro Quirúrgico por Provincia
-        p_umbral: 0.85                // 🚀 Mantenemos el umbral estricto al 85%
+        p_provincia: provinciaValidada, // Usamos la provincia blindada
+        p_umbral: 0.85                
       });
 
     if (rpcError) {
         console.error("   ❌ Error en RPC buscar_padre_fuzzy:", rpcError.message);
     } else if (posiblesPadres && posiblesPadres.length > 0) {
-      let plazaExistente = posiblesPadres[0]; // Tomamos el mejor resultado (el #1)
+      let plazaExistente = posiblesPadres[0]; 
 
-      // 🛡️ ESCUDO ANTIMEZCLAS DE TURNOS
-      const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
-      
-      let turnoAntiguoArray = [];
-      if (Array.isArray(plazaExistente.turno)) {
-          turnoAntiguoArray = plazaExistente.turno;
-      } else if (typeof plazaExistente.turno === 'string') {
-          try { turnoAntiguoArray = JSON.parse(plazaExistente.turno); } 
-          catch(e) { turnoAntiguoArray = [plazaExistente.turno]; }
-      }
-      
-      const turnoAntiguoStr = turnoAntiguoArray.length > 0 ? [...turnoAntiguoArray].sort().join(',') : 'Turno Libre';
-
-      if (turnoNuevoStr !== turnoAntiguoStr) {
-          console.log(`   ⚖️ Salvado de deduplicación: Alta similitud (${(plazaExistente.similitud * 100).toFixed(0)}%) pero TURNOS DISTINTOS (${turnoNuevoStr} vs ${turnoAntiguoStr})`);
-          plazaExistente = null; // Anulamos la coincidencia
+      // 🛡️ 0. ESCUDO ESTRICTO DE AYUNTAMIENTOS
+      // Si ambos organismos son Ayuntamientos, exigimos coincidencia EXACTA del nombre.
+      if (plazaExistente) {
+          const deptNuevo = departamentoFinal.toLowerCase();
+          const deptViejo = plazaExistente.department.toLowerCase();
+          
+          if (deptNuevo.includes('ayuntamiento') && deptViejo.includes('ayuntamiento')) {
+              if (deptNuevo !== deptViejo) {
+                  console.log(`   🏛️ Salvado de deduplicación: Confusión de Ayuntamientos (${deptNuevo} vs ${deptViejo}).`);
+                  plazaExistente = null;
+              }
+          }
       }
 
-     // ⏱️ ESCUDO CRONOLÓGICO EVOLUTIVO (Motor de rangos)
+      // 🛡️ 1. ESCUDO ANTIMEZCLAS DE TURNOS
+      if (plazaExistente) {
+          const turnoNuevoStr = Array.isArray(analisisIA.turno) ? [...analisisIA.turno].sort().join(',') : 'Turno Libre';
+          
+          let turnoAntiguoArray = [];
+          if (Array.isArray(plazaExistente.turno)) {
+              turnoAntiguoArray = plazaExistente.turno;
+          } else if (typeof plazaExistente.turno === 'string') {
+              try { turnoAntiguoArray = JSON.parse(plazaExistente.turno); } 
+              catch(e) { turnoAntiguoArray = [plazaExistente.turno]; }
+          }
+          
+          const turnoAntiguoStr = turnoAntiguoArray.length > 0 ? [...turnoAntiguoArray].sort().join(',') : 'Turno Libre';
+
+          if (turnoNuevoStr !== turnoAntiguoStr) {
+              console.log(`   ⚖️ Salvado: Alta similitud pero TURNOS DISTINTOS (${turnoNuevoStr} vs ${turnoAntiguoStr})`);
+              plazaExistente = null; 
+          }
+      }
+
+      // ⏱️ 2. ESCUDO CRONOLÓGICO EVOLUTIVO (Motor de rangos)
+      let rangoNuevo = 0;
+      let rangoPadre = 0;
+      
       if (plazaExistente) {
           const RANGOS = {
               'Apertura de Plazos / Convocatoria': 1,
@@ -146,71 +194,59 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
               'Tribunales y Fechas de Examen': 3,
               'Calificaciones y Resultados': 4,
               'Adjudicación y Nombramientos': 5,
-              'Correcciones y Modificaciones': 0, // Las correcciones pueden ir a cualquier rango
+              'Correcciones y Modificaciones': 0, 
               'Otros Trámites': 0
           };
 
-          const rangoNuevo = RANGOS[analisisIA.fase] || 0;
-          const rangoPadre = RANGOS[plazaExistente.fase] || 0;
+          rangoNuevo = RANGOS[analisisIA.fase] || 0;
+          rangoPadre = RANGOS[plazaExistente.fase] || 0;
 
-          // REGLA DE ORO: Solo enlazamos si el nuevo trámite es de igual rango o superior al que ya tenemos.
-          // Si rangoNuevo es 0 (corrección), lo permitimos siempre.
           if (rangoNuevo > 0 && rangoPadre > 0 && rangoNuevo < rangoPadre) {
-              console.log(`   ⏱️ Salvado de deduplicación: La plaza encontrada está más avanzada (${plazaExistente.fase}) que este documento (${analisisIA.fase}). Son plazas distintas.`);
+              console.log(`   ⏱️ Salvado: La plaza encontrada está más avanzada (${plazaExistente.fase}) que el documento actual (${analisisIA.fase}).`);
               plazaExistente = null; 
           }
       }
 
-      // 🚀 AHORA SÍ: NUEVA LÓGICA DE HISTORIAL DE PUBLICACIONES
+      // 👯 3. ESCUDO DE RESOLUCIONES GEMELAS (Anti-Clones)
+      if (plazaExistente && rangoNuevo === rangoPadre && rangoNuevo > 0) {
+          const mismoBoletin = plazaExistente.boletin && plazaExistente.boletin.startsWith(fuente.nombre);
+          
+          if (mismoBoletin) {
+              console.log(`   👯 Salvado: Resoluciones gemelas en el mismo boletín (${fuente.nombre}). Son plazas distintas.`);
+              plazaExistente = null;
+          } else {
+              const extraerParentesis = (texto) => {
+                  if (!texto) return "";
+                  return (texto.match(/\(([^)]+)\)/g) || []).join(' ').toLowerCase();
+              };
+              
+              const parenNuevo = extraerParentesis(itemData.title);
+              const parenViejo = extraerParentesis(plazaExistente.title);
+              
+              if (parenNuevo && parenViejo && parenNuevo !== parenViejo) {
+                  console.log(`   📍 Salvado: Localizaciones difieren (${parenNuevo} vs ${parenViejo}).`);
+                  plazaExistente = null;
+              }
+          }
+      }
+
+      // 🚀 AHORA SÍ: LÓGICA DE HISTORIAL DE PUBLICACIONES (VERSIÓN INMUTABLE)
       if (plazaExistente) {
         if (esTramite) {
           console.log(`   🔗 Trámite enlazado por Trigramas (${(plazaExistente.similitud * 100).toFixed(0)}%). Padre: ${plazaExistente.slug}`);
           parentSlug = plazaExistente.slug;
           statsFuente.enlazadas++; 
         } else {
-          // Ya no es un "Duplicado evitado", es un "Historial detectado"
           console.log(`   📖 Historial detectado (${(plazaExistente.similitud * 100).toFixed(0)}%): Vinculando nueva publicación al boletín original: ${plazaExistente.slug}`);
-          
-          // Enlazamos la nueva fila al padre para crear la cronología
           parentSlug = plazaExistente.slug;
-          statsFuente.enlazadas++; // Lo contamos como enlazada
-          
-          // 🔄 ENRIQUECIMIENTO DEL PADRE (Sincronización Retrospectiva)
-          // Si el BOE nos da la información que el boletín autonómico no tenía (los plazos),
-          // se la inyectamos a la plaza original para que aparezca como "Abierta" en las búsquedas.
-          if (fuente.nombre === "BOE") {
-              const datosActualizacionPadre = {};
-              
-              // 1. Inyectamos el link del BOE si no lo tenía
-              if (!plazaExistente.link_boe) {
-                  datosActualizacionPadre.link_boe = itemData.link;
-              }
-              
-              // 2. Inyectamos los plazos SI Y SOLO SI el padre los tiene vacíos
-              if (!plazaExistente.fecha_cierre && fechaCierreCalculada) {
-                  datosActualizacionPadre.fecha_cierre = fechaCierreCalculada;
-                  datosActualizacionPadre.plazo_numero = analisisIA.plazo_numero;
-                  datosActualizacionPadre.plazo_tipo = analisisIA.plazo_tipo;
-                  datosActualizacionPadre.plazo_texto = (analisisIA.plazo_numero && analisisIA.plazo_tipo) 
-                      ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` 
-                      : null;
-              }
-
-              // Solo ejecutamos el update si hay algo nuevo que aportar
-              if (Object.keys(datosActualizacionPadre).length > 0) {
-                  console.log('   ✨ [Sincronización] Enriqueciendo plaza original (${plazaExistente.slug}) con plazos del BOE.');
-                  await supabase.from("convocatorias")
-                    .update(datosActualizacionPadre)
-                    .eq('slug', plazaExistente.slug);
-              }
-          }
+          statsFuente.enlazadas++; 
+          // 🚫 SE ELIMINA LA SINCRONIZACIÓN RETROSPECTIVA: La base de datos es ahora inmutable.
         }
       }
     }
   }
 
   let textoPlazas = analisisIA.plazas ? (analisisIA.plazas === 1 ? '1-plaza-' : `${analisisIA.plazas}-plazas-`) : '';
-  // Creamos un sufijo seguro. Si no hay departamento, ponemos "administracion-publica" para el SEO.
   const sufijoDep = departamentoFinal ? `-${departamentoFinal}` : '-administracion-publica';
   let textoParaSlug = profesionPrincipal ? `oposiciones-${textoPlazas}${profesionPrincipal}${sufijoDep}` : (analisisIA.resumen || itemData.title);
   let slugBase = slugify(textoParaSlug, { lower: true, strict: true, remove: /[*+~.()'"!:@,]/g });
@@ -229,25 +265,22 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const slugFinal = `${slugBase}-${suffix}`;
 
   // =========================================================================
-  // ✍️ 🚀 EJECUCIÓN DE LA REDACTORA SEO (Solo para las que sobrevivieron)
+  // ✍️ 🚀 EJECUCIÓN DE LA REDACTORA SEO
   // =========================================================================
-  // Solo generamos artículos largos para aperturas reales, no para "Trámites" menores, 
-  // así ahorramos dinero en la API. Si es un trámite, la descripcion_extendida será null.
+  // Ahora redactamos SEO también para Admitidos y Calificaciones para que las hijas posicionen bien en Google
   let descripcionSEO = null;
-  if (!esTramite || analisisIA.fase === 'Apertura de Plazos / Convocatoria') {
+  const fasesSEO = ['Apertura de Plazos / Convocatoria', 'Listas de Admitidos y Excluidos', 'Calificaciones y Resultados'];
+  
+  if (!esTramite || fasesSEO.includes(analisisIA.fase)) {
       console.log(`   ✍️ Redactando artículo SEO extenso para: ${profesionPrincipal || 'Plaza'}...`);
       descripcionSEO = await redactarArticuloSEOIA(analisisIA, textoParaIA);
   }
   // =========================================================================
 
   // --- 🛠️ ASIGNACIÓN DEFINITIVA DE ENLACES (link_boe y guid) ---
-  // 1. Asignamos el HTML principal (link_boe)
   let webDefinitiva = itemData.htmlGenerado || itemData.link;
-  
-  // 2. Asignamos el PDF principal (guid)
   let pdfDefinitivo = itemData.pdfGenerado || itemData.pdf_rss || itemData.pdf_extraido || analisisIA.enlace_pdf;
 
-  // 3. REGLAS DE SEGURIDAD Y LIMPIEZA
   if (webDefinitiva.includes('{')) {
       webDefinitiva = itemData.link_boletin;
   }
@@ -275,25 +308,14 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       pdfDefinitivo = webDefinitiva;
   }
 
-  // Fallback de seguridad
   if (!pdfDefinitivo) pdfDefinitivo = webDefinitiva;
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
-  // ----------------------------------------------------------
 
-/*   const fechaPublicacionHoy = new Date().toISOString().split('T')[0];
-  const fechaCierreCalculada = calcularFechaCierre(fechaPublicacionHoy, analisisIA.plazo_numero, analisisIA.plazo_tipo); */
-
-  // 1. Usamos la fecha real que nos llega del engine (o la de hoy por defecto)
+  // FECHAS
   const fechaPublicacionReal = itemData.fecha_publicacion_real || new Date().toISOString().split('T')[0];
-  
-  // 2. Si la IA logró encontrar una fecha exacta escrita en el texto, la usamos. 
-  // Si no, delegamos en tu cálculo matemático de días hábiles/naturales.
-  // Usamos la provincia extraída por la IA (o la genérica de la fuente si la IA falló)
-  const provinciaCalculo = analisisIA.provincia || fuente.ambito;
+  const fechaCierreCalculada = analisisIA.fecha_cierre_exacta || calcularFechaCierre(fechaPublicacionReal, analisisIA.plazo_numero, analisisIA.plazo_tipo, provinciaValidada);
 
-  const fechaCierreCalculada = analisisIA.fecha_cierre_exacta || calcularFechaCierre(fechaPublicacionReal, analisisIA.plazo_numero, analisisIA.plazo_tipo, provinciaCalculo);
-
-  // 📦 AHORA SÍ: Construimos el objeto definitivo con la Matriz 3D
+  // 📦 CONSTRUCCIÓN DEL OBJETO DEFINITIVO
   const convocatoria = {
     slug: slugFinal, 
     title: limpiarCodificacion(itemData.title), 
@@ -304,13 +326,12 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     boletin: `${fuente.nombre} - ${fuente.ambito}`,
     parent_type: "OPOSICION", 
 
-    // 🏗️ Inyección de la Matriz 3D Completa
-    type: analisisIA.tipo, // La BD se llama type
+    type: analisisIA.tipo, 
     fase: analisisIA.fase,
     sistema: analisisIA.sistema,
-    turno: analisisIA.turno, // Esto ahora es un Array
-    distribucion_plazas: analisisIA.distribucion_plazas, // El array de objetos para desgloses
-    ambito: analisisIA.ambito, // Territorial
+    turno: analisisIA.turno, 
+    distribucion_plazas: analisisIA.distribucion_plazas, 
+    ambito: analisisIA.ambito, 
 
     plazas: analisisIA.plazas, 
     resumen: limpiarCodificacion(analisisIA.resumen),
@@ -319,19 +340,19 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     fecha_cierre: fechaCierreCalculada,
     boletin_origen_nombre: analisisIA.boletin_origen_nombre,
     boletin_origen_fecha: analisisIA.boletin_origen_fecha,
-    referencia_boe_original: analisisIA.referencia_boe_original, // Faltaba esto para que enlace tramites BOE
+    referencia_boe_original: analisisIA.referencia_boe_original,
     plazo_texto: (analisisIA.plazo_numero && analisisIA.plazo_tipo) ? `${analisisIA.plazo_numero} días ${analisisIA.plazo_tipo}` : null,
     referencia_bases: (analisisIA.boletin_origen_nombre && analisisIA.boletin_origen_fecha) ? `${analisisIA.boletin_origen_nombre} | ${analisisIA.boletin_origen_fecha}` : null,
     grupo: analisisIA.grupo, 
     profesion: profesionPrincipal, 
     profesiones: analisisIA.profesiones,
     categoria: analisisIA.categoria,
-    provincia: analisisIA.provincia || fuente.ambito, 
+    provincia: provinciaValidada, 
     titulacion: analisisIA.titulacion, 
     enlace_inscripcion: analisisIA.enlace_inscripcion, 
     tasa: analisisIA.tasa,
     parent_slug: parentSlug, 
-    publication_date: fechaPublicacionReal,
+    publication_date: fechaPublicacionReal, 
     link_boe: webDefinitiva, 
     guid: pdfDefinitivo,
     raw_text: textoParaIA, 
@@ -344,9 +365,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     statsFuente.errores++;
   } else {
     await gestionarDepartamento(departamentoFinal);
-    // Print bonito en la consola para confirmar que funciona
     console.log(`✅ Guardado -> ${fuente.nombre} | Fase: ${analisisIA.fase} | Tipo: ${analisisIA.tipo} | Org: ${departamentoFinal} | Slug: ${slugFinal} | 🔗 ${webDefinitiva}`);
-    statsFuente.guardadas++; // Sumamos como guardada final
+    statsFuente.guardadas++; 
     if (data && data.length > 0) convocatoriasInsertadasHoy.push(data[0]);
   }
 }

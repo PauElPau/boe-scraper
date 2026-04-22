@@ -102,10 +102,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - 'Otros Trámites': Renuncias, ceses, aplazamientos o cosas que no encajan arriba.
 
   -- PLAZOS:
-     Extrae el plazo_numero y plazo_tipo SOLO Y EXCLUSIVAMENTE si la FASE es 'Apertura de Plazos / Convocatoria' para presentar solicitudes de inscripción inicial. 
-     🛑 REGLA VITAL 1 (PROHIBICIÓN ESTRICTA): Si has clasificado la FASE como cualquier otra cosa que no sea 'Apertura de Plazos / Convocatoria' (por ejemplo, si es 'Adjudicación y Nombramientos', 'Listas de Admitidos', etc.), ESTÁ TERMINANTEMENTE PROHIBIDO extraer ningún plazo. DEBES devolver SIEMPRE null en plazo_numero y plazo_tipo, sin importar si el texto menciona "días para presentar documentación", "toma de posesión" o "recursos".
-     🛑 REGLA VITAL 2 (CONDICIÓN BOE): Es muy común en Ayuntamientos publicar las bases en el boletín autonómico/provincial indicando que el plazo empezará a contar "desde la publicación en el Boletín Oficial del Estado (BOE)". Si el texto indica que el plazo de presentación de instancias empezará a contar a partir de una publicación futura en el BOE u otro boletín, DEBES DEVOLVER null en plazo_numero y plazo_tipo. Solo extrae el plazo si empieza a contar a partir de *este mismo* boletín que estás leyendo.
-
+     Extrae el plazo_numero y plazo_tipo SOLO si la FASE es 'Apertura de Plazos / Convocatoria', 'Listas de Admitidos y Excluidos' o 'Calificaciones y Resultados'.
+     🛑 REGLA VITAL 1 (PROHIBICIÓN ESTRICTA): Si has clasificado la FASE como 'Adjudicación y Nombramientos', 'Correcciones y Modificaciones' u 'Otros Trámites', ESTÁ TERMINANTEMENTE PROHIBIDO extraer ningún plazo. DEBES devolver SIEMPRE null en plazo_numero y plazo_tipo, sin importar si el texto menciona "días para tomar posesión" o "recursos".
+     🛑 REGLA VITAL 2 (CONDICIÓN BOE): Es muy común publicar las bases en el boletín autonómico indicando que el plazo empezará a contar "desde la publicación en el BOE". Si el texto indica que el plazo empezará a contar a partir de una publicación futura en el BOE u otro boletín, DEBES DEVOLVER null en plazo_numero y plazo_tipo. Solo extrae el plazo si empieza a contar a partir de *este mismo* boletín que estás leyendo.
+     
   -- PLAZAS Y TURNOS (DESGLOSE):
      - plazas: Busca el TOTAL de vacantes numérico. Traduce palabras a números. 🛑 REGLA VITAL: Si el TIPO es 'Bolsas de Empleo Temporal', debe ser null.
      - turno: Una convocatoria puede tener varios turnos simultáneos. Deduce los que apliquen y devuélvelos en una lista. Valores: "Turno Libre", "Promoción Interna", "Discapacidad". Si no especifica, asume ["Turno Libre"].
@@ -123,8 +123,10 @@ async function analizarConvocatoriaIA(titulo, textoInterior, departamento, secci
      - categoria: Clasifica obligatoriamente la profesión en UNA de estas: 'Administración General', 'Economía, Hacienda y Finanzas', 'Sanidad y Salud', 'Cuerpos de Seguridad y Emergencias', 'Educación y Docencia', 'Informática y Telecomunicaciones', 'Ingeniería, Arquitectura y Medio Ambiente', 'Justicia y Legislación', 'Trabajo Social y Cuidados', 'Cultura, Archivos y Deportes', 'Oficios y Mantenimiento', 'Otros'. 🛑 REGLA VITAL: Si es una Oferta de Empleo Público (OEP) general sin una profesión clara, asígnale SIEMPRE 'Administración General'.
      - profesiones: Nombres limpios de los puestos.
      - grupo: Deduce a partir de 'Técnica Superior'(A1), 'Administrativa'(C1), 'Auxiliar'(C2), etc.
-     - organismo: Identifica la entidad LOCAL o FINAL que ofrece el puesto (ej: 'Ayuntamiento de Torrevieja'). No uses comillas en los nombres.
-     - provincia: ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final.
+     - organismo: Identifica la entidad LOCAL o FINAL que ofrece el puesto (ej: 'Ayuntamiento de Madrid', 'Servicio Andaluz de Salud', 'Universidad de Salamanca'). 🛑 REGLA ANTI-VACÍOS: Si te es imposible deducir el organismo local, usa el valor de 'DEPARTAMENTO/ORGANISMO DE ORIGEN'. Este campo NUNCA puede ser null. Si no sabes qué poner, usa el nombre genérico de la administración (Ej: 'Generalitat de Catalunya').
+    - provincia:  ESTÁS EN EL TERRITORIO DE: ${ambitoAutonomico}. Es IMPOSIBLE que la provincia elegida pertenezca a otra región. Deduce la provincia exacta del organismo final. Indica la provincia específica (Ej: 'Castellón', 'Madrid'). 🛑 REGLA GEOGRÁFICA CRÍTICA: 
+        1. Identifica el municipio o comarca en el título (ej: "Elda"-> Alicante, "La Plana"-> Castellón).
+        2. La 'provincia' debe ser SIEMPRE coherente con el boletín. Si es un boletín autonómico, la provincia DEBE ser de esa comunidad. JAMÁS inventes una provincia de otra región.
   
   -- TEXTOS SEO Y LINKS:
   - resumen: Resumen claro de 1-2 frases.
