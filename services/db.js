@@ -149,6 +149,21 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     } else if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = posiblesPadres[0]; 
 
+      // 🚀 PARCHE VITAL: RECUPERACIÓN DE DATOS FALTANTES DEL RPC
+      // El RPC de Supabase no devuelve título, boletín ni grupo. Los necesitamos sí o sí para que los escudos funcionen.
+      if (plazaExistente) {
+          const { data: extraData } = await supabase.from('convocatorias')
+              .select('title, boletin, grupo')
+              .eq('slug', plazaExistente.slug)
+              .single();
+              
+          if (extraData) {
+              plazaExistente.title = extraData.title;
+              plazaExistente.boletin = extraData.boletin;
+              plazaExistente.grupo = extraData.grupo;
+          }
+      }
+
       // 🛡️ 0. ESCUDO ESTRICTO DE AYUNTAMIENTOS
       // Si ambos organismos son Ayuntamientos, exigimos coincidencia EXACTA del nombre.
       if (plazaExistente) {
