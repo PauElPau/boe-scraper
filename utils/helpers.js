@@ -177,8 +177,9 @@ function esTramiteBasura(titulo) {
                     t.includes('recurso extraordinario') || t.includes('interposición de recurso');
   const esNombramientoTribunal = accionTribunal && esTribunal;
 const esRuido =   t.includes('convenio') || t.includes('subvención') || t.includes('subvenciones') || 
-                  t.includes('licitación') || t.includes('adjudicación de contrato') || t.includes('adjudicación del contrato') || 
+                  t.includes('licitación') || t.includes('adjudica el contrato') || t.includes('adjudicación') || 
                   t.includes('contrato de suministro') || t.includes('contrato de servicio') || t.includes('contrato de obra') ||
+                  t.includes('contratación') || t.includes('formalización') ||
                   t.includes('arrendamiento') || t.includes('enajenación') || t.includes('subasta') ||
                   t.includes('impacto ambiental') || 
                   t.includes('ayudas ') || t.includes('ayuda a la ') || t.includes('solicitud de ayuda') || t.includes('solicitud de la ayuda') || 
