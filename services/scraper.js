@@ -155,7 +155,10 @@ async function obtenerTextoUniversal(url, reintentos = 3) {
 async function obtenerDOGCporAPI() {
     console.log(`   🔌 Conectando directamente a la API REST del DOGC...`);
     
-    const hoy = new Date();
+    // 🛡️ PARCHE ZONA HORARIA
+    const fechaEspañaStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+    const hoy = new Date(fechaEspañaStr);
+    
     const dd = String(hoy.getDate()).padStart(2, '0');
     const mm = String(hoy.getMonth() + 1).padStart(2, '0');
     const yyyy = hoy.getFullYear();
@@ -273,9 +276,9 @@ function fetchNativoSeguro(url, cookie = "") {
 async function obtenerCantabriaMatematico() {
     console.log(`   🧮 Iniciando Buscador Matemático para Cantabria (Vía HTML + Cheerio Definitivo)...`);
     
-    const cheerio = require("cheerio");
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0); 
+    const fechaEspañaStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+    const hoy = new Date(fechaEspañaStr);
+    hoy.setHours(0, 0, 0, 0);
     
     const formatoHoy = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

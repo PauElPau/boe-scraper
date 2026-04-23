@@ -330,7 +330,8 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   if (!webDefinitiva) webDefinitiva = pdfDefinitivo;
 
 // --- 🛡️ ESCUDO MATEMÁTICO ABSOLUTO PARA FECHAS DE CIERRE ---
-  const fechaPublicacionReal = itemData.fecha_publicacion_real || new Date().toISOString().split('T')[0];
+  const formatterMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+    const fechaPublicacionReal = itemData.fecha_publicacion_real || formatterMadrid.format(new Date());
   
   // REGLA DE HIERRO: Si el texto indica que hay un "plazo_numero" (ej: 15 días, 1 mes),
   // se anula SIEMPRE cualquier fecha de cierre exacta que la IA haya intentado deducir.

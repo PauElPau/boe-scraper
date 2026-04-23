@@ -27,7 +27,9 @@ async function burlarCortafuegos(url) {
 async function obtenerUrlDelDia(fuente) {
     console.log(`   🕵️‍♂️ Ejecutando Pre-Scraping Táctico para ${fuente.nombre}...`);
     
-    const hoy = new Date();
+    // 🛡️ PARCHE ZONA HORARIA
+    const fechaEspañaStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+    const hoy = new Date(fechaEspañaStr);
     const dd = String(hoy.getDate()).padStart(2, '0');
     const mm = String(hoy.getMonth() + 1).padStart(2, '0');
     const yyyy = hoy.getFullYear();
@@ -38,8 +40,9 @@ async function obtenerUrlDelDia(fuente) {
     if (fuente.nombre === "DOGC") {
         console.log(`   🧮 Calculando ID matemático para el Sumario del DOGC...`);
         hoy.setHours(0,0,0,0);
-        
-        const fechaAncla = new Date('2026-04-17T00:00:00');
+        // 🛡️ PARCHE ZONA HORARIA
+    
+        const fechaAncla = new Date('2026-04-17T00:00:00').toLocaleString("en-US", { timeZone: "Europe/Madrid" });
         const idAncla = 9647; // Nuestro número ancla descubierto por ti
         let diasHabiles = 0;
         let fechaTemp = new Date(fechaAncla);
