@@ -194,10 +194,16 @@ async function extraerBoletines() {
             let textoParaIA = null;
             let pdfExtraidoNativo = item.pdf || null;
 
-            if (["BOE", "BOJA", "BOPV", "BORM", "DOE", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
-              const nativo = await obtenerTextoNativo(item.link);
-              textoParaIA = nativo ? nativo.texto : null;
-              pdfExtraidoNativo = nativo ? nativo.pdf : null;
+            // 🚀 ATAJO ANTI-TIMEOUTS: Separamos los que bloquean conexiones nativas
+            if (["BOE", "BOPV", "BORM", "DOG", "BOCM", "BOA", "BOC"].includes(fuente.nombre)) {
+                const nativo = await obtenerTextoNativo(item.link, false);
+                textoParaIA = nativo ? nativo.texto : null;
+                pdfExtraidoNativo = nativo ? nativo.pdf : null;
+            } else if (["BOJA", "DOE"].includes(fuente.nombre)) {
+                // Forzamos CodeTabs (true) directamente para no perder 20 segundos en cada intento fallido
+                const nativo = await obtenerTextoNativo(item.link, true);
+                textoParaIA = nativo ? nativo.texto : null;
+                pdfExtraidoNativo = nativo ? nativo.pdf : null;
             } else if (item.link.toLowerCase().includes('pdf')) {
               textoParaIA = item.tituloLimpioParaLog + " - " + (item.contentSnippet || item.content || "");
             } else {
@@ -304,11 +310,12 @@ async function extraerBoletines() {
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              // 🐛 Añadimos DOGC aquí para que use el Proxy rápido y esquive Cloudflare
-              } else if (["BOPA", "BON", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+              } else if (["BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+                  // Quitamos "BON" de esta lista para que no fuerce CodeTabs
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
-              } else if (fuente.nombre === "BOR") {
+              } else if (["BOR", "BON"].includes(fuente.nombre)) {
+                  // Metemos "BON" aquí para que use la ruta nativa sin forzar
                   const nativo = await obtenerTextoNativo(urlFinal, false);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
