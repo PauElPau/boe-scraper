@@ -183,6 +183,18 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           }
       }
 
+      // 🛡️ 1.5 ESCUDO DE GRUPO PROFESIONAL
+      if (plazaExistente) {
+          const grupoNuevo = analisisIA.grupo || '';
+          const grupoViejo = plazaExistente.grupo || '';
+          
+          // Si sabemos los grupos y son distintos (Ej. A2 vs C1), bloqueamos la fusión
+          if (grupoNuevo && grupoViejo && grupoNuevo !== grupoViejo) {
+              console.log(`   🔠 Salvado de deduplicación: Pertenecen a Grupos distintos (${grupoNuevo} vs ${grupoViejo}).`);
+              plazaExistente = null;
+          }
+      }
+
       // ⏱️ 2. ESCUDO CRONOLÓGICO EVOLUTIVO (Motor de rangos)
       let rangoNuevo = 0;
       let rangoPadre = 0;
@@ -209,7 +221,20 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
       // 👯 3. ESCUDO DE RESOLUCIONES GEMELAS (Anti-Clones)
       if (plazaExistente && rangoNuevo === rangoPadre && rangoNuevo > 0) {
-          const mismoBoletin = plazaExistente.boletin && plazaExistente.boletin.startsWith(fuente.nombre);
+          
+          // Recuperamos el título y boletín reales del padre por si el RPC omitió esos campos
+          let tituloPadre = plazaExistente.title;
+          let boletinPadre = plazaExistente.boletin;
+          
+          if (!tituloPadre || !boletinPadre) {
+              const { data: parentData } = await supabase.from('convocatorias').select('title, boletin').eq('slug', plazaExistente.slug).single();
+              if (parentData) {
+                  tituloPadre = parentData.title;
+                  boletinPadre = parentData.boletin;
+              }
+          }
+
+          const mismoBoletin = boletinPadre && boletinPadre.startsWith(fuente.nombre);
           
           if (mismoBoletin) {
               console.log(`   👯 Salvado: Resoluciones gemelas en el mismo boletín (${fuente.nombre}). Son plazas distintas.`);
@@ -221,7 +246,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
               };
               
               const parenNuevo = extraerParentesis(itemData.title);
-              const parenViejo = extraerParentesis(plazaExistente.title);
+              const parenViejo = extraerParentesis(tituloPadre);
               
               if (parenNuevo && parenViejo && parenNuevo !== parenViejo) {
                   console.log(`   📍 Salvado: Localizaciones difieren (${parenNuevo} vs ${parenViejo}).`);
