@@ -59,10 +59,14 @@ async function extraerBoletines() {
       
       let urlFinalLog = fuente.url;
       if (fuente.tipo === "html_directo") {
-          const hoy = new Date();
+          // 🛡️ PARCHE ZONA HORARIA: Forzamos la hora de España para evitar el "Bug de la Medianoche" en servidores UTC
+          const fechaEspañaStr = new Date().toLocaleString("en-US", { timeZone: "Europe/Madrid" });
+          const hoy = new Date(fechaEspañaStr);
+          
           const yyyy = hoy.getFullYear();
           const mm = String(hoy.getMonth() + 1).padStart(2, '0');
           const dd = String(hoy.getDate()).padStart(2, '0');
+
           urlFinalLog = fuente.url
             .replace(/{YYYYMMDD}/g, `${yyyy}${mm}${dd}`)
             .replace(/{DD\/MM\/YYYY}/g, `${dd}/${mm}/${yyyy}`)
@@ -203,7 +207,9 @@ async function extraerBoletines() {
             if (!textoParaIA || textoParaIA.length < 50) textoParaIA = item.contentSnippet || item.content;
             if (textoParaIA && textoParaIA.length > 25000) textoParaIA = textoParaIA.substring(0, 25000) + "... [Texto cortado]";
 
-            let fechaRealRss = new Date().toISOString().split('T')[0];
+            const formatterMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+            let fechaRealRss = formatterMadrid.format(new Date());
+
             if (item.isoDate || item.pubDate) {
                 const itemDate = new Date(item.isoDate || item.pubDate);
                 // Forzamos la hora local de España. Así las 23:45 UTC del día 19, pasarán a ser las 01:45 CEST del día 20.
@@ -482,7 +488,8 @@ async function extraerBoletines() {
             
             if (textoInterior.length > 25000) textoInterior = textoInterior.substring(0, 25000) + "... [Texto cortado]";
 
-            const fechaRealHtml = new Date().toISOString().split('T')[0];
+            const formatterMadrid = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Madrid', year: 'numeric', month: '2-digit', day: '2-digit' });
+            const fechaRealHtml = formatterMadrid.format(new Date());
 
             await procesarYGuardarConvocatoria({ 
               title: item.titulo, 
