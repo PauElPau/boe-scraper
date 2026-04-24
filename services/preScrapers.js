@@ -97,8 +97,8 @@ async function obtenerUrlDelDia(fuente) {
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-            const fechaBor = `${dd}/${mm}/${yyyy}`; // Ej: 24/04/2026
-            const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
+             const fechaBor = `${yyyy}-${mm}-${dd}`; // Ej: 24/04/2026
+            const apiUrl = `https://web.larioja.org/bor-portada?fecha=${fechaBor}`;
             console.log(`   🔎 Tanteando API secreta BOR: ${apiUrl}`);
             
             let jsonText = null;
@@ -163,7 +163,7 @@ async function obtenerUrlDelDia(fuente) {
         }
     }
 
-    
+
     // ==========================================
     // 2. CEUTA (BOCCE) - VÍA NATIVA DIRECTA
     // ==========================================
