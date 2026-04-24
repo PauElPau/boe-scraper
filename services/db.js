@@ -247,13 +247,28 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
       // 🛡️ 3.7 ESCUDO DE ESPECIALIDADES MÉDICAS Y DOCENTES (Anti-Fuzzy Avanzado)
       if (plazaExistente && (analisisIA.categoria === 'Sanidad y Salud' || analisisIA.categoria === 'Educación y Docencia')) {
           let especialidadesDiferentes = false;
-          const profNueva = profesionPrincipal ? profesionPrincipal.toLowerCase() : '';
-          const profVieja = plazaExistente.profesion ? plazaExistente.profesion.toLowerCase() : '';
           
-          if (profNueva && profVieja && profNueva !== profVieja) {
+          // 1. Comprobación flexible de profesiones (Ignorando género, plurales, preposiciones y espacios)
+          const normalizarProf = (texto) => {
+              if (!texto) return "";
+              return texto.toLowerCase()
+                          .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Sin tildes
+                          .replace(/\b(de|la|el|las|los|en|y|a|o)\b/g, '') // Sin preposiciones sueltas
+                          .replace(/[aeos]\b/g, '') // Sin vocales finales (neutraliza jefe/jefa, medico/medica)
+                          .replace(/[^a-z0-9]/g, ''); // Todo junto sin espacios ni signos
+          };
+
+          const pNuevo = normalizarProf(profesionPrincipal);
+          const pViejo = normalizarProf(plazaExistente.profesion);
+          
+          // Solo bloqueamos si NO se contienen mutuamente
+          // Ej: "jefseccion" está contenido en "jefseccionmedic" -> NO bloquea.
+          // Ej: "neurologi" NO está contenido en "neumologi" -> SÍ bloquea.
+          if (pNuevo && pViejo && !pNuevo.includes(pViejo) && !pViejo.includes(pNuevo)) {
               especialidadesDiferentes = true;
           }
 
+          // 2. Extractor de especialidades (Para SAS, SERMAS y otros servicios de salud)
           const extraerEspecialidad = (texto) => {
               if (!texto) return "";
               const match = texto.match(/(?:especialidad|especialista en)\s+([^,]+)/i);
@@ -263,23 +278,27 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           const espNueva = extraerEspecialidad(itemData.title);
           const espVieja = extraerEspecialidad(tituloPadre);
 
-          if (espNueva && espVieja && espNueva !== espVieja) {
+          // Usamos includes() en lugar de !== para evitar falsos positivos por espacios o recortes
+          if (espNueva && espVieja && !espNueva.includes(espVieja) && !espVieja.includes(espNueva)) {
               especialidadesDiferentes = true;
           }
           
-          const palabrasCriticas = ['psiquiatría', 'pediatría', 'geriatría', 'neumología', 'neurología', 'cardiología', 'radiología', 'urología', 'oncología'];
-          const tNuevo = `${profNueva} ${itemData.title.toLowerCase()}`;
-          const tViejo = `${profVieja} ${tituloPadre ? tituloPadre.toLowerCase() : ''}`;
+          // 3. Diccionario de Choques Frecuentes
+          const palabrasCriticas = ['psiquiatria', 'pediatria', 'geriatria', 'neumologia', 'neurologia', 'cardiologia', 'radiologia', 'urologia', 'oncologia', 'traumatologia'];
+          const tNuevo = normalizarProf(`${profesionPrincipal} ${itemData.title}`);
+          const tViejo = normalizarProf(`${plazaExistente.profesion} ${tituloPadre}`);
           
           for (let palabra of palabrasCriticas) {
-              if (tNuevo.includes(palabra) !== tViejo.includes(palabra)) {
+              const palNorm = normalizarProf(palabra);
+              // Si la palabra está en el nuevo pero no en el viejo (o viceversa), son distintas
+              if (tNuevo.includes(palNorm) !== tViejo.includes(palNorm)) {
                   especialidadesDiferentes = true;
                   break;
               }
           }
 
           if (especialidadesDiferentes) {
-              console.log(`   🩺 Salvado de deduplicación: Especialidades distintas (${espNueva || profNueva} vs ${espVieja || profVieja}).`);
+              console.log(`   🩺 Salvado de deduplicación: Especialidades distintas (${profesionPrincipal || espNueva} vs ${plazaExistente.profesion || espVieja}).`);
               plazaExistente = null;
           }
       }
