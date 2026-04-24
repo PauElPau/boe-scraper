@@ -310,11 +310,9 @@ async function extraerBoletines() {
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
-                  const nativo = await obtenerTextoNativo(urlFinal, true);
-                  markdownWeb = nativo ? nativo.texto : null;
-              } else if (["BOR"].includes(fuente.nombre)) {
-                  const nativo = await obtenerTextoNativo(urlFinal, false); 
+              } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME", "BOR"].includes(fuente.nombre)) {
+                  // BOR se procesa aquí directamente, sin Cloudflare ni proxies raros
+                  const nativo = await obtenerTextoNativo(urlFinal, false);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
                   markdownWeb = await obtenerTextoUniversal(urlFinal);
