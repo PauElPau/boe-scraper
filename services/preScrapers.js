@@ -93,68 +93,48 @@ async function obtenerUrlDelDia(fuente) {
     }
    
     // ==========================================
-    // 1. LA RIOJA (BOR): ATAQUE API EN CASCADA
+    // 1. LA RIOJA (BOR): COMPROBACIÓN HTML VÍA PROXY
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-             const fechaBor = `${yyyy}-${mm}-${dd}`; // Ej: 24/04/2026
-            const apiUrl = `https://web.larioja.org/bor-portada?fecha=${fechaBor}`;
-            console.log(`   🔎 Tanteando API secreta BOR: ${apiUrl}`);
+            const urlPublica = `https://web.larioja.org/bor-portada?fecha=${yyyy}-${mm}-${dd}`;
+            console.log(`   🔎 Comprobando portada BOR: ${urlPublica}`);
             
-            let jsonText = null;
+            let htmlText = null;
             let exito = false;
 
-            // 🛡️ Intento 1: Proxy AllOrigins (Ideal para JSON)
+            // 🛡️ Intento 1: Proxy AllOrigins (Ideal para HTML)
             try {
-                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
+                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`);
                 if (res.ok) {
-                    jsonText = await res.text();
+                    htmlText = await res.text();
                     exito = true;
-                    console.log(`      ✅ API cargada vía AllOrigins`);
+                    console.log(`      ✅ Portada cargada vía AllOrigins`);
                 }
             } catch (e) {}
 
             // 🛡️ Intento 2: Proxy CodeTabs
             if (!exito) {
                 try {
-                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${apiUrl}`);
+                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlPublica)}`);
                     if (res.ok) {
-                        jsonText = await res.text();
+                        htmlText = await res.text();
                         exito = true;
-                        console.log(`      ✅ API cargada vía CodeTabs`);
+                        console.log(`      ✅ Portada cargada vía CodeTabs`);
                     }
                 } catch (e) {}
             }
 
-            // 🛡️ Intento 3: Tanque Nativo
-            if (!exito) {
-                try {
-                    const res = await fetchNativoSeguro(apiUrl);
-                    if (res.ok) {
-                        jsonText = res.text;
-                        exito = true;
-                        console.log(`      ✅ API cargada vía Conexión Nativa`);
-                    }
-                } catch (e) {}
-            }
-
-            if (exito && jsonText) {
-                try {
-                    const data = JSON.parse(jsonText);
-                    if (data && data.boletines && data.boletines.length > 0) {
-                        const boletinHoy = data.boletines[0];
-                        console.log(`   🎯 ¡Bingo! BOR de hoy encontrado con ID: ${boletinHoy.idBoletin}`);
-                        return `https://web.larioja.org/bor-boletin?id=${boletinHoy.idBoletin}`;
-                    } else {
-                        console.log(`   ⚠️ La API respondió correctamente, pero está vacía. (No hay publicación hoy)`);
-                        return null;
-                    }
-                } catch (e) {
-                    console.log(`   ⚠️ BOR no devolvió JSON válido.`);
-                    return null;
+            if (exito && htmlText) {
+                // Verificamos si realmente hay boletín hoy
+                if (htmlText.includes('No se han encontrado resultados') || htmlText.includes('No hay boletín')) {
+                     console.log(`   ⚠️ La web del BOR indica que no hay publicación hoy.`);
+                     return null;
                 }
+                console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada.`);
+                return urlPublica; // Devolvemos la URL pública para que el motor la escrapee
             } else {
-                console.log(`   ❌ Todos los métodos fallaron al cargar la API del BOR.`);
+                console.log(`   ❌ Todos los proxies fallaron al cargar la portada del BOR.`);
                 return null;
             }
         } catch (e) {
