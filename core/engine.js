@@ -310,12 +310,8 @@ async function extraerBoletines() {
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-            } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
+                } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME", "BOR"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
-                  markdownWeb = nativo ? nativo.texto : null;
-              } else if (fuente.nombre === "BOR") {
-                  // Obligamos a BOR a usar el proxy CodeTabs para leer el sumario
-                  const nativo = await obtenerTextoNativo(urlFinal, true); 
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
                   markdownWeb = await obtenerTextoUniversal(urlFinal);
@@ -479,7 +475,6 @@ async function extraerBoletines() {
                 pdfExtraidoNativo = urlParaRayosX;
 
             } else if (["BON", "BOCCE", "BOME", "BOR"].includes(fuente.nombre)) {
-                // BOR incluido aquí para que descargue el interior vía proxy y no use Cloudflare
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
