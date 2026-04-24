@@ -122,6 +122,11 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
   const tiposNuevos = ['Plazas de Nuevo Ingreso', 'Procesos de Estabilización', 'Bolsas de Empleo Temporal', 'Provisión de Puestos y Movilidad'];
   const esTramite = !tiposNuevos.includes(analisisIA.tipo);
 
+  // ⛔ CORTAFUEGOS DE RENDIMIENTO: Las Ofertas de Empleo (OEP) son origen, nunca tienen padre.
+  if (analisisIA.tipo === "Ofertas de Empleo Público (OEP)") {
+      parentSlug = "NO_BUSCAR"; 
+  }
+
   // 🥇 PRIORIDAD 1: Cruce seguro por BOE
   if (analisisIA.referencia_boe_original && analisisIA.referencia_boe_original.length > 10) {
     const { data: parentMatch } = await supabase.from('convocatorias').select('slug')
