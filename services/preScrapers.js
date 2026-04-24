@@ -92,8 +92,8 @@ async function obtenerUrlDelDia(fuente) {
         return `https://dogc.gencat.cat/es/sumari-del-dogc/?selectedYear=${year}&selectedMonth=${month}&numDOGC=${fuente.numDOGC_calculado}&language=es_ES`;
     }
    
-    // ==========================================
-    // 1. LA RIOJA (BOR): COMPROBACIÓN HTML VÍA PROXY
+   // ==========================================
+    // 1. LA RIOJA (BOR): COMPROBACIÓN HTML VÍA PROXY ROTATIVO
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
@@ -103,38 +103,42 @@ async function obtenerUrlDelDia(fuente) {
             let htmlText = null;
             let exito = false;
 
-            // 🛡️ Intento 1: Proxy AllOrigins (Ideal para HTML)
-            try {
-                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`);
-                if (res.ok) {
-                    htmlText = await res.text();
-                    exito = true;
-                    console.log(`      ✅ Portada cargada vía AllOrigins`);
-                }
-            } catch (e) {}
+            // 🛡️ Batería de Proxies para asaltar el firewall
+            const proxies = [
+                `https://corsproxy.io/?url=${encodeURIComponent(urlPublica)}`, // Proxy nuevo ultra-potente
+                `https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`,
+                `https://api.codetabs.com/v1/proxy?quest=${urlPublica}`
+            ];
 
-            // 🛡️ Intento 2: Proxy CodeTabs
-            if (!exito) {
+            for (const proxy of proxies) {
+                if (exito) break;
                 try {
-                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlPublica)}`);
+                    console.log(`      🔄 Probando proxy: ${proxy.split('/')[2]}...`);
+                    const res = await fetch(proxy, { headers: { 'User-Agent': 'Mozilla/5.0' } });
                     if (res.ok) {
                         htmlText = await res.text();
                         exito = true;
-                        console.log(`      ✅ Portada cargada vía CodeTabs`);
+                        console.log(`      ✅ Portada cargada con éxito`);
                     }
                 } catch (e) {}
             }
 
+            if (!exito) {
+                try {
+                    const res = await fetchNativoSeguro(urlPublica);
+                    if (res.ok) { htmlText = res.text; exito = true; }
+                } catch (e) {}
+            }
+
             if (exito && htmlText) {
-                // Verificamos si realmente hay boletín hoy
                 if (htmlText.includes('No se han encontrado resultados') || htmlText.includes('No hay boletín')) {
                      console.log(`   ⚠️ La web del BOR indica que no hay publicación hoy.`);
                      return null;
                 }
                 console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada.`);
-                return urlPublica; // Devolvemos la URL pública para que el motor la escrapee
+                return urlPublica; 
             } else {
-                console.log(`   ❌ Todos los proxies fallaron al cargar la portada del BOR.`);
+                console.log(`   ❌ Todos los escudos fallaron al intentar penetrar el BOR.`);
                 return null;
             }
         } catch (e) {

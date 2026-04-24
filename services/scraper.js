@@ -5,60 +5,55 @@ const https = require('https');
 const { esperar } = require("../utils/helpers");
 
 
-// 🛡️ MEJORA: Escudo Anti-Geobloqueo usando el Tanque Interno
+// 🛡️ MEJORA: Escudo Anti-Geobloqueo usando el Tanque Interno y Proxies Rotativos
 async function obtenerTextoNativo(url, forzarCodeTabs = false) {
   let html = "";
   let exito = false;
   
-  // 1. Intento CodeTabs
   if (forzarCodeTabs) {
     console.log(`   🚀 Atajo activado: Saltando barreras y yendo directo al Plan D (CodeTabs)...`);
     try {
-      const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-      const resProxy = await fetch(proxyUrl);
-      if (resProxy.ok) {
-          html = await resProxy.text();
-          exito = true;
-      } else {
-          console.log(`   ⚠️ CodeTabs falló (Status ${resProxy.status}). Cayendo a cascada secundaria...`);
-      }
-    } catch (e) {
-      console.log(`   ⚠️ Error de red en CodeTabs. Cayendo a cascada secundaria...`);
-    }
+      const resProxy = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`);
+      if (resProxy.ok) { html = await resProxy.text(); exito = true; } 
+      else { console.log(`   ⚠️ CodeTabs falló (Status ${resProxy.status}). Cayendo a cascada secundaria...`); }
+    } catch (e) { console.log(`   ⚠️ Error de red en CodeTabs. Cayendo a cascada secundaria...`); }
   }
 
-  // 2. Cascada Secundaria (Usando el Tanque Indestructible)
   if (!exito) {
     try {
-      // 🐛 CAMBIO VITAL: Usamos nuestro Tanque HTTPS en vez del fetch débil de Node.js
       const res = await fetchNativoSeguro(url);
       if (!res.ok) throw new Error("Nativo bloqueado");
       html = res.text;
       exito = true;
       console.log(`   ✅ Conexión nativa establecida con éxito.`);
     } catch (error) {
-      console.log(`   ⚠️ Fallo de red detectado. Activando Proxy Público...`);
-      try {
-        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-        const resProxy = await fetch(proxyUrl);
-        if (!resProxy.ok) throw new Error("Proxy denegado");
-        html = await resProxy.text();
-      } catch (e2) {
-        if (!forzarCodeTabs) {
-            console.log(`   ⚠️ AllOrigins bloqueado. Activando Plan D (Proxy CodeTabs)...`);
-            try {
-              const proxyUrl2 = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
-              const resProxy2 = await fetch(proxyUrl2);
-              if (!resProxy2.ok) throw new Error("Proxy CodeTabs denegado");
-              html = await resProxy2.text();
-            } catch (e3) {
-              console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
-              return { texto: null, pdf: null }; 
-            }
-        } else {
-            console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
-            return { texto: null, pdf: null };
-        }
+      console.log(`   ⚠️ Fallo de red detectado. Activando Proxies Públicos...`);
+      
+      const proxiesFallbacks = [
+          { name: 'CorsProxy', url: `https://corsproxy.io/?url=${encodeURIComponent(url)}` },
+          { name: 'AllOrigins', url: `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}` }
+      ];
+      
+      if (!forzarCodeTabs) {
+          proxiesFallbacks.push({ name: 'CodeTabs', url: `https://api.codetabs.com/v1/proxy?quest=${url}` });
+      }
+
+      for (const proxy of proxiesFallbacks) {
+          if (exito) break;
+          try {
+              console.log(`   🔄 Probando ${proxy.name}...`);
+              const resProxy = await fetch(proxy.url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+              if (resProxy.ok) {
+                  html = await resProxy.text();
+                  exito = true;
+                  console.log(`   ✅ Cargado con éxito vía ${proxy.name}`);
+              }
+          } catch (e) {}
+      }
+
+      if (!exito) {
+          console.error(`   ❌ Imposible acceder a la web con ningún método: ${url}`);
+          return { texto: null, pdf: null }; 
       }
     }
   }
