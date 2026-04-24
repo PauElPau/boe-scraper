@@ -93,52 +93,33 @@ async function obtenerUrlDelDia(fuente) {
     }
    
    // ==========================================
-    // 1. LA RIOJA (BOR): COMPROBACIÓN HTML VÍA PROXY ROTATIVO
+    // 1. LA RIOJA (BOR): ATAQUE VÍA CLOUDFLARE BROWSER RENDERING
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
             const urlPublica = `https://web.larioja.org/bor-portada?fecha=${yyyy}-${mm}-${dd}`;
-            console.log(`   🔎 Comprobando portada BOR: ${urlPublica}`);
+            console.log(`   🔎 Comprobando portada BOR vía Cloudflare Browser: ${urlPublica}`);
             
-            let htmlText = null;
-            let exito = false;
+            // Usamos tu función universal (Cloudflare) para saltarnos el bloqueo de IP a nivel de red
+            const htmlText = await obtenerTextoUniversal(urlPublica);
 
-            // 🛡️ Batería de Proxies para asaltar el firewall
-            const proxies = [
-                `https://corsproxy.io/?url=${encodeURIComponent(urlPublica)}`, // Proxy nuevo ultra-potente
-                `https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`,
-                `https://api.codetabs.com/v1/proxy?quest=${urlPublica}`
-            ];
-
-            for (const proxy of proxies) {
-                if (exito) break;
-                try {
-                    console.log(`      🔄 Probando proxy: ${proxy.split('/')[2]}...`);
-                    const res = await fetch(proxy, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-                    if (res.ok) {
-                        htmlText = await res.text();
-                        exito = true;
-                        console.log(`      ✅ Portada cargada con éxito`);
-                    }
-                } catch (e) {}
-            }
-
-            if (!exito) {
-                try {
-                    const res = await fetchNativoSeguro(urlPublica);
-                    if (res.ok) { htmlText = res.text; exito = true; }
-                } catch (e) {}
-            }
-
-            if (exito && htmlText) {
+            if (htmlText) {
+                // Verificamos si realmente hay boletín hoy (buscando frases típicas de página vacía)
                 if (htmlText.includes('No se han encontrado resultados') || htmlText.includes('No hay boletín')) {
                      console.log(`   ⚠️ La web del BOR indica que no hay publicación hoy.`);
                      return null;
                 }
-                console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada.`);
-                return urlPublica; 
+                
+                // Extraemos validación de que hay enlaces a PDF (señal ineludible de que hay boletín)
+                if (htmlText.includes('.pdf') || htmlText.includes('Sumario')) {
+                    console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada por Cloudflare.`);
+                    return urlPublica; // Devolvemos la URL pública para que el motor principal la escrapee
+                } else {
+                    console.log(`   ⚠️ La página cargó pero no parece un boletín válido.`);
+                    return null;
+                }
             } else {
-                console.log(`   ❌ Todos los escudos fallaron al intentar penetrar el BOR.`);
+                console.log(`   ❌ Cloudflare falló al cargar la portada del BOR.`);
                 return null;
             }
         } catch (e) {
