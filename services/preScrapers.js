@@ -97,32 +97,31 @@ async function obtenerUrlDelDia(fuente) {
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-
-            const fechaBor = `${yyyy}-${mm}-${dd}`; // Ej: 24/04/2026
-            const apiUrl = `https://web.larioja.org/bor-portada?fecha=${fechaBor}`;
+            const fechaBor = `${dd}/${mm}/${yyyy}`; // Ej: 24/04/2026
+            const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
             console.log(`   🔎 Tanteando API secreta BOR: ${apiUrl}`);
             
             let jsonText = null;
             let exito = false;
 
-            // 🛡️ Intento 1: Proxy CodeTabs
+            // 🛡️ Intento 1: Proxy AllOrigins (Ideal para JSON)
             try {
-                const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`);
+                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
                 if (res.ok) {
                     jsonText = await res.text();
                     exito = true;
-                    console.log(`      ✅ API cargada vía CodeTabs`);
+                    console.log(`      ✅ API cargada vía AllOrigins`);
                 }
             } catch (e) {}
 
-            // 🛡️ Intento 2: Proxy AllOrigins
+            // 🛡️ Intento 2: Proxy CodeTabs
             if (!exito) {
                 try {
-                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
+                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${apiUrl}`);
                     if (res.ok) {
                         jsonText = await res.text();
                         exito = true;
-                        console.log(`      ✅ API cargada vía AllOrigins`);
+                        console.log(`      ✅ API cargada vía CodeTabs`);
                     }
                 } catch (e) {}
             }
@@ -145,14 +144,13 @@ async function obtenerUrlDelDia(fuente) {
                     if (data && data.boletines && data.boletines.length > 0) {
                         const boletinHoy = data.boletines[0];
                         console.log(`   🎯 ¡Bingo! BOR de hoy encontrado con ID: ${boletinHoy.idBoletin}`);
-                        // Devolvemos la URL real del boletín de hoy para que el scraper la lea
                         return `https://web.larioja.org/bor-boletin?id=${boletinHoy.idBoletin}`;
                     } else {
                         console.log(`   ⚠️ La API respondió correctamente, pero está vacía. (No hay publicación hoy)`);
                         return null;
                     }
                 } catch (e) {
-                    console.log(`   ⚠️ BOR no devolvió JSON válido. Snippet: ${jsonText.substring(0, 100)}...`);
+                    console.log(`   ⚠️ BOR no devolvió JSON válido.`);
                     return null;
                 }
             } else {
@@ -165,6 +163,7 @@ async function obtenerUrlDelDia(fuente) {
         }
     }
 
+    
     // ==========================================
     // 2. CEUTA (BOCCE) - VÍA NATIVA DIRECTA
     // ==========================================
