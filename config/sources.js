@@ -1,6 +1,6 @@
 const FUENTES_BOLETINES = [
   
-/*   { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
+  { nombre: "BOJA", tipo: "rss", url: "https://www.juntadeandalucia.es/boja/distribucion/s53.xml", ambito: "Andalucía" },
   { nombre: "BOPV", tipo: "rss", url: "https://www.euskadi.eus/bopv2/datos/Ultimo.xml", ambito: "País Vasco" },
   { nombre: "BORM", tipo: "rss", url: "https://www.borm.es/rss/boletin.xml", ambito: "Región de Murcia" },
   { nombre: "DOE", tipo: "rss", url: "https://doe.juntaex.es/rss/rss.php?seccion=6", ambito: "Extremadura" },
@@ -19,14 +19,14 @@ const FUENTES_BOLETINES = [
 
    // A REVISAR (Scraping de 2 Fases activado)
   { nombre: "BOCCE", tipo: "html_directo", url: "https://www.ceuta.es/ceuta/bocce", ambito: "Ceuta", fase_previa: true },
-  { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla", fase_previa: true },   */
+  { nombre: "BOME", tipo: "html_directo", url: "https://bomemelilla.es/", ambito: "Melilla", fase_previa: true },   
   { nombre: "BOR", tipo: "html_directo", url: "https://web.larioja.org/bor-portada?fecha={YYYY}-{MM}-{DD}", ambito: "La Rioja", fase_previa: false },
-/*    
+    
   // DEJAMOS MADRID PARA ANTES DEL BOE PORQUE EL BOLETIN ENTRA A LAS 9:00
   { nombre: "BOCM", tipo: "rss", url: "https://www.bocm.es/ultimo-boletin.xml", ambito: "Madrid" },
 
   // POR ÚLTIMO DEJAMOS EL BOE PARA LA FUNCIONALIDAD DEL PADRE
-  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" }  */
+  { nombre: "BOE", tipo: "rss", url: "https://www.boe.es/rss/boe.php?s=2B", ambito: "Estatal" }  
  
 
 ];
