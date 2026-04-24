@@ -93,61 +93,69 @@ async function obtenerUrlDelDia(fuente) {
     }
    
     // ==========================================
-    // 1. LA RIOJA (BOR): ATAQUE EN CASCADA (AllOrigins -> CodeTabs -> Nativo)
+    // 1. LA RIOJA (BOR): ATAQUE API EN CASCADA
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-            const urlPublica = `https://web.larioja.org/bor-portada?fecha=${yyyy}-${mm}-${dd}`;
-            console.log(`   🔎 Tanteando portada BOR: ${urlPublica}`);
+            const fechaBor = `${dd}/${mm}/${yyyy}`; // Ej: 24/04/2026
+            const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
+            console.log(`   🔎 Tanteando API secreta BOR: ${apiUrl}`);
             
-            let html = null;
+            let jsonText = null;
             let exito = false;
 
-            // 🛡️ Intento 1: Proxy AllOrigins (Suele ser el más estable para HTML puro)
+            // 🛡️ Intento 1: Proxy CodeTabs
             try {
-                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`);
+                const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(apiUrl)}`);
                 if (res.ok) {
-                    html = await res.text();
+                    jsonText = await res.text();
                     exito = true;
-                    console.log(`      ✅ Cargado vía AllOrigins`);
+                    console.log(`      ✅ API cargada vía CodeTabs`);
                 }
             } catch (e) {}
 
-            // 🛡️ Intento 2: Proxy CodeTabs (Plan B)
+            // 🛡️ Intento 2: Proxy AllOrigins
             if (!exito) {
                 try {
-                    // CodeTabs a veces falla con el encodeURIComponent, probamos la URL directa
-                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${urlPublica}`);
+                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
                     if (res.ok) {
-                        html = await res.text();
+                        jsonText = await res.text();
                         exito = true;
-                        console.log(`      ✅ Cargado vía CodeTabs`);
+                        console.log(`      ✅ API cargada vía AllOrigins`);
                     }
                 } catch (e) {}
             }
 
-            // 🛡️ Intento 3: Tanque Nativo (Por si han bajado el cortafuegos)
+            // 🛡️ Intento 3: Tanque Nativo
             if (!exito) {
                 try {
-                    const res = await fetchNativoSeguro(urlPublica);
+                    const res = await fetchNativoSeguro(apiUrl);
                     if (res.ok) {
-                        html = res.text;
+                        jsonText = res.text;
                         exito = true;
-                        console.log(`      ✅ Cargado vía Conexión Nativa`);
+                        console.log(`      ✅ API cargada vía Conexión Nativa`);
                     }
                 } catch (e) {}
             }
 
-            if (exito && html) {
-                // Verificamos si realmente hay boletín hoy
-                if (html.includes('No se han encontrado resultados') || html.includes('No hay boletín')) {
-                     console.log(`   ⚠️ La web del BOR indica que no hay publicación hoy.`);
-                     return null;
+            if (exito && jsonText) {
+                try {
+                    const data = JSON.parse(jsonText);
+                    if (data && data.boletines && data.boletines.length > 0) {
+                        const boletinHoy = data.boletines[0];
+                        console.log(`   🎯 ¡Bingo! BOR de hoy encontrado con ID: ${boletinHoy.idBoletin}`);
+                        // Devolvemos la URL real del boletín de hoy para que el scraper la lea
+                        return `https://web.larioja.org/bor-boletin?id=${boletinHoy.idBoletin}`;
+                    } else {
+                        console.log(`   ⚠️ La API respondió correctamente, pero está vacía. (No hay publicación hoy)`);
+                        return null;
+                    }
+                } catch (e) {
+                    console.log(`   ⚠️ BOR no devolvió JSON válido. Snippet: ${jsonText.substring(0, 100)}...`);
+                    return null;
                 }
-                console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada.`);
-                return urlPublica; // Devolvemos la URL buena
             } else {
-                console.log(`   ❌ Todos los métodos fallaron al cargar la portada del BOR.`);
+                console.log(`   ❌ Todos los métodos fallaron al cargar la API del BOR.`);
                 return null;
             }
         } catch (e) {
