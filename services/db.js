@@ -149,10 +149,18 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     } else if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = posiblesPadres[0]; 
 
-      // 🚀 PARCHE VITAL: RECUPERACIÓN DE DATOS FALTANTES DEL RPC
+      // 🚀 PARCHE VITAL: RECUPERACIÓN DE DATOS FALTANTES DEL RPC (GLOBAL PARA TODOS LOS ESCUDOS)
+      let tituloPadre = '';
+      let boletinPadre = '';
+      let resumenPadre = '';
+
       if (plazaExistente) {
+          // Asignaciones preventivas por si falla el fetch
+          tituloPadre = plazaExistente.title || '';
+          boletinPadre = plazaExistente.boletin || '';
+
           const { data: extraData } = await supabase.from('convocatorias')
-              .select('title, boletin, grupo, type, sistema, fase') // <-- AÑADIMOS 'fase'
+              .select('title, boletin, grupo, type, sistema, fase, resumen') 
               .eq('slug', plazaExistente.slug)
               .single();
               
@@ -160,14 +168,17 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
               plazaExistente.title = extraData.title;
               plazaExistente.boletin = extraData.boletin;
               plazaExistente.grupo = extraData.grupo;
-              plazaExistente.type = extraData.type;
-              plazaExistente.sistema = extraData.sistema;
-              plazaExistente.fase = extraData.fase; // <-- LA GUARDAMOS
+              plazaExistente.type = extraData.type; 
+              plazaExistente.sistema = extraData.sistema; 
+              plazaExistente.fase = extraData.fase; 
+              
+              tituloPadre = extraData.title || '';
+              boletinPadre = extraData.boletin || '';
+              resumenPadre = extraData.resumen || '';
           }
       }
 
       // 🛡️ 0. ESCUDO ESTRICTO DE AYUNTAMIENTOS
-      // Si ambos organismos son Ayuntamientos, exigimos coincidencia EXACTA del nombre.
       if (plazaExistente) {
           const deptNuevo = departamentoFinal.toLowerCase();
           const deptViejo = plazaExistente.department.toLowerCase();
@@ -205,7 +216,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           const grupoNuevo = analisisIA.grupo || '';
           const grupoViejo = plazaExistente.grupo || '';
           
-          // Si sabemos los grupos y son distintos (Ej. A2 vs C1), bloqueamos la fusión
           if (grupoNuevo && grupoViejo && grupoNuevo !== grupoViejo) {
               console.log(`   🔠 Salvado de deduplicación: Pertenecen a Grupos distintos (${grupoNuevo} vs ${grupoViejo}).`);
               plazaExistente = null;
@@ -219,14 +229,52 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           const sistemaNuevo = analisisIA.sistema || '';
           const sistemaViejo = plazaExistente.sistema || '';
 
-          // Si cambian radicalmente de tipo (Ej: De 'Nuevo Ingreso' a 'Bolsa') bloqueamos
           if (tipoNuevo && tipoViejo && tipoNuevo !== tipoViejo) {
               console.log(`   🧬 Salvado de deduplicación: Naturaleza distinta (${tipoNuevo} vs ${tipoViejo}).`);
               plazaExistente = null;
           }
-          // Si cambian de sistema de evaluación (Ej: De 'Oposición' a 'Concurso de Méritos')
-          else if (plazaExistente && sistemaNuevo && sistemaViejo && sistemaNuevo !== sistemaViejo) {
+          else if (sistemaNuevo && sistemaViejo && sistemaNuevo !== sistemaViejo) {
               console.log(`   ⚖️ Salvado de deduplicación: Sistema de evaluación distinto (${sistemaNuevo} vs ${sistemaViejo}).`);
+              plazaExistente = null;
+          }
+      }
+
+      // 🛡️ 3.7 ESCUDO DE ESPECIALIDADES MÉDICAS Y DOCENTES (Anti-Fuzzy Avanzado)
+      if (plazaExistente && (analisisIA.categoria === 'Sanidad y Salud' || analisisIA.categoria === 'Educación y Docencia')) {
+          let especialidadesDiferentes = false;
+          const profNueva = profesionPrincipal ? profesionPrincipal.toLowerCase() : '';
+          const profVieja = plazaExistente.profesion ? plazaExistente.profesion.toLowerCase() : '';
+          
+          if (profNueva && profVieja && profNueva !== profVieja) {
+              especialidadesDiferentes = true;
+          }
+
+          const extraerEspecialidad = (texto) => {
+              if (!texto) return "";
+              const match = texto.match(/(?:especialidad|especialista en)\s+([^,]+)/i);
+              return match ? match[1].trim().toLowerCase() : "";
+          };
+
+          const espNueva = extraerEspecialidad(itemData.title);
+          const espVieja = extraerEspecialidad(tituloPadre);
+
+          if (espNueva && espVieja && espNueva !== espVieja) {
+              especialidadesDiferentes = true;
+          }
+          
+          const palabrasCriticas = ['psiquiatría', 'pediatría', 'geriatría', 'neumología', 'neurología', 'cardiología', 'radiología', 'urología', 'oncología'];
+          const tNuevo = `${profNueva} ${itemData.title.toLowerCase()}`;
+          const tViejo = `${profVieja} ${tituloPadre ? tituloPadre.toLowerCase() : ''}`;
+          
+          for (let palabra of palabrasCriticas) {
+              if (tNuevo.includes(palabra) !== tViejo.includes(palabra)) {
+                  especialidadesDiferentes = true;
+                  break;
+              }
+          }
+
+          if (especialidadesDiferentes) {
+              console.log(`   🩺 Salvado de deduplicación: Especialidades distintas (${espNueva || profNueva} vs ${espVieja || profVieja}).`);
               plazaExistente = null;
           }
       }
@@ -257,34 +305,19 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
       // 👯 3. ESCUDO DE RESOLUCIONES GEMELAS (Anti-Clones y Nombres Regionales)
       if (plazaExistente && rangoNuevo === rangoPadre && rangoNuevo > 0) {
-          
-          let tituloPadre = plazaExistente.title || '';
-          let boletinPadre = plazaExistente.boletin || '';
-          let resumenPadre = plazaExistente.resumen || '';
-          
-          if (!tituloPadre || !boletinPadre) {
-              const { data: parentData } = await supabase.from('convocatorias').select('title, boletin, resumen').eq('slug', plazaExistente.slug).single();
-              if (parentData) {
-                  tituloPadre = parentData.title || '';
-                  boletinPadre = parentData.boletin || '';
-                  resumenPadre = parentData.resumen || '';
-              }
-          }
-
           const mismoBoletin = boletinPadre && boletinPadre.startsWith(fuente.nombre);
           
           if (mismoBoletin) {
               console.log(`   👯 Salvado: Resoluciones gemelas en el mismo boletín (${fuente.nombre}). Son plazas distintas.`);
               plazaExistente = null;
           } else {
-              // Si vienen de distintos boletines (Ej: BOE vs DOGV), comprobamos los paréntesis/localizaciones
               const extraerParentesis = (texto) => {
                   if (!texto) return "";
                   return (texto.match(/\(([^)]+)\)/g) || []).join(' ').toLowerCase();
               };
               
-              // Buscamos paréntesis tanto en el título bruto como en el resumen procesado por la IA
-              const textoHijoCompleto = `${itemData.title || ''} ${analisisIA.resumen || ''}`;
+              // Buscamos paréntesis tanto en el título bruto como en el resumen procesado por la IA y en los primeros 1000 caracteres del texto real
+              const textoHijoCompleto = `${itemData.title || ''} ${analisisIA.resumen || ''} ${(textoParaIA || '').substring(0, 1000)}`;
               const textoPadreCompleto = `${tituloPadre} ${resumenPadre}`;
 
               const parenNuevo = extraerParentesis(textoHijoCompleto);
@@ -299,91 +332,37 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
 
       // 🪪 3.5 ESCUDO DE CÓDIGOS DE EXPEDIENTE / RESOLUCIÓN
       if (plazaExistente) {
-          // Extraemos patrones típicos de códigos (ej: "ADC-EDU-69/26", "123/2026", "R-462/2026")
           const extraerCodigo = (texto) => {
               if (!texto) return "";
+              // Ampliamos la regex para capturar formatos como ADC-EDU-69/26, 123/2026, R-462/2026, 52/25
               const match = texto.match(/[A-Z0-9-]*\d{1,4}\/\d{2,4}/i);
               return match ? match[0].toLowerCase() : "";
           };
           
-          const codNuevo = extraerCodigo(itemData.title);
+          // Buscamos el código también en los primeros 1000 caracteres del texto real (el PDF/HTML)
+          const textoHijoCod = `${itemData.title || ''} ${(textoParaIA || '').substring(0, 1000)}`;
+          
+          const codNuevo = extraerCodigo(textoHijoCod);
           const codViejo = extraerCodigo(tituloPadre);
           
-          // Si ambos tienen un código de expediente pero son diferentes, bloqueamos la fusión
           if (codNuevo && codViejo && codNuevo !== codViejo) {
               console.log(`   🪪 Salvado de deduplicación: Códigos de expediente distintos (${codNuevo} vs ${codViejo}).`);
               plazaExistente = null;
           }
       }
 
-      // 🛡️ 3.7 ESCUDO DE ESPECIALIDADES MÉDICAS Y DOCENTES (Anti-Fuzzy Avanzado)
-      if (plazaExistente && (analisisIA.categoria === 'Sanidad y Salud' || analisisIA.categoria === 'Educación y Docencia')) {
-          
-          let especialidadesDiferentes = false;
-
-          // 1. Comprobación estricta de profesiones base de la IA
-          const profNueva = profesionPrincipal ? profesionPrincipal.toLowerCase() : '';
-          const profVieja = plazaExistente.profesion ? plazaExistente.profesion.toLowerCase() : '';
-          
-          if (profNueva && profVieja && profNueva !== profVieja) {
-              especialidadesDiferentes = true;
-          }
-
-          // 2. Extractor de especialidades (Para SAS, SERMAS y otros servicios de salud)
-          const extraerEspecialidad = (texto) => {
-              if (!texto) return "";
-              // Busca "especialidad [X]" o "especialista en [X]"
-              const match = texto.match(/(?:especialidad|especialista en)\s+([^,]+)/i);
-              return match ? match[1].trim().toLowerCase() : "";
-          };
-
-          const espNueva = extraerEspecialidad(itemData.title);
-          const espVieja = extraerEspecialidad(tituloPadre);
-
-          if (espNueva && espVieja && espNueva !== espVieja) {
-              especialidadesDiferentes = true;
-          }
-          
-          // 3. Diccionario de Choques Frecuentes (Las que el Fuzzy Matching siempre confunde)
-          // Si ambas cadenas de texto (título o profesión) contienen alguna de estas pero no coinciden, bloqueamos.
-          const palabrasCriticas = ['psiquiatría', 'pediatría', 'geriatría', 'neumología', 'neurología', 'cardiología', 'radiología', 'urología', 'oncología'];
-          const tNuevo = `${profNueva} ${itemData.title.toLowerCase()}`;
-          const tViejo = `${profVieja} ${tituloPadre ? tituloPadre.toLowerCase() : ''}`;
-          
-          for (let palabra of palabrasCriticas) {
-              // Si la palabra está en el nuevo pero no en el viejo (o viceversa), son especialidades distintas
-              if (tNuevo.includes(palabra) !== tViejo.includes(palabra)) {
-                  especialidadesDiferentes = true;
-                  break;
-              }
-          }
-
-          // Si difieren por la IA, por el título o por el diccionario, bloqueamos la fusión
-          if (especialidadesDiferentes) {
-              console.log(`   🩺 Salvado de deduplicación: Especialidades distintas (${espNueva || profNueva} vs ${espVieja || profVieja}).`);
-              plazaExistente = null;
-          }
-      }
-
       // 🛡️ 4. ESCUDO UNIVERSAL DE FASES IDÉNTICAS (Super-Gemelas)
       if (plazaExistente) {
-          // Si ambas publicaciones están exactamente en la misma fase (sean Aperturas, Adjudicaciones o Admitidos)
           if (analisisIA.fase && plazaExistente.fase && analisisIA.fase === plazaExistente.fase) {
-              
-              const mismoBoletin = plazaExistente.boletin && plazaExistente.boletin.startsWith(fuente.nombre);
-              
-              // Si salen en el mismo boletín, es físicamente imposible que sean el mismo proceso. Son plazas distintas/paralelas.
+              const mismoBoletin = boletinPadre && boletinPadre.startsWith(fuente.nombre);
               if (mismoBoletin) {
                   console.log(`   🚫 Salvado de deduplicación: Tienen la misma fase (${analisisIA.fase}) en el MISMO boletín (${fuente.nombre}). Son procesos paralelos.`);
                   plazaExistente = null;
               } else {
-                  // Excepción BOE vs Autonómico: Se permite enlazar si vienen de boletines distintos
-                  console.log(`   🤝 Excepción Mixta: Tienen la misma fase, pero provienen de boletines distintos (${fuente.nombre} y ${plazaExistente.boletin}). Se enlazan.`);
+                  console.log(`   🤝 Excepción Mixta: Tienen la misma fase, pero provienen de boletines distintos (${fuente.nombre} y ${boletinPadre}). Se enlazan.`);
               }
           }
       }
-
-      
 
       // 🚀 AHORA SÍ: LÓGICA DE HISTORIAL DE PUBLICACIONES (VERSIÓN INMUTABLE)
       if (plazaExistente) {
@@ -395,7 +374,6 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
           console.log(`   📖 Historial detectado (${(plazaExistente.similitud * 100).toFixed(0)}%): Vinculando nueva publicación al boletín original: ${plazaExistente.slug}`);
           parentSlug = plazaExistente.slug;
           statsFuente.enlazadas++; 
-          // 🚫 SE ELIMINA LA SINCRONIZACIÓN RETROSPECTIVA: La base de datos es ahora inmutable.
         }
       }
     }
