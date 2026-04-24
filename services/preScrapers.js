@@ -93,31 +93,61 @@ async function obtenerUrlDelDia(fuente) {
     }
    
     // ==========================================
-    // 1. LA RIOJA (BOR): ATAQUE VÍA PROXY (Para evitar ETIMEDOUT)
+    // 1. LA RIOJA (BOR): ATAQUE EN CASCADA (AllOrigins -> CodeTabs -> Nativo)
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-            // Usamos el formato que descubriste que funciona en el navegador
             const urlPublica = `https://web.larioja.org/bor-portada?fecha=${yyyy}-${mm}-${dd}`;
-            console.log(`   🔎 Tanteando portada BOR vía Proxy: ${urlPublica}`);
+            console.log(`   🔎 Tanteando portada BOR: ${urlPublica}`);
             
-            // Usamos el proxy de CodeTabs para evitar el ETIMEDOUT por bloqueo de IP de DataCenter
-            const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(urlPublica)}`;
-            const res = await fetch(proxyUrl);
-            
-            if (res.ok) {
-                const html = await res.text();
-                
-                // Verificamos si realmente hay boletín hoy (si la web dice "No hay boletín" o similar)
+            let html = null;
+            let exito = false;
+
+            // 🛡️ Intento 1: Proxy AllOrigins (Suele ser el más estable para HTML puro)
+            try {
+                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(urlPublica)}`);
+                if (res.ok) {
+                    html = await res.text();
+                    exito = true;
+                    console.log(`      ✅ Cargado vía AllOrigins`);
+                }
+            } catch (e) {}
+
+            // 🛡️ Intento 2: Proxy CodeTabs (Plan B)
+            if (!exito) {
+                try {
+                    // CodeTabs a veces falla con el encodeURIComponent, probamos la URL directa
+                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${urlPublica}`);
+                    if (res.ok) {
+                        html = await res.text();
+                        exito = true;
+                        console.log(`      ✅ Cargado vía CodeTabs`);
+                    }
+                } catch (e) {}
+            }
+
+            // 🛡️ Intento 3: Tanque Nativo (Por si han bajado el cortafuegos)
+            if (!exito) {
+                try {
+                    const res = await fetchNativoSeguro(urlPublica);
+                    if (res.ok) {
+                        html = res.text;
+                        exito = true;
+                        console.log(`      ✅ Cargado vía Conexión Nativa`);
+                    }
+                } catch (e) {}
+            }
+
+            if (exito && html) {
+                // Verificamos si realmente hay boletín hoy
                 if (html.includes('No se han encontrado resultados') || html.includes('No hay boletín')) {
                      console.log(`   ⚠️ La web del BOR indica que no hay publicación hoy.`);
                      return null;
                 }
-                
                 console.log(`   🎯 ¡Bingo! Portada del BOR de hoy confirmada.`);
-                return urlPublica; // Devolvemos la URL buena para que el motor siga adelante
+                return urlPublica; // Devolvemos la URL buena
             } else {
-                console.log(`   ⚠️ Proxy falló al cargar BOR: HTTP ${res.status}`);
+                console.log(`   ❌ Todos los métodos fallaron al cargar la portada del BOR.`);
                 return null;
             }
         } catch (e) {
