@@ -310,10 +310,24 @@ async function extraerBoletines() {
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME", "BOR"].includes(fuente.nombre)) {
-                  // BOR extrae su sumario con proxies
+              } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
+              } else if (fuente.nombre === "BOR") {
+                  console.log(`   🚀 Asaltando La Rioja vía Microlink Scraping API...`);
+                  try {
+                      // Microlink renderiza el Javascript y nos devuelve el HTML real saltándose el firewall
+                      const microlinkUrl = `https://api.microlink.io/?url=${encodeURIComponent(urlFinal)}&meta=false&prerender=true`;
+                      const res = await fetch(microlinkUrl);
+                      if (res.ok) {
+                          const data = await res.json();
+                          markdownWeb = data.data && data.data.content ? data.data.content : await obtenerTextoUniversal(urlFinal);
+                      } else {
+                          markdownWeb = await obtenerTextoUniversal(urlFinal);
+                      }
+                  } catch (e) {
+                      markdownWeb = await obtenerTextoUniversal(urlFinal);
+                  }
               } else {
                   markdownWeb = await obtenerTextoUniversal(urlFinal);
               }
@@ -475,12 +489,11 @@ async function extraerBoletines() {
                 }
                 pdfExtraidoNativo = urlParaRayosX;
 
-            } else if (["BON", "BOCCE", "BOME", "BOR"].includes(fuente.nombre)) {
-                // BOR descarga los PDFs e interiores también con proxies
+            } else if (["BON", "BOCCE", "BOME"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
-            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
+            } else if (["BOA", "BOCYL", "DOCM", "DOGV", "BOR"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, false);
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;

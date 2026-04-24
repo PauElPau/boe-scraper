@@ -224,18 +224,18 @@ async function obtenerDOGCporAPI() {
     }
 }
 // 🛡️ HELPER NATIVO INDESTRUCTIBLE: Disfrazado de Google Chrome
+// 🛡️ HELPER NATIVO INDESTRUCTIBLE: Disfrazado de Google Chrome
 function fetchNativoSeguro(url, cookie = "") {
     return new Promise((resolve, reject) => {
         const options = {
             headers: {
-                // 🐛 EL TRUCO MAESTRO: Nos hacemos pasar por el rastreador de Google
-                'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                'X-Forwarded-For': '66.249.66.1', // Falsificamos una IP de los servidores de Google
                 'Connection': 'keep-alive'
             },
-            rejectUnauthorized: false // Ignora certificados caducados
+            rejectUnauthorized: false
         };
+        // ... (el resto de la función se queda igual)
         if (cookie) options.headers['Cookie'] = cookie;
 
         https.get(url, options, (res) => {
