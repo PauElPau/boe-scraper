@@ -460,7 +460,7 @@ async function extraerBoletines() {
             // 🚀 BLOQUE DE RUTA ESTRICTA Y RAYOS X
             // ===================================================================================
             // 🐛 Eliminamos el forzado de PDF para DOGC. Dejamos que lea el HTML de la web.
-            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOPA" || fuente.nombre === "BOC_CANTABRIA";
+            let esPdfOculto = enlaceFinal.toLowerCase().includes('.pdf') || enlaceFinal.includes('jdownloads') || fuente.nombre === "BOC_CANTABRIA";
 
             if (esPdfOculto) {
                 console.log(`   📄 Enlace PDF detectado. Activando visión de Rayos X...`);
@@ -479,11 +479,11 @@ async function extraerBoletines() {
                 }
                 pdfExtraidoNativo = urlParaRayosX;
 
-            } else if (["BON", "BOCCE", "BOME"].includes(fuente.nombre)) {
+            } else if (["BOCCE", "BOME"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
-            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
+            } else if (["BON", "BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal);
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
