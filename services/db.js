@@ -149,7 +149,7 @@ async function procesarYGuardarConvocatoria(itemData, textoParaIA, fuente, convo
     } else if (posiblesPadres && posiblesPadres.length > 0) {
       let plazaExistente = posiblesPadres[0]; 
 
-      // 🚀 PARCHE VITAL: RECUPERACIÓN DE DATOS FALTANTES DEL RPC (GLOBAL PARA TODOS LOS ESCUDOS)
+      // 🚀 PARCHE VITAL: RECUPERACIÓN DE DATOS FALTANTES (¡AHORA CON SCOPE GLOBAL!)
       let tituloPadre = '';
       let boletinPadre = '';
       let resumenPadre = '';

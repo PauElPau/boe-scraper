@@ -99,15 +99,15 @@ async function obtenerUrlDelDia(fuente) {
             const fechaBor1 = `${dd}/${mm}/${yyyy}`; // Formato español
             const fechaBor2 = `${yyyy}-${mm}-${dd}`; // Formato ISO
             
-            // Intento 1: Formato DD/MM/YYYY con el Tanque Nativo (Sin Proxy)
-            let apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor1}`;
+            // Intento 1: Formato Formato ISO con el Tanque Nativo (Sin Proxy)
+            let apiUrl = `https://web.larioja.org/bor-portada?fecha=${fechaBor2}`;
             console.log(`   🔎 Consultando API BOR: ${apiUrl}`);
             
             let res = await fetchNativoSeguro(apiUrl);
             
             // Si falla o viene vacío, intentamos con el otro formato de fecha
             if (!res.ok || !res.text.includes('idBoletin')) {
-                apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor2}`;
+                apiUrl = `https://web.larioja.org/bor-portada?fecha=${fechaBor1}`;
                 console.log(`   🔎 Reintentando API BOR: ${apiUrl}`);
                 res = await fetchNativoSeguro(apiUrl);
             }
