@@ -310,12 +310,10 @@ async function extraerBoletines() {
               if (fuente.nombre === "BOA") {
                   const res = await fetch(urlFinal);
                   markdownWeb = await res.text();
-              } else if (["BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
-                  // Quitamos "BON" de esta lista para que no fuerce CodeTabs
+             } else if (["BON", "BOPA", "DOCM", "BOCYL", "BOCCE", "BOME"].includes(fuente.nombre)) {
                   const nativo = await obtenerTextoNativo(urlFinal, true);
                   markdownWeb = nativo ? nativo.texto : null;
-              } else if (["BOR", "BON"].includes(fuente.nombre)) {
-                  // Metemos "BON" aquí para que use la ruta nativa sin forzar
+              } else if (fuente.nombre === "BOR") {
                   const nativo = await obtenerTextoNativo(urlFinal, false);
                   markdownWeb = nativo ? nativo.texto : null;
               } else {
@@ -479,11 +477,11 @@ async function extraerBoletines() {
                 }
                 pdfExtraidoNativo = urlParaRayosX;
 
-            } else if (["BOCCE", "BOME"].includes(fuente.nombre)) {
+            } else if (["BON", "BOCCE", "BOME"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal, true); 
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
-            } else if (["BON", "BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
+            } else if (["BOA", "BOCYL", "DOCM", "DOGV"].includes(fuente.nombre)) {
                 const nativo = await obtenerTextoNativo(enlaceFinal);
                 textoInterior = nativo ? nativo.texto : null;
                 if (nativo && nativo.pdf) pdfExtraidoNativo = nativo.pdf;
