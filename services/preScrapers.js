@@ -93,74 +93,70 @@ async function obtenerUrlDelDia(fuente) {
     }
    
    // ==========================================
-    // 1. LA RIOJA (BOR): TÁCTICA "CABALLO DE TROYA" (Googlebot)
+    // 1. LA RIOJA (BOR): ATAQUE A LA API (Para evitar la página vacía de la SPA)
     // ==========================================
     if (fuente.nombre === "BOR") {
         try {
-            // Apuntamos a la API directa (más rápida y no requiere parsear HTML visual)
+            // ⚠️ IMPORTANTE: Usamos la API de datos, NO la "bor-portada". 
             const fechaBor = `${dd}/${mm}/${yyyy}`; // Ej: 24/04/2026
             const apiUrl = `https://web.larioja.org/bor-api/busquedas/boletines?fecha=${fechaBor}`;
-            console.log(`   🔎 Asaltando API secreta BOR con Táctica Googlebot...`);
+            console.log(`   🔎 Tanteando API secreta BOR: ${apiUrl}`);
             
             let jsonText = null;
             let exito = false;
 
-            // 🛡️ Intento 1: Disfraz de Googlebot (Conexión Nativa)
-            // Las administraciones públicas NUNCA bloquean a Googlebot por temas de SEO.
+            // 🛡️ Intento 1: Proxy AllOrigins (Ideal para JSON)
             try {
-                const res = await fetch(apiUrl, {
-                    headers: {
-                        'User-Agent': 'Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)',
-                        'Accept': 'application/json',
-                        'X-Forwarded-For': '66.249.66.1' // Simulamos venir desde una IP real de Google
-                    }
-                });
+                const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
                 if (res.ok) {
                     jsonText = await res.text();
                     exito = true;
-                    console.log(`      ✅ API cargada exitosamente disfrazados de Googlebot`);
+                    console.log(`      ✅ API cargada vía AllOrigins`);
                 }
             } catch (e) {}
 
-            // 🛡️ Intento 2: Nuevo Proxy "ThingProxy" (Menos conocido, rara vez está en listas negras)
+            // 🛡️ Intento 2: Proxy CodeTabs (SIN encodeURIComponent porque da Error 400)
             if (!exito) {
                 try {
-                    const res = await fetch(`https://thingproxy.freeboard.io/fetch/${apiUrl}`);
+                    const res = await fetch(`https://api.codetabs.com/v1/proxy?quest=${apiUrl}`);
                     if (res.ok) {
                         jsonText = await res.text();
                         exito = true;
-                        console.log(`      ✅ API cargada vía ThingProxy`);
+                        console.log(`      ✅ API cargada vía CodeTabs`);
                     }
                 } catch (e) {}
             }
 
-            // 🛡️ Intento 3: AllOrigins como último recurso
+            // 🛡️ Intento 3: Tanque Nativo
             if (!exito) {
                 try {
-                    const res = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`);
-                    if (res.ok) { jsonText = await res.text(); exito = true; }
+                    const res = await fetchNativoSeguro(apiUrl);
+                    if (res.ok) {
+                        jsonText = res.text;
+                        exito = true;
+                        console.log(`      ✅ API cargada vía Conexión Nativa`);
+                    }
                 } catch (e) {}
             }
 
-            // Procesamos la respuesta
             if (exito && jsonText) {
                 try {
                     const data = JSON.parse(jsonText);
                     if (data && data.boletines && data.boletines.length > 0) {
                         const boletinHoy = data.boletines[0];
                         console.log(`   🎯 ¡Bingo! BOR de hoy encontrado con ID: ${boletinHoy.idBoletin}`);
-                        // Devolvemos la URL real del boletín de hoy para que el motor principal la escrapee
+                        // Devolvemos la URL real de lectura de ese boletín para el scraper
                         return `https://web.larioja.org/bor-boletin?id=${boletinHoy.idBoletin}`;
                     } else {
-                        console.log(`   ⚠️ La API respondió, pero está vacía. (No hay publicación hoy)`);
+                        console.log(`   ⚠️ La API respondió correctamente, pero está vacía. (No hay publicación hoy)`);
                         return null;
                     }
                 } catch (e) {
-                    console.log(`   ⚠️ BOR no devolvió JSON válido. El cortafuegos bloqueó la respuesta real.`);
+                    console.log(`   ⚠️ BOR no devolvió JSON válido. Probablemente un bloqueo del cortafuegos.`);
                     return null;
                 }
             } else {
-                console.log(`   ❌ El búnker del BOR ha resistido todos los ataques.`);
+                console.log(`   ❌ Todos los proxies fallaron al cargar la API del BOR.`);
                 return null;
             }
         } catch (e) {
