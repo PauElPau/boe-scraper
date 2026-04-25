@@ -38,9 +38,12 @@ async function extraerBoletines() {
 
   // 2. SÁBADOS: Filtro selectivo
   if (diaSemana === 6) {
-    console.log("🛡️ Hoy es sábado. Ejecutando solo fuentes prioritarias (RSS, DOGV y BOE)...");
+    console.log("🛡️ Hoy es sábado. Ejecutando solo fuentes prioritarias (BORM, DOGV, BOIB, BOCM y BOE)...");
+    
+    const fuentesSabado = ["BORM", "DOGV", "BOIB", "BOCM", "BOE"];
+    
     fuentesFiltradas = FUENTES_BOLETINES.filter(fuente => {
-      return fuente.tipo === "rss" || fuente.nombre === "DOGV" || fuente.nombre === "BOE";
+      return fuentesSabado.includes(fuente.nombre);
     });
   }
 
